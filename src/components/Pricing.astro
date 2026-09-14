@@ -1,5 +1,6 @@
 ---
 import { PRICE, PRICING_AVAILABILITY_NOTE, PRICING_FAQ_LINK } from "../data/site";
+import LicenseActions from "./tools/LicenseActions.tsx";
 
 const FEATURES = [
   "Reusable labor, material, and service rates.",
@@ -43,7 +44,8 @@ const FEATURES = [
       </ul>
 
       <div class="mt-9 flex flex-col items-center gap-3 text-center">
-        <a href={PRICING_FAQ_LINK.href} class="btn btn-secondary">
+        <LicenseActions client:load returnTo="/app" />
+        <a href={PRICING_FAQ_LINK.href} class="text-link mt-2 text-sm">
           {PRICING_FAQ_LINK.label}
         </a>
         <p class="status-note">

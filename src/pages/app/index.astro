@@ -2,7 +2,7 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import Header from "../../components/Header.astro";
 import Footer from "../../components/Footer.astro";
-import ProApp from "../../components/tools/pro/ProApp.tsx";
+import ProGate from "../../components/tools/pro/ProGate.tsx";
 
 const title = "Painting Estimate Pro — Workspace";
 const description = "Business settings, catalog, projects, Price Book Health, and actuals — all stored locally in your browser.";
@@ -12,16 +12,11 @@ const description = "Business settings, catalog, projects, Price Book Health, an
   <Header />
   <main id="main-content" class="section-pad">
     <div class="content-shell">
-      <p class="status-note mb-4">
-        In development · Everything here runs and saves locally in your
-        browser. Purchasing is not available yet — see
-        <a href="/#pricing" class="text-link">the planned Pro offer</a>.
-      </p>
       <h1 class="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
         Pro workspace
       </h1>
       <div class="mt-8">
-        <ProApp client:only="react" />
+        <ProGate client:only="react" />
       </div>
     </div>
   </main>
