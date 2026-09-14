@@ -1,0 +1,23 @@
+---
+import { CLOSING_CTA_PRIMARY, FREE_TOOLS_LINK } from "../data/site";
+---
+
+<section class="section-pad border-t border-line">
+  <div class="content-shell text-center">
+    <h2 data-animate class="text-balance mx-auto max-w-2xl text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+      Give your next quote a closer look.
+    </h2>
+    <p data-animate class="mx-auto mt-4 max-w-xl text-lg text-ink-soft">
+      Explore how the planned Pro workflow brings estimated costs and
+      margins into one view.
+    </p>
+    <div data-animate class="mt-8 flex flex-col items-center justify-center gap-3">
+      <a href={CLOSING_CTA_PRIMARY.href} class="btn btn-primary">
+        {CLOSING_CTA_PRIMARY.label}
+      </a>
+      <a href={FREE_TOOLS_LINK.href} class="text-link text-sm">
+        {FREE_TOOLS_LINK.label}
+      </a>
+    </div>
+  </div>
+</section>

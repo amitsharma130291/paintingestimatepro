@@ -1,0 +1,71 @@
+---
+import { PRICE } from "../data/site";
+
+const FAQS = [
+  {
+    question: "Who is Pro being built for?",
+    answer:
+      "Independent painters and small painting businesses that want a focused estimating and profitability workflow.",
+  },
+  {
+    question: "Will this tell me what to charge?",
+    answer:
+      "No. Pro is being designed to show how your proposed price relates to estimated costs and margin. You decide what to charge.",
+  },
+  {
+    question: "What if my actual costs change?",
+    answer:
+      "An estimate depends on its assumptions. Actual labor and material costs may differ. Estimate-versus-actual review is a planned feature.",
+  },
+  {
+    question: "Are the sample prices recommended rates?",
+    answer:
+      "No. They illustrate the product concept and are not market-rate recommendations.",
+  },
+  {
+    question: "Will there be a monthly subscription?",
+    answer: `The planned offer is a ${PRICE.amount} one-time purchase with lifetime access.`,
+  },
+  {
+    question: "Can I use it today?",
+    answer: "Not yet. The product and free tools are in development.",
+  },
+];
+---
+
+<section id="faq" class="section-pad scroll-mt-16">
+  <div class="content-shell max-w-3xl">
+    <h2 data-animate class="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+      Frequently asked questions
+    </h2>
+
+    <div data-animate class="mt-8 divide-y divide-line border-y border-line">
+      {
+        FAQS.map((faq) => (
+          <details class="group py-5">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-ink marker:content-none [&::-webkit-details-marker]:hidden">
+              <span>{faq.question}</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5 shrink-0 text-ink-soft transition-transform duration-200 group-open:rotate-45"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </summary>
+            <p class="mt-3 max-w-2xl text-sm leading-relaxed text-ink-soft">
+              {faq.answer}
+            </p>
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>

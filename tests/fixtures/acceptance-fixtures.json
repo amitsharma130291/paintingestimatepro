@@ -1,0 +1,452 @@
+{
+  "schemaVersion": 2,
+  "note": "Expected strings use specified display precision. Status comparisons and totals use raw values. Oracle inputs may use rational strings solely to preserve exact expected arithmetic. Production persisted input strings are decimal only.",
+  "cases": [
+    {
+      "id": "job-original-brief",
+      "kind": "job",
+      "input": {
+        "materials": "1104",
+        "labor": "1344",
+        "expenses": "175",
+        "overheadRatio": "0.15",
+        "targetRatio": "0.35",
+        "price": "4640.70"
+      },
+      "expected": {
+        "directCost": "2623.00",
+        "overhead": "393.45",
+        "cost": "3016.45",
+        "approxPrice": "4640.69",
+        "minimumPrice": "4640.70",
+        "profit": "1624.25",
+        "marginPercent": "35.0"
+      }
+    },
+    {
+      "id": "job-homepage",
+      "kind": "job",
+      "input": {
+        "materials": "620",
+        "labor": "1280",
+        "expenses": "0",
+        "overheadRatio": "0.15",
+        "targetRatio": "0.35",
+        "price": "3200"
+      },
+      "expected": {
+        "directCost": "1900.00",
+        "overhead": "285.00",
+        "cost": "2185.00",
+        "approxPrice": "3361.54",
+        "minimumPrice": "3361.54",
+        "profit": "1015.00",
+        "marginPercent": "31.7"
+      }
+    },
+    {
+      "id": "door-homepage",
+      "kind": "price",
+      "input": {
+        "cost": "67",
+        "price": "85",
+        "targetRatio": "0.35"
+      },
+      "expected": {
+        "profit": "18.00",
+        "marginPercent": "21.2",
+        "approxPrice": "103.08",
+        "minimumPrice": "103.08",
+        "status": "below_target"
+      }
+    },
+    {
+      "id": "loss",
+      "kind": "price",
+      "input": {
+        "cost": "100",
+        "price": "85",
+        "targetRatio": "0.35"
+      },
+      "expected": {
+        "profit": "-15.00",
+        "marginPercent": "-17.6",
+        "approxPrice": "153.85",
+        "minimumPrice": "153.85",
+        "status": "below_cost"
+      }
+    },
+    {
+      "id": "at-target",
+      "kind": "price",
+      "input": {
+        "cost": "65",
+        "price": "100",
+        "targetRatio": "0.35"
+      },
+      "expected": {
+        "profit": "35.00",
+        "marginPercent": "35.0",
+        "approxPrice": "100.00",
+        "minimumPrice": "100.00",
+        "status": "at_target"
+      }
+    },
+    {
+      "id": "unpriced",
+      "kind": "price",
+      "input": {
+        "cost": "100",
+        "price": null,
+        "targetRatio": "0.35"
+      },
+      "expected": {
+        "profit": null,
+        "marginPercent": null,
+        "approxPrice": "153.85",
+        "minimumPrice": "153.85",
+        "status": "unpriced"
+      }
+    },
+    {
+      "id": "no-charge",
+      "kind": "price",
+      "input": {
+        "cost": "100",
+        "price": "0",
+        "targetRatio": "0.35"
+      },
+      "expected": {
+        "profit": "-100.00",
+        "marginPercent": null,
+        "approxPrice": "153.85",
+        "minimumPrice": "153.85",
+        "status": "zero_price"
+      }
+    },
+    {
+      "id": "rounding-target-boundary",
+      "kind": "price",
+      "input": {
+        "cost": "1",
+        "price": "1.66",
+        "targetRatio": "0.40"
+      },
+      "expected": {
+        "profit": "0.66",
+        "marginPercent": "39.8",
+        "approxPrice": "1.67",
+        "minimumPrice": "1.67",
+        "status": "below_target"
+      }
+    },
+    {
+      "id": "interior-walls-brief",
+      "kind": "interior",
+      "input": {
+        "length": "20",
+        "width": "16",
+        "height": "9",
+        "doorCount": 2,
+        "doorArea": "20",
+        "windowCount": 3,
+        "windowArea": "15",
+        "includeCeiling": false,
+        "coats": 2,
+        "wasteRatio": "0.1",
+        "coverage": "350",
+        "paintPrice": "42",
+        "wallRate": "150",
+        "ceilingRate": "120",
+        "laborRate": "32"
+      },
+      "expected": {
+        "grossArea": "648.00",
+        "deduction": "85.00",
+        "netWall": "563.00",
+        "totalArea": "563.00",
+        "coatArea": "1126.00",
+        "rawGallons": "3.538857",
+        "purchaseGallons": 4,
+        "paintCost": "168.00",
+        "hours": "7.506667",
+        "laborCost": "240.21",
+        "totalCost": "408.21"
+      }
+    },
+    {
+      "id": "interior-with-ceiling",
+      "kind": "interior",
+      "input": {
+        "length": "20",
+        "width": "16",
+        "height": "9",
+        "doorCount": 2,
+        "doorArea": "20",
+        "windowCount": 3,
+        "windowArea": "15",
+        "includeCeiling": true,
+        "coats": 2,
+        "wasteRatio": "0.1",
+        "coverage": "350",
+        "paintPrice": "42",
+        "wallRate": "150",
+        "ceilingRate": "120",
+        "laborRate": "32"
+      },
+      "expected": {
+        "grossArea": "648.00",
+        "deduction": "85.00",
+        "netWall": "563.00",
+        "totalArea": "883.00",
+        "coatArea": "1766.00",
+        "rawGallons": "5.550286",
+        "purchaseGallons": 6,
+        "paintCost": "252.00",
+        "hours": "12.840000",
+        "laborCost": "410.88",
+        "totalCost": "662.88"
+      }
+    },
+    {
+      "id": "document-rounding",
+      "kind": "document",
+      "input": {
+        "lines": [
+          [
+            "1",
+            "12.005"
+          ],
+          [
+            "1",
+            "12.005"
+          ]
+        ],
+        "taxRatio": "0.10"
+      },
+      "expected": {
+        "lines": [
+          "12.01",
+          "12.01"
+        ],
+        "subtotal": "24.02",
+        "tax": "2.40",
+        "total": "26.42"
+      }
+    },
+    {
+      "id": "pool-same-product",
+      "kind": "paint",
+      "input": {
+        "demands": [
+          [
+            "A",
+            "1.2"
+          ],
+          [
+            "A",
+            "1.2"
+          ]
+        ],
+        "prices": {
+          "A": "42"
+        }
+      },
+      "expected": {
+        "purchases": {
+          "A": 3
+        },
+        "paintCost": "126.00"
+      }
+    },
+    {
+      "id": "separate-colors",
+      "kind": "paint",
+      "input": {
+        "demands": [
+          [
+            "white",
+            "1.2"
+          ],
+          [
+            "blue",
+            "1.2"
+          ]
+        ],
+        "prices": {
+          "white": "42",
+          "blue": "42"
+        }
+      },
+      "expected": {
+        "purchases": {
+          "white": 2,
+          "blue": 2
+        },
+        "paintCost": "168.00"
+      }
+    },
+    {
+      "id": "exact-purchase-boundaries",
+      "kind": "paint",
+      "input": {
+        "demands": [
+          [
+            "exact",
+            "3"
+          ],
+          [
+            "under",
+            "2.9999999999"
+          ],
+          [
+            "over",
+            "3.0000000001"
+          ]
+        ],
+        "prices": {
+          "exact": "1",
+          "under": "1",
+          "over": "1"
+        }
+      },
+      "expected": {
+        "purchases": {
+          "exact": 3,
+          "under": 3,
+          "over": 4
+        },
+        "paintCost": "10.00"
+      }
+    },
+    {
+      "id": "wall-service",
+      "kind": "service",
+      "input": {
+        "areaPerUnit": "1",
+        "coats": 2,
+        "wasteRatio": "0.1",
+        "coverage": "350",
+        "paintPrice": "42",
+        "applicationHours": "1/75",
+        "additionalHours": "0",
+        "laborRate": "32",
+        "supplies": "0",
+        "expenses": "0",
+        "overheadRatio": "0.15",
+        "price": "1.80",
+        "targetRatio": "0.35"
+      },
+      "expected": {
+        "paintPerUnit": "0.264000",
+        "laborPerUnit": "0.426667",
+        "costPerUnit": "0.794267",
+        "marginPercent": "55.9",
+        "approxPrice": "1.22",
+        "minimumPrice": "1.23"
+      }
+    },
+    {
+      "id": "trim-surface",
+      "kind": "surface",
+      "input": {
+        "surfaceKind": "trim",
+        "length": "100",
+        "developedWidth": "0.5",
+        "coats": 2,
+        "throughput": "40",
+        "wasteRatio": "0.1",
+        "coverage": "350",
+        "paintPrice": "42",
+        "laborRate": "32"
+      },
+      "expected": {
+        "area": "50.00",
+        "rawGallons": "0.314286",
+        "purchasedGallons": 1,
+        "hours": "5.000000",
+        "laborCost": "160.00",
+        "paintCost": "42.00"
+      }
+    },
+    {
+      "id": "door-two-faces",
+      "kind": "surface",
+      "input": {
+        "surfaceKind": "door",
+        "count": 1,
+        "width": "3",
+        "height": "7",
+        "sides": 2,
+        "coats": 2,
+        "hoursPerSidePerCoat": "0.75",
+        "wasteRatio": "0.1",
+        "coverage": "350",
+        "paintPrice": "42",
+        "laborRate": "32"
+      },
+      "expected": {
+        "area": "42.00",
+        "rawGallons": "0.264000",
+        "purchasedGallons": 1,
+        "hours": "3.000000",
+        "laborCost": "96.00",
+        "paintCost": "42.00"
+      }
+    },
+    {
+      "id": "actual-final",
+      "kind": "actual",
+      "input": {
+        "materials": "700",
+        "labor": "1400",
+        "expenses": "100",
+        "overhead": "285",
+        "baselineCost": "2185",
+        "baselinePrice": "3200"
+      },
+      "expected": {
+        "actualCost": "2485.00",
+        "profit": "715.00",
+        "marginPercent": "22.3",
+        "totalVariance": "300.00"
+      }
+    },
+    {
+      "id": "actual-final-loss",
+      "kind": "actual",
+      "input": {
+        "materials": "1000",
+        "labor": "2000",
+        "expenses": "200",
+        "overhead": "300",
+        "baselineCost": "2185",
+        "baselinePrice": "3200"
+      },
+      "expected": {
+        "actualCost": "3500.00",
+        "profit": "-300.00",
+        "marginPercent": "-9.4",
+        "totalVariance": "1315.00"
+      }
+    },
+    {
+      "id": "actual-zero-price",
+      "kind": "actual",
+      "input": {
+        "materials": "100",
+        "labor": "0",
+        "expenses": "0",
+        "overhead": "0",
+        "baselineCost": "100",
+        "baselinePrice": "0"
+      },
+      "expected": {
+        "actualCost": "100.00",
+        "profit": "-100.00",
+        "marginPercent": null,
+        "totalVariance": "0.00"
+      }
+    }
+  ]
+}

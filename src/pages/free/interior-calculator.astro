@@ -1,0 +1,35 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import Header from "../../components/Header.astro";
+import Footer from "../../components/Footer.astro";
+import InteriorCalculator from "../../components/tools/InteriorCalculator.tsx";
+
+const title = "Free Interior Painting Calculator | Painting Estimate Pro";
+const description =
+  "Estimate paint gallons and cost for a single room — walls plus an optional ceiling, with an optional labor estimate.";
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <main id="main-content" class="section-pad">
+    <div class="content-shell max-w-4xl">
+      <p class="eyebrow">Free tool</p>
+      <h1 class="mt-4 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        Interior painting calculator
+      </h1>
+      <p class="mt-3 text-lg text-ink-soft">
+        A single-room estimator: walls plus an optional ceiling, one paint
+        variant, quick door/window deductions. For a full multi-room project
+        with trim and doors, see Pro.
+      </p>
+      <div class="mt-8">
+        <InteriorCalculator client:load />
+      </div>
+      <p class="mt-6 text-sm text-ink-soft">
+        Need trim, doors, or multiple rooms in one project?
+        <a href="/#pricing" class="text-link">See the planned Pro offer.</a>
+      </p>
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>

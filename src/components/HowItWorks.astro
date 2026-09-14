@@ -1,0 +1,47 @@
+---
+const STEPS = [
+  {
+    title: "Include the work.",
+    description: "Define surfaces, preparation, and expected labor.",
+  },
+  {
+    title: "Include the costs.",
+    description: "Bring materials, labor, and overhead together.",
+  },
+  {
+    title: "Review the margin.",
+    description: "See what the proposed price leaves after estimated costs.",
+  },
+];
+---
+
+<section id="how-it-works" class="section-pad scroll-mt-16 pt-[1.875rem] sm:pt-[2.875rem] lg:pt-[3.625rem]">
+  <div class="content-shell">
+    <div data-animate class="max-w-2xl">
+      <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        Three checks before the quote goes out.
+      </h2>
+    </div>
+
+    <ol class="mt-9 grid grid-cols-1 gap-8 sm:grid-cols-3">
+      {
+        STEPS.map((step, i) => (
+          <li data-animate class="relative">
+            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-ink">
+              {i + 1}
+            </span>
+            <h3 class="mt-4 text-base font-semibold text-ink">{step.title}</h3>
+            <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">
+              {step.description}
+            </p>
+          </li>
+        ))
+      }
+    </ol>
+
+    <p data-animate class="mt-8 text-base text-ink-soft">
+      Planned reusable rates let you start future estimates with your own
+      business assumptions.
+    </p>
+  </div>
+</section>

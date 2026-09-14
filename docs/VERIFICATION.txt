@@ -1,0 +1,24 @@
+Independent specification arithmetic verification
+PASS job-original-brief
+PASS job-homepage
+PASS door-homepage
+PASS loss
+PASS at-target
+PASS unpriced
+PASS no-charge
+PASS rounding-target-boundary
+PASS interior-walls-brief
+PASS interior-with-ceiling
+PASS document-rounding
+PASS pool-same-product
+PASS separate-colors
+PASS exact-purchase-boundaries
+PASS wall-service
+PASS trim-surface
+PASS door-two-faces
+PASS actual-final
+PASS actual-final-loss
+PASS actual-zero-price
+20 numerical fixtures, 106 expected fields passed. Production implementation and lifecycle tests remain required.
+
+Not a production-app test. Lifecycle, UI, persistence, and payment gates remain unexecuted.

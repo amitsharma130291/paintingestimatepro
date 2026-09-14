@@ -1,0 +1,46 @@
+---
+const ITEMS = [
+  {
+    title: "Time beyond painting",
+    description: "Preparation, masking, cleanup, and touch-ups count too.",
+  },
+  {
+    title: "Expenses beyond paint",
+    description: "Supplies, travel, and overhead need to be accounted for.",
+  },
+  {
+    title: "Rates that haven't kept up",
+    description: "Changing costs can change the margin behind a familiar price.",
+  },
+];
+---
+
+<section class="section-pad">
+  <div class="content-shell">
+    <div data-animate class="max-w-2xl">
+      <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        The work is done. But did the quote cover it?
+      </h2>
+      <p class="mt-4 text-lg text-ink-soft">
+        Extra prep. Another trip for supplies. More hours than expected.
+        Costs missing from the estimate reduce what remains from the
+        price.
+      </p>
+    </div>
+
+    <div data-animate class="mt-8 divide-y divide-line border-y border-line sm:grid sm:grid-cols-3 sm:divide-y-0 sm:divide-x sm:border-x">
+      {
+        ITEMS.map((item) => (
+          <div class="py-5 sm:px-6 sm:py-6 first:sm:pl-0 last:sm:pr-0">
+            <h3 class="text-base font-semibold text-ink">{item.title}</h3>
+            <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">{item.description}</p>
+          </div>
+        ))
+      }
+    </div>
+
+    <p data-animate class="mt-6 text-base font-medium text-ink">
+      Review the assumptions before you commit to the quote.
+    </p>
+  </div>
+</section>

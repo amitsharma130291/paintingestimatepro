@@ -1,0 +1,114 @@
+---
+import Logo from "./Logo.astro";
+import { NAV_LINKS, HEADER_CTA } from "../data/site";
+---
+
+<header
+  class="sticky top-0 z-50 border-b border-line bg-paper/90 backdrop-blur supports-[backdrop-filter]:bg-paper/80"
+>
+  <div class="content-shell flex h-16 items-center justify-between">
+    <a href="#main-content" class="focus:outline-none">
+      <Logo />
+    </a>
+
+    <nav class="hidden md:flex items-center gap-8" aria-label="Primary">
+      {
+        NAV_LINKS.map((link) => (
+          <a
+            href={link.href}
+            class="text-sm font-medium text-ink-soft transition-colors duration-150 hover:text-ink"
+          >
+            {link.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <div class="hidden md:block">
+      <a href={HEADER_CTA.href} class="btn btn-primary">
+        {HEADER_CTA.label}
+      </a>
+    </div>
+
+    <button
+      type="button"
+      id="mobile-menu-button"
+      class="md:hidden inline-flex items-center justify-center rounded-btn border border-line p-2 text-ink"
+      aria-expanded="false"
+      aria-controls="mobile-menu"
+    >
+      <span class="sr-only">Open main menu</span>
+      <svg id="icon-menu" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+      <svg id="icon-close" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+
+  <div
+    id="mobile-menu"
+    class="hidden md:hidden border-t border-line bg-paper"
+  >
+    <nav class="content-shell flex flex-col gap-1 py-3" aria-label="Mobile">
+      {
+        NAV_LINKS.map((link) => (
+          <a
+            href={link.href}
+            data-mobile-link
+            class="rounded-btn px-3 py-2.5 text-base font-medium text-ink-soft transition-colors duration-150 hover:bg-line-soft hover:text-ink"
+          >
+            {link.label}
+          </a>
+        ))
+      }
+      <a
+        href={HEADER_CTA.href}
+        data-mobile-link
+        class="btn btn-primary mt-2 w-full"
+      >
+        {HEADER_CTA.label}
+      </a>
+    </nav>
+  </div>
+</header>
+
+<script>
+  const button = document.getElementById("mobile-menu-button");
+  const menu = document.getElementById("mobile-menu");
+  const iconMenu = document.getElementById("icon-menu");
+  const iconClose = document.getElementById("icon-close");
+
+  if (button && menu && iconMenu && iconClose) {
+    const closeMenu = () => {
+      menu.classList.add("hidden");
+      button.setAttribute("aria-expanded", "false");
+      iconMenu.classList.remove("hidden");
+      iconClose.classList.add("hidden");
+    };
+
+    const openMenu = () => {
+      menu.classList.remove("hidden");
+      button.setAttribute("aria-expanded", "true");
+      iconMenu.classList.add("hidden");
+      iconClose.classList.remove("hidden");
+    };
+
+    button.addEventListener("click", () => {
+      const isOpen = button.getAttribute("aria-expanded") === "true";
+      isOpen ? closeMenu() : openMenu();
+    });
+
+    menu.querySelectorAll("[data-mobile-link]").forEach((link) => {
+      link.addEventListener("click", closeMenu);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeMenu();
+    });
+  }
+</script>
