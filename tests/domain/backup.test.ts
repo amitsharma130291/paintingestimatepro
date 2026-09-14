@@ -61,6 +61,82 @@ describe('BACK-D11: validation rejects before any write', () => {
   });
 });
 
+describe('BACK-015: an actual-review baseline pointing at a missing revision is a dangling reference', () => {
+  it('rejects an actualReview whose baselineIssuedRevisionId does not match any revision in the same project', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withDanglingActual: Project = {
+      ...project,
+      actualReviews: [{ id: 'ar-1', projectId: 'p1', baselineIssuedRevisionId: 'revision-that-does-not-exist', state: 'final', materials: { confirmed: true, amount: '100' }, labor: { confirmed: true, amount: '100' }, otherExpenses: { confirmed: true, amount: '0' }, overhead: { confirmed: true, amount: '0', mode: 'actualFlat' }, updatedAt: ids.now() }],
+    };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withDanglingActual], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues.some((i) => /dangling|baseline/i.test(i.message))).toBe(true);
+  });
+
+  it('accepts an actualReview whose baseline correctly matches an existing revision', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const realRevisionId = project.revisions[0].id;
+    const withValidActual: Project = {
+      ...project,
+      actualReviews: [{ id: 'ar-1', projectId: 'p1', baselineIssuedRevisionId: realRevisionId, state: 'final', materials: { confirmed: true, amount: '100' }, labor: { confirmed: true, amount: '100' }, otherExpenses: { confirmed: true, amount: '0' }, overhead: { confirmed: true, amount: '0', mode: 'actualFlat' }, updatedAt: ids.now() }],
+    };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withValidActual], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('BACK-020: unknown enums, negative costs, and non-decimal scalars in imported financial data are rejected, never silently coerced', () => {
+  it('rejects a paint variant with a negative price', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const badVariant = { ...makeVariant(), pricePerGal: '-42' };
+    const envelope = exportBackup('install-1', makeSettings(), [badVariant], [], [], [project], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects a paint variant with a non-decimal price scalar', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const badVariant = { ...makeVariant(), pricePerGal: 'forty-two' };
+    const envelope = exportBackup('install-1', makeSettings(), [badVariant], [], [], [project], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects a revision with an unknown state enum value', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deliberately corrupt enum value for the test
+    const corrupted = { ...project, revisions: [{ ...project.revisions[0], state: 'not-a-real-state' as any }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects a revision with a negative proposedPrice', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const corrupted = { ...project, revisions: [{ ...project.revisions[0], proposedPrice: '-500' }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('a null proposedPrice (genuinely unpriced) is still accepted — null is not the same as invalid', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withNullPrice = { ...project, revisions: [{ ...project.revisions[0], proposedPrice: null }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withNullPrice], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(true);
+  });
+});
+
 describe('BACK-D09: restore/merge — identical skip, new add, conflicting requires a choice (default keep-local)', () => {
   it('an identical existing project is skipped, not duplicated', () => {
     const ids = sequentialIdSource();

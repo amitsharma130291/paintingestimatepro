@@ -1,6 +1,30 @@
 import type { BackupEnvelope, Project, BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition } from './entities';
 import { SCHEMA_VERSION, ENGINE_VERSION } from './entities';
 import type { IdSource } from './ids';
+import { parseDecimalField } from '../engine/parse';
+
+const REVISION_STATES = new Set(['draft', 'issued', 'superseded']);
+const PRICE_MODES = new Set(['suggested', 'custom']);
+
+/** A required, non-negative decimal scalar (catalog prices, coverage, etc.).
+ * BACK-020: reject non-decimal scalars and negative costs, never coerce. */
+function checkRequiredNonNegativeDecimal(path: string, raw: unknown, issues: ValidationIssue[]): void {
+  if (typeof raw !== 'string') {
+    issues.push({ path, message: `Expected a decimal string at ${path}, got ${typeof raw}.` });
+    return;
+  }
+  const parsed = parseDecimalField(raw);
+  if (parsed.kind === 'missing') issues.push({ path, message: `Missing required decimal value at ${path}.` });
+  else if (parsed.kind === 'invalid') issues.push({ path, message: `Invalid decimal value at ${path}: ${parsed.message}` });
+}
+
+/** An optional (nullable) decimal scalar that, when present, must be a
+ * non-negative decimal string — e.g. a revision's proposedPrice, which is
+ * legitimately `null` for an unpriced estimate. */
+function checkOptionalNonNegativeDecimal(path: string, raw: unknown, issues: ValidationIssue[]): void {
+  if (raw === null || raw === undefined) return;
+  checkRequiredNonNegativeDecimal(path, raw, issues);
+}
 
 /** DATA_CONTRACT.md "Backup envelope" + "Import modes". */
 
@@ -60,6 +84,9 @@ export function validateBackupEnvelope(raw: unknown, rawByteLength: number): { o
     for (const v of env.paintVariants) {
       if (seen.has(v.id)) issues.push({ path: `paintVariants[${v.id}]`, message: `Duplicate paint variant ID ${v.id}.` });
       seen.add(v.id);
+      // BACK-020: field-level validation on imported financial/catalog data.
+      checkRequiredNonNegativeDecimal(`paintVariants[${v.id}].pricePerGal`, (v as PaintVariant).pricePerGal, issues);
+      checkRequiredNonNegativeDecimal(`paintVariants[${v.id}].coverageFt2PerGal`, (v as PaintVariant).coverageFt2PerGal, issues);
     }
   }
 
@@ -74,8 +101,30 @@ export function validateBackupEnvelope(raw: unknown, rawByteLength: number): { o
         issues.push({ path: `projects[${p.id ?? '?'}]`, message: 'Project missing id or revisions[].' });
         continue;
       }
+      const revisionIds = new Set(p.revisions.map((rev) => rev.id));
       for (const rev of p.revisions) {
         if (!rev.activeRateSnapshot) issues.push({ path: `projects[${p.id}].revisions[${rev.id}]`, message: 'Revision missing embedded rate snapshot.' });
+        // BACK-020: unknown enum values and negative/malformed financial scalars
+        // on the revision itself must be rejected, not silently coerced.
+        if (!REVISION_STATES.has(rev.state)) {
+          issues.push({ path: `projects[${p.id}].revisions[${rev.id}].state`, message: `Unknown revision state "${rev.state}".` });
+        }
+        if (!PRICE_MODES.has(rev.priceMode)) {
+          issues.push({ path: `projects[${p.id}].revisions[${rev.id}].priceMode`, message: `Unknown priceMode "${rev.priceMode}".` });
+        }
+        checkOptionalNonNegativeDecimal(`projects[${p.id}].revisions[${rev.id}].proposedPrice`, rev.proposedPrice, issues);
+      }
+      // BACK-015: every actual review's baseline must reference a revision
+      // that actually exists in this same project. A baseline pointing
+      // anywhere else (deleted revision, another project, typo/corruption)
+      // is a dangling reference and must be rejected before any write.
+      for (const ar of p.actualReviews ?? []) {
+        if (!revisionIds.has(ar.baselineIssuedRevisionId)) {
+          issues.push({
+            path: `projects[${p.id}].actualReviews[${ar.id}].baselineIssuedRevisionId`,
+            message: `Dangling reference: actual review baseline "${ar.baselineIssuedRevisionId}" does not match any revision in project "${p.id}".`,
+          });
+        }
       }
     }
   }
