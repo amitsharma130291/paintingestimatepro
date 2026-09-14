@@ -1,0 +1,28 @@
+[2m03:17:33[22m [34m[types][39m Generated [2m81ms[22m
+[2m03:17:33[22m [34m[build][39m output: [34m"static"[39m
+[2m03:17:33[22m [34m[build][39m mode: [34m"server"[39m
+[2m03:17:33[22m [34m[build][39m directory: [34mC:\Users\amits\SEOSites\paintingestimatepro\dist\[39m
+[2m03:17:33[22m [34m[build][39m adapter: [32m@astrojs/vercel[39m
+[2m03:17:33[22m [34m[build][39m Collecting build info...
+[2m03:17:33[22m [34m[build][39m [32m✓ Completed in 212ms.[39m
+[2m03:17:33[22m [34m[build][39m Building server entrypoints...
+[2m03:17:34[22m [34m[vite][39m [32m✓ built in 405ms[39m
+[2m03:17:34[22m [34m[vite][39m [32m✓ built in 144ms[39m
+[2m03:17:34[22m [34m[vite][39m [32m✓ built in 114ms[39m
+
+[42m[30m prerendering static routes [39m[49m
+[2m03:17:34[22m   [34m├─[39m [2m/app/index.html[22m [2m(+12ms)[22m 
+[2m03:17:34[22m   [34m├─[39m [2m/free/estimate-template/index.html[22m [2m(+18ms)[22m 
+[2m03:17:34[22m   [34m├─[39m [2m/free/interior-calculator/index.html[22m [2m(+6ms)[22m 
+[2m03:17:34[22m   [34m├─[39m [2m/free/job-cost-calculator/index.html[22m [2m(+6ms)[22m 
+[2m03:17:34[22m   [34m├─[39m [2m/index.html[22m [2m(+7ms)[22m 
+[2m03:17:34[22m [32m✓ Completed in 71ms.
+[39m
+[2m03:17:34[22m [34m[build][39m Rearranging server assets...
+[2m03:17:34[22m [34m[build][39m [32m✓ Completed in 817ms.[39m
+[2m03:17:34[22m [34m[@astrojs/vercel][39m Bundling function ..\..\server\entry.mjs
+[2m03:17:37[22m [34m[build][39m Waiting for integration [1m"@astrojs/vercel"[22m, hook [1m"astro:build:done"[22m...
+[2m03:17:39[22m [34m[@astrojs/sitemap][39m `sitemap-index.xml` created at `dist\client`
+[2m03:17:39[22m [34m[@astrojs/vercel][39m Copying static files to .vercel/output/static
+[2m03:17:39[22m [34m[build][39m Server built in [1m5.81s[22m
+[2m03:17:39[22m [34m[build][39m [1mComplete![22m

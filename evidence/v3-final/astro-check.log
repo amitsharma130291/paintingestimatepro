@@ -1,0 +1,20 @@
+[2m03:17:20[22m [34m[types][39m Generated [2m106ms[22m
+[2m03:17:20[22m [34m[check][39m Getting diagnostics for Astro files in C:\Users\amits\SEOSites\paintingestimatepro...
+[96msrc/components/tools/LicenseActions.tsx[0m:[93m54[0m:[93m35[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m54[0m   async function handleRecover(e: FormEvent) {
+[7m  [0m [93m                                  ~~~~~~~~~[0m
+[96msrc/components/tools/LicenseActions.tsx[0m:[93m36[0m:[93m34[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m36[0m   async function handleRedeem(e: FormEvent) {
+[7m  [0m [93m                                 ~~~~~~~~~[0m
+[96msrc/components/tools/LicenseActions.tsx[0m:[93m1[0m:[93m20[0m - [93mwarning[0m[90m ts(6385): [0m'FormEvent' is deprecated.
+
+[7m1[0m import { useState, type FormEvent } from 'react';
+[7m [0m [93m                   ~~~~~~~~~~~~~~[0m
+
+Result (92 files): 
+- 0 errors
+- 0 warnings
+- 3 hints
+
