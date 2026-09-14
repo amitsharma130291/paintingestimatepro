@@ -268,6 +268,18 @@ Separately: "Duplicate" only re-assigned line IDs on the SAME in-memory form (`s
 
 ---
 
+## 18. Missing revision-selection workflow — previously issued revisions became unreachable from the UI
+
+**Found by:** Named directly in this session's task (item 7) and previously flagged as a known gap in `TEST_EXECUTION_REPORT.md` §7 — once a project had more than one revision, only the currently-"active" one was ever shown; an earlier issued revision's customer document was provably intact in storage (per the draft/issued isolation tests) but had no way to be opened or reprinted from the UI.
+
+**Fix:** Added a revision selector to the project detail view (shown whenever a project has more than one revision) listing every revision by number and state, with the currently-active one marked. Selecting a revision loads it into the (read-only, for an issued one) view — the existing render logic already correctly shows only the customer document + "Edit" button for an issued revision and the full editor for a draft, so this only needed to make every revision *reachable*, not new rendering logic. Viewing a revision never changes which one is "active" — only issuing a new one does, which the selector's copy states explicitly.
+
+**Regression test:** No new automated test (this is pure navigation/selection UI wiring around already-tested rendering logic — the underlying "issued revisions stay frozen and independently correct" guarantee is what `tests/integration/draftIssuedIsolation.test.ts` already proves).
+
+**Verification:** 237/237 tests pass; `astro check` 0 errors; `astro build` succeeds. **Not verified live in the browser** — this session has no real Dodo credentials to unlock the Pro workspace UI itself (the same disclosed limitation affecting every Pro-gated feature's live verification this session), so this fix is verified by code reading and the passing automated suite only, not a browser click-through. Flagged explicitly rather than claimed as browser-verified.
+
+---
+
 ## Not a bug (documented false alarm)
 
 While writing `PROPERTY 11` (application labor linearity), a strict `.equals()` assertion failed on the counterexample `area=1, coats=1, throughput=290`. Investigation showed `area*coats/290` is a non-terminating decimal (290 = 2×5×29); computing it once and doubling versus computing `(2×area)/290` directly are two independently-rounded results at the engine's 50-significant-digit precision floor, differing by `1e-52` — twelve digits past the spec's required 40-significant-digit floor and financially meaningless at any real display precision. The linearity formula itself is correct; the test's exactness requirement was wrong. Fixed by using a `1e-40` tolerance instead of bit-exact equality. See the comment in `tests/property/geometry.property.test.ts` for the full reasoning — recorded here so it isn't mistaken for an unresolved defect.

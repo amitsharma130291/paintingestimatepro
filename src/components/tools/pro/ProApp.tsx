@@ -637,6 +637,27 @@ export default function ProApp() {
               ← Back to projects
             </button>
 
+            {activeProject.revisions.length > 1 && (
+              <div className="flex flex-wrap items-center gap-2 print:hidden">
+                <span className="text-xs font-medium text-ink-soft">Revisions:</span>
+                {[...activeProject.revisions].sort((a, b) => a.revisionNumber - b.revisionNumber).map((rev) => (
+                  <button
+                    key={rev.id}
+                    type="button"
+                    className={`btn ${rev.id === draftEdit.id ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => {
+                      setDraftEdit(rev);
+                      setCustomPriceRaw(rev.priceMode === 'custom' ? rev.proposedPrice ?? '' : '');
+                    }}
+                  >
+                    Rev {rev.revisionNumber} · {rev.state}
+                    {rev.id === activeProject.activeRevisionId ? ' (active)' : ''}
+                  </button>
+                ))}
+                <span className="text-xs text-ink-soft">Viewing any revision here never changes which one is active — only issuing a new one does.</span>
+              </div>
+            )}
+
             <div className="card p-6 print:hidden">
               <TextField label="Project title" value={draftEdit.title} onChange={(v) => mutateDraft((r) => ({ ...r, title: v, updatedAt: ids.now() }))} />
               <p className="mt-1 text-xs text-ink-soft">
