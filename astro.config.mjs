@@ -3,16 +3,20 @@ import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 import react from '@astrojs/react';
+import vercel from '@astrojs/vercel';
 
 // Configure the real production domain before deploying.
 const SITE_URL = 'https://paintingestimatepro.com';
 
 export default defineConfig({
   site: SITE_URL,
-  // The marketing homepage stays static Astro with no framework. The free
-  // tools and the Pro app are focused React islands (client:load) that use
-  // the shared engine in src/engine — no server runtime/adapter, everything
-  // computes and persists locally in the browser.
+  // Every page stays statically prerendered (the marketing homepage, free
+  // tools, and Pro app are unchanged). Only src/pages/api/** opts out of
+  // prerendering per-route (`export const prerender = false`) for the Dodo
+  // Payments checkout/webhook endpoints, which need a real server request —
+  // same pattern as qrworkbench/barcodeflow, not a switch to server-rendering
+  // the whole site.
+  adapter: vercel(),
   integrations: [sitemap(), react()],
   vite: {
     plugins: [tailwindcss()],
