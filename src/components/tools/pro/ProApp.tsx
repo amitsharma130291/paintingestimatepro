@@ -406,16 +406,16 @@ export default function ProApp() {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2 border-b border-line pb-3">
+      <div className="flex flex-wrap gap-2 border-b border-line pb-3 print:hidden">
         {(['settings', 'catalog', 'projects', 'health', 'actuals', 'backup'] as Tab[]).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)} className={`btn ${tab === t ? 'btn-primary' : 'btn-secondary'}`}>
             {t === 'settings' ? 'Business settings' : t === 'catalog' ? 'Paint catalog' : t === 'projects' ? 'Projects' : t === 'health' ? 'Price Book Health' : t === 'actuals' ? 'Actual review' : 'Backup'}
           </button>
         ))}
       </div>
-      {saveMessage && <p className="mt-3 text-xs text-ink-soft">{saveMessage}</p>}
+      {saveMessage && <p className="mt-3 text-xs text-ink-soft print:hidden">{saveMessage}</p>}
       {conflict && (
-        <div className="mt-3 rounded-btn border border-warn-line bg-warn-soft p-4 text-sm text-warn">
+        <div className="mt-3 rounded-btn border border-warn-line bg-warn-soft p-4 text-sm text-warn print:hidden">
           <p className="font-semibold">This project was changed elsewhere before your save landed.</p>
           <p className="mt-1">Your edit is still here. Reload the latest saved version (discarding your edit), or save your edit as a new copy instead of overwriting.</p>
           <div className="mt-2 flex gap-2">
@@ -486,11 +486,11 @@ export default function ProApp() {
 
         {tab === 'projects' && activeProjectId && draftEdit && activeProject && (
           <div className="space-y-4">
-            <button type="button" className="text-link text-xs" onClick={() => { setActiveProjectId(null); setDraftEdit(null); }}>
+            <button type="button" className="text-link text-xs print:hidden" onClick={() => { setActiveProjectId(null); setDraftEdit(null); }}>
               ← Back to projects
             </button>
 
-            <div className="card p-6">
+            <div className="card p-6 print:hidden">
               <TextField label="Project title" value={draftEdit.title} onChange={(v) => mutateDraft((r) => ({ ...r, title: v, updatedAt: ids.now() }))} />
               <p className="mt-1 text-xs text-ink-soft">
                 Revision {draftEdit.revisionNumber} · <span className="font-semibold">{draftEdit.state}</span>
@@ -602,15 +602,32 @@ export default function ProApp() {
 
             {draftEdit.customerDocumentSnapshot && (
               <div className="card p-6">
-                <p className="tag-preview mb-2 inline-block">Customer-facing document</p>
+                <p className="tag-preview mb-2 inline-block print:hidden">Customer-facing document</p>
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    {draftEdit.customerDocumentSnapshot.businessInfo.name && <p className="font-semibold">{draftEdit.customerDocumentSnapshot.businessInfo.name}</p>}
+                    {draftEdit.customerDocumentSnapshot.businessInfo.contact && <p className="text-sm text-ink-soft">{draftEdit.customerDocumentSnapshot.businessInfo.contact}</p>}
+                    {draftEdit.customerDocumentSnapshot.businessInfo.address && <p className="text-sm text-ink-soft">{draftEdit.customerDocumentSnapshot.businessInfo.address}</p>}
+                  </div>
+                  <button type="button" className="btn btn-primary print:hidden" onClick={() => window.print()}>Print / Save as PDF</button>
+                </div>
                 <p className="font-semibold">{draftEdit.customerDocumentSnapshot.projectTitle}</p>
-                <p className="text-sm text-ink-soft">Estimate {draftEdit.customerDocumentSnapshot.estimateNumber} — {draftEdit.customerDocumentSnapshot.estimateDate} · {draftEdit.customerDocumentSnapshot.status}</p>
-                <p className="mt-2 text-2xl font-semibold tabular-nums">${draftEdit.customerDocumentSnapshot.proposedPrice}</p>
-                <p className="text-xs text-ink-soft">{draftEdit.customerDocumentSnapshot.taxNotice}</p>
-                <ul className="mt-2 text-sm text-ink-soft">
+                {draftEdit.customerDocumentSnapshot.projectAddress && <p className="text-sm text-ink-soft">{draftEdit.customerDocumentSnapshot.projectAddress}</p>}
+                {(draftEdit.customerDocumentSnapshot.customerInfo.name || draftEdit.customerDocumentSnapshot.customerInfo.address) && (
+                  <p className="text-sm text-ink-soft">
+                    Prepared for: {draftEdit.customerDocumentSnapshot.customerInfo.name || '—'}
+                    {draftEdit.customerDocumentSnapshot.customerInfo.address ? `, ${draftEdit.customerDocumentSnapshot.customerInfo.address}` : ''}
+                  </p>
+                )}
+                <p className="text-sm text-ink-soft">Estimate {draftEdit.customerDocumentSnapshot.estimateNumber} — {draftEdit.customerDocumentSnapshot.estimateDate} · {draftEdit.customerDocumentSnapshot.revisionLabel} · {draftEdit.customerDocumentSnapshot.status}</p>
+                <ul className="mt-3 text-sm text-ink-soft">
                   {draftEdit.customerDocumentSnapshot.scopeLines.map((line, i) => (<li key={i}>{line}</li>))}
                 </ul>
-                <p className="mt-2 text-xs text-ink-soft italic">No cost, overhead, or margin figures appear on this document — verified by allow-list, see IMPLEMENTATION_DECISIONS.md.</p>
+                <p className="mt-3 text-2xl font-semibold tabular-nums">${draftEdit.customerDocumentSnapshot.proposedPrice}</p>
+                <p className="text-xs text-ink-soft">{draftEdit.customerDocumentSnapshot.taxNotice}</p>
+                {draftEdit.customerDocumentSnapshot.notes && <p className="mt-3 text-sm text-ink-soft whitespace-pre-wrap">{draftEdit.customerDocumentSnapshot.notes}</p>}
+                {draftEdit.customerDocumentSnapshot.terms && <p className="mt-2 text-xs text-ink-soft whitespace-pre-wrap">{draftEdit.customerDocumentSnapshot.terms}</p>}
+                <p className="mt-3 text-xs text-ink-soft italic print:hidden">No cost, overhead, or margin figures appear on this document — verified by allow-list, see IMPLEMENTATION_DECISIONS.md.</p>
               </div>
             )}
           </div>

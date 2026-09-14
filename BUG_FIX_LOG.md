@@ -114,6 +114,20 @@ Four real defects were found during this implementation — three via automated 
 
 ---
 
+## 8. Pro's issued customer document had no print affordance, and would have printed internal notes and the whole app chrome
+
+**Found by:** Manual browser + code review while verifying task item 6 ("customer-safe printing... inspect actual multi-page customer output"). The free tools (`EstimateTemplate.tsx`) already had a `window.print()` button and `print:`-variant CSS; the Pro app's issued-estimate customer document card had neither.
+
+**Reproduction (as it stood before this fix):** Issue an estimate in the Pro app and try to produce a customer-facing printout. There was no print button anywhere on the page. If a user pressed Ctrl+P/Cmd+P anyway, the browser would print the ENTIRE page as rendered — the tab bar, "Business settings"/"Paint catalog"/etc. buttons, any save-message banner, and (worse) an internal developer note reading "verified by allow-list, see IMPLEMENTATION_DECISIONS.md" sitting directly under the price, all sent to the customer's printout. Separately, the document also never displayed the business name/contact/address or the customer's name/address, terms, or notes — fields that exist in `CustomerDocumentSnapshot` and are already allow-listed, but were simply never rendered.
+
+**Fix:** Added a `window.print()` "Print / Save as PDF" button directly on the customer-document card; added `print:hidden` (Tailwind's print media-query variant, confirmed present in the compiled stylesheet) to the tab bar, save-message banner, conflict banner, the "Back to projects" button, the project-title/revision-info editor card, and the internal allow-list dev note — so only the actual customer document remains visible when printing. Also rendered the previously-missing `businessInfo`, `customerInfo`, `revisionLabel`, `notes`, and `terms` fields (all already present in the allow-listed `CustomerDocumentSnapshot`, just not wired into the UI) so the printed document is actually usable as a real customer-facing estimate.
+
+**Regression test:** No automated test — this is print-media CSS and JSX rendering, outside the pure-function engine/domain layers this session's automated suite covers. Verified manually: issued a fresh estimate, confirmed the print button appears and calls `window.print`, confirmed via `document.styleSheets` inspection that a compiled `print:hidden` rule exists, and confirmed by reading the rendered DOM that the internal dev note and app chrome all carry the `print:hidden` class while the document content does not.
+
+**Known remaining gap:** there is still no UI to enter `businessInfo`/`customerInfo` values before issuing (no form fields for business name/customer name exist yet, only the underlying data model and document rendering support them) — noted here rather than silently left incomplete. There is also no revision switcher — once a new draft revision exists for a project, the UI has no way to go back and view/reprint an earlier issued revision's document (its data is provably intact in storage, per the draft/issued isolation tests, but not reachable from the UI without directly inspecting storage).
+
+---
+
 ## Not a bug (documented false alarm)
 
 While writing `PROPERTY 11` (application labor linearity), a strict `.equals()` assertion failed on the counterexample `area=1, coats=1, throughput=290`. Investigation showed `area*coats/290` is a non-terminating decimal (290 = 2×5×29); computing it once and doubling versus computing `(2×area)/290` directly are two independently-rounded results at the engine's 50-significant-digit precision floor, differing by `1e-52` — twelve digits past the spec's required 40-significant-digit floor and financially meaningless at any real display precision. The linearity formula itself is correct; the test's exactness requirement was wrong. Fixed by using a `1e-40` tolerance instead of bit-exact equality. See the comment in `tests/property/geometry.property.test.ts` for the full reasoning — recorded here so it isn't mistaken for an unresolved defect.
