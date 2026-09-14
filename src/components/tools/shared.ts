@@ -2,7 +2,7 @@
 // so every tool renders FieldState/CalculationResult consistently. No
 // calculation logic lives here; it only formats/dispatches to src/engine.
 import { toMoneyString, toPercentString, type Dec } from '../../engine/decimal';
-import { parseDecimalField, type ParseOptions } from '../../engine/parse';
+import { parseDecimalField, parseCountField, type ParseOptions } from '../../engine/parse';
 import type { FieldState } from '../../engine/types';
 import type { PriceResult, PriceStatus } from '../../engine/types';
 
@@ -41,4 +41,22 @@ export function statusBadge(result: PriceResult): { label: string; className: st
 
 export function fieldError(f: FieldState<Dec>): string | null {
   return f.kind === 'invalid' ? f.message : null;
+}
+
+/**
+ * BOUND-003/004/005 regression: a Pro-app per-surface "coats override"
+ * field used to commit `Number.parseInt(v, 10) || 1` directly — a falsy-
+ * zero bug that silently turned "0" into 1, accepted any value with no
+ * upper bound, and truncated "1.5" to 1 instead of rejecting it, all
+ * contradicting CALCULATION_SPEC's "coats integer 1..5" and "do not
+ * truncate meaningful quantities silently." This is the single validated
+ * choke point every per-surface coats input must go through: blank clears
+ * the override (`null`), a valid 1..5 integer commits, anything else is
+ * rejected outright — the caller must NOT commit on 'reject' (leave the
+ * previously-committed value in place rather than substituting a guess).
+ */
+export function parseCoatsInput(raw: string): number | null | 'reject' {
+  if (raw.trim() === '') return null;
+  const parsed = parseCountField(raw, { min: 1, max: 5 });
+  return parsed.kind === 'valid' ? parsed.value : 'reject';
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { PEP } from '../../../engine/decimal';
 import { evaluateActualReview, type ActualCategory } from '../../../engine/actuals';
 import { computeServiceUnitCost, evaluateServiceHealth } from '../../../engine/serviceHealth';
-import { statusBadge, money } from '../shared';
+import { statusBadge, money, parseCoatsInput } from '../shared';
 import type { BusinessSettings, PaintVariant, Project, Room, Surface, EstimateRevision, ServiceKind } from '../../../domain/entities';
 import { createSnapshot } from '../../../domain/snapshot';
 import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, upsertRevision } from '../../../domain/project';
@@ -770,7 +770,7 @@ function SurfaceRow({ label, surface, catalog, onPatch, onRemove }: { label: str
             {catalog.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
           </select>
         </label>
-        <NumField label="Coats (blank = default)" value={surface.coats?.toString() ?? ''} onChange={(v) => onPatch({ coats: v.trim() === '' ? null : Number.parseInt(v, 10) || 1 })} />
+        <NumField label="Coats 1-5 (blank = default)" value={surface.coats?.toString() ?? ''} onChange={(v) => { const parsed = parseCoatsInput(v); if (parsed !== 'reject') onPatch({ coats: parsed }); }} />
         <NumField label="Waste ratio (blank = default)" value={surface.wasteRatio ?? ''} onChange={(v) => onPatch({ wasteRatio: v.trim() === '' ? null : v })} />
         <NumField label="Throughput override" value={surface.throughput ?? ''} onChange={(v) => onPatch({ throughput: v.trim() === '' ? null : v })} />
       </div>
@@ -816,7 +816,7 @@ function StandaloneSurfaceEditor({ surface, catalog, onPatch, onRemove }: { surf
             <NumField label="Hours/side/coat override" value={surface.hoursPerSidePerCoat ?? ''} onChange={(v) => onPatch({ hoursPerSidePerCoat: v.trim() === '' ? null : v })} />
           </>
         )}
-        <NumField label="Coats (blank = default)" value={surface.coats?.toString() ?? ''} onChange={(v) => onPatch({ coats: v.trim() === '' ? null : Number.parseInt(v, 10) || 1 })} />
+        <NumField label="Coats 1-5 (blank = default)" value={surface.coats?.toString() ?? ''} onChange={(v) => { const parsed = parseCoatsInput(v); if (parsed !== 'reject') onPatch({ coats: parsed }); }} />
         <NumField label="Waste ratio (blank = default)" value={surface.wasteRatio ?? ''} onChange={(v) => onPatch({ wasteRatio: v.trim() === '' ? null : v })} />
       </div>
       <button type="button" className="text-link mt-2 text-xs text-bad" onClick={onRemove}>Remove surface</button>

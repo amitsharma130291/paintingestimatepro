@@ -128,6 +128,36 @@ Four real defects were found during this implementation — three via automated 
 
 ---
 
+## 9. Pro app's per-surface Coats field silently accepted 0, unbounded values, and truncated fractions (BOUND-003/004/005)
+
+**Found by:** The parallel test-catalogue audit (this session), reading `ProApp.tsx`'s source directly rather than running a new test — traced the per-surface Coats input handler and found `Number.parseInt(v, 10) || 1`.
+
+**Reproduction:** In the Pro app's room or standalone-surface editor, typing "0" into a surface's Coats field silently became 1 (JS's `0 || 1` falsy-zero idiom); typing "6" was accepted with no upper-bound check; typing "1.5" was silently truncated to 1. All three directly contradict `CALCULATION_SPEC.md`'s "coats integer 1..5" and its explicit "do not truncate meaningful quantities silently" instruction. The free `InteriorCalculator.tsx` tool already implemented this correctly via `parseCountField(coats, {min:1, max:5})`; the Pro app's newly-rewritten per-surface field did not reuse it.
+
+**Root cause:** The new per-surface Coats `<input>` (added this session as part of the Pro UI rewrite) was written as a raw one-line `Number.parseInt` conversion instead of going through the engine's existing validated count parser.
+
+**Fix:** Added `parseCoatsInput()` to `src/components/tools/shared.ts` — a single validated choke point wrapping `parseCountField` with the spec's 1..5 bound, returning `null` (clears the override) for blank input, the parsed integer for 1..5, or the literal string `'reject'` for anything else. Both per-surface Coats inputs in `ProApp.tsx` now only call `onPatch` when the result isn't `'reject'` — an invalid keystroke is refused outright (the field visually reverts to its last valid committed value) rather than silently substituting a wrong number.
+
+**Regression test:** `tests/ui/shared.test.ts` — 6 cases covering blank/0/6/1.5/valid-range/malformed input.
+
+**Verification:** New tests pass; full suite (177/177) passes; `astro check` clean.
+
+## 10. Trim surface with a length of exactly 0 was wrongly rejected at field validation (BOUND-026)
+
+**Found by:** The same parallel audit, reading `estimateAssembly.ts`'s trim-geometry branch.
+
+**Reproduction:** A standalone (or room-attached) trim surface with `trimLengthFt: '0'` was marked `invalid` at the field level, blocking the whole project. Per `CALCULATION_SPEC.md`'s "zero-demand geometry" rule (already correctly implemented for room-derived wall/ceiling area, and explicit in `IMPLEMENTATION_DECISIONS.md` #8), a zero length/count is a legitimate field value that should pass field validation — a degenerate all-zero project is a job for the ISSUE gate, not field-level rejection. The catalogue's `BOUND-026` case states this explicitly: "accepted at field validation; zero-count project can still fail issue gate."
+
+**Root cause:** `resolveSurface`'s trim branch in `src/domain/estimateAssembly.ts` had an extra `if (!lengthField.value.greaterThan(0) || !widthField.value.greaterThan(0)) return { state: 'invalid' }` check that wall/ceiling's manual-area path legitimately needs (per decision #8, manual area DOES require positive) but trim does not.
+
+**Fix:** Removed the positivity floor for trim's length/width — `parseDecimalField` (without `allowNegative`) already guarantees a non-negative value, so no further check was needed; a trim surface with 0 length/width now correctly resolves to a valid (zero-demand) surface.
+
+**Regression test:** `tests/domain/estimateAssembly.test.ts` — "BOUND-026: a trim surface with trimLengthFt=0 is ACCEPTED at field validation."
+
+**Verification:** New test passes; full suite (177/177) passes.
+
+---
+
 ## Not a bug (documented false alarm)
 
 While writing `PROPERTY 11` (application labor linearity), a strict `.equals()` assertion failed on the counterexample `area=1, coats=1, throughput=290`. Investigation showed `area*coats/290` is a non-terminating decimal (290 = 2×5×29); computing it once and doubling versus computing `(2×area)/290` directly are two independently-rounded results at the engine's 50-significant-digit precision floor, differing by `1e-52` — twelve digits past the spec's required 40-significant-digit floor and financially meaningless at any real display precision. The linearity formula itself is correct; the test's exactness requirement was wrong. Fixed by using a `1e-40` tolerance instead of bit-exact equality. See the comment in `tests/property/geometry.property.test.ts` for the full reasoning — recorded here so it isn't mistaken for an unresolved defect.

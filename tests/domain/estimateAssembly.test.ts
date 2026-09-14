@@ -78,6 +78,19 @@ describe('Standalone surfaces with no room', () => {
     expect(out.aggregate!.laborHours.toString()).toBe('9'); // 3*2*2*0.75
   });
 
+  it('BOUND-026: a trim surface with trimLengthFt=0 is ACCEPTED at field validation (zero-demand geometry, not a field error)', () => {
+    const trim: Surface = {
+      id: 'trim-1', roomId: null, kind: 'trim', enabled: true, measurementMode: 'manual',
+      areaFt2: null, trimLengthFt: '0', developedWidthFt: '0.5', doorCount: null, widthFt: null, heightFt: null, paintedSides: null,
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+    };
+    let revision = baseRevision();
+    revision = { ...revision, rooms: [], surfaces: [trim] };
+    const out = assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' });
+    expect(out.calculationState).toBe('complete'); // NOT invalid — zero length is a valid (if degenerate) field value
+    expect(out.aggregate!.purchases[0].purchasedGal).toBe(0); // zero paintable area -> zero demand, but still a complete result
+  });
+
   it('a standalone trim surface with missing developed width is incomplete, not silently zero', () => {
     const trim: Surface = {
       id: 'trim-1', roomId: null, kind: 'trim', enabled: true, measurementMode: 'manual',

@@ -107,7 +107,11 @@ function resolveSurface(s: Surface, rooms: Map<string, Room>, defaults: { coats:
     const lengthField = parseDecimalField(s.trimLengthFt);
     const widthField = parseDecimalField(s.developedWidthFt);
     if (lengthField.kind !== 'valid' || widthField.kind !== 'valid') return { state: lengthField.kind === 'missing' || widthField.kind === 'missing' ? 'missing' : 'invalid' };
-    if (!lengthField.value.greaterThan(0) || !widthField.value.greaterThan(0)) return { state: 'invalid' };
+    // BOUND-026: a trim length (or width) of exactly 0 is a valid field
+    // value (zero-demand geometry), not a field-level error — parseDecimalField
+    // already rejects negative input, so no further floor check is needed
+    // here. A degenerate all-zero project is caught by the ISSUE gate, not
+    // by field validation (CALCULATION_SPEC §1 / DECISIONS.md #8).
     geometry = { kind: 'trim', trimLengthFt: lengthField.value, developedWidthFt: widthField.value };
   } else {
     if (s.doorCount === null || s.doorCount === undefined) return { state: 'missing' };
