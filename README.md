@@ -5,7 +5,9 @@ workspace. See [NOTICE.md](./NOTICE.md) for the Mainline template
 attribution. See [TEST_EXECUTION_REPORT.md](./TEST_EXECUTION_REPORT.md),
 [IMPLEMENTATION_DECISIONS.md](./IMPLEMENTATION_DECISIONS.md), and
 [BUG_FIX_LOG.md](./BUG_FIX_LOG.md) for what's built, what's tested, and
-what isn't yet.
+what isn't yet. `evidence/baseline/` has raw command output captured before
+this continuation session's changes; `evidence/audit-batches/` has the
+full per-case reasoning behind `test-execution-results.csv`.
 
 ## What's here
 
@@ -59,7 +61,7 @@ npm run test          # runs the full vitest suite once
 npm run test:watch    # watch mode
 ```
 
-167 tests across `tests/engine/`, `tests/domain/`, `tests/storage/`,
+179 tests across `tests/engine/`, `tests/domain/`, `tests/storage/`,
 `tests/property/`, `tests/mutation/`, `tests/ui/`, and `tests/integration/`
 (real-transaction, multi-step journeys — draft-vs-issued isolation, backup/
 restore, multi-tab conflict rejection). See `TEST_EXECUTION_REPORT.md` for
