@@ -1,80 +1,155 @@
-import { useMemo, useState } from 'react';
-import { PEP, type Dec } from '../../engine/decimal';
-import { parseDecimalField } from '../../engine/parse';
+import { useEffect, useMemo, useState } from 'react';
+import { PEP } from '../../engine/decimal';
 import { computeDocumentTotals } from '../../engine/document';
+import { defaultIdSource } from '../../domain/ids';
+import {
+  newDraft,
+  newLine,
+  cloneDraftForDuplicate,
+  validateTaxPercent,
+  evaluateLines,
+  evaluatePrintEligibility,
+  type EstimateDraft,
+  type Line,
+} from './estimateTemplateLogic';
 
-interface Line {
-  id: string;
-  description: string;
-  quantity: string;
-  unitPrice: string;
+const ids = defaultIdSource;
+const STORAGE_KEY = 'pep_free_estimate_drafts_v1';
+
+function loadStoredDrafts(): { drafts: EstimateDraft[]; activeDraftId: string } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.drafts) || parsed.drafts.length === 0) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
-let nextId = 1;
-function newLine(): Line {
-  return { id: `line-${nextId++}`, description: '', quantity: '1', unitPrice: '' };
+function persistDrafts(drafts: EstimateDraft[], activeDraftId: string) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ drafts, activeDraftId }));
+  } catch {
+    /* storage unavailable (private mode, quota) — draft still works for this session */
+  }
 }
 
-/** Free manual estimate template (tool-specs/01). A line counts as
- * "touched" once ANY field has content — an untouched blank row is simply
- * ignored, but a touched-and-incomplete row blocks a priced print. */
+/**
+ * Free manual estimate template (tool-specs/01). Supports multiple
+ * independent drafts (session/local storage, no account) so "Duplicate"
+ * can create a genuinely separate estimate rather than re-labeling the one
+ * form in place — see estimateTemplateLogic.ts for the pure rules this
+ * component wires up (tax validation, zero-total confirmation, duplicate
+ * cloning).
+ */
 export default function EstimateTemplate() {
-  const [businessName, setBusinessName] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [lines, setLines] = useState<Line[]>([newLine(), newLine()]);
-  const [taxEnabled, setTaxEnabled] = useState(false);
-  const [taxPercent, setTaxPercent] = useState('0');
-  const [notes, setNotes] = useState('');
+  const [drafts, setDrafts] = useState<EstimateDraft[]>(() => [newDraft(ids)]);
+  const [activeDraftId, setActiveDraftId] = useState<string>(() => drafts[0].id);
+  const [loaded, setLoaded] = useState(false);
 
-  function updateLine(id: string, patch: Partial<Line>) {
-    setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  useEffect(() => {
+    const stored = loadStoredDrafts();
+    if (stored) {
+      setDrafts(stored.drafts);
+      setActiveDraftId(stored.drafts.some((d) => d.id === stored.activeDraftId) ? stored.activeDraftId : stored.drafts[0].id);
+    }
+    setLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (loaded) persistDrafts(drafts, activeDraftId);
+  }, [drafts, activeDraftId, loaded]);
+
+  const draft = drafts.find((d) => d.id === activeDraftId) ?? drafts[0];
+
+  function updateDraft(patch: Partial<EstimateDraft>) {
+    setDrafts((ds) => ds.map((d) => (d.id === draft.id ? { ...d, ...patch } : d)));
+  }
+  function updateLine(lineId: string, patch: Partial<Line>) {
+    updateDraft({ lines: draft.lines.map((l) => (l.id === lineId ? { ...l, ...patch } : l)), noChargeConfirmed: false });
   }
   function addLine() {
-    setLines((ls) => [...ls, newLine()]);
+    updateDraft({ lines: [...draft.lines, newLine(ids)] });
   }
-  function removeLine(id: string) {
-    setLines((ls) => ls.filter((l) => l.id !== id));
+  function removeLine(lineId: string) {
+    updateDraft({ lines: draft.lines.filter((l) => l.id !== lineId), noChargeConfirmed: false });
+  }
+  function newEstimate() {
+    const created = newDraft(ids);
+    setDrafts((ds) => [...ds, created]);
+    setActiveDraftId(created.id);
   }
   function duplicateEstimate() {
-    setLines((ls) => ls.map((l) => ({ ...l, id: `line-${nextId++}` })));
+    const clone = cloneDraftForDuplicate(draft, ids);
+    setDrafts((ds) => [...ds, clone]);
+    setActiveDraftId(clone.id);
+  }
+  function deleteEstimate(id: string) {
+    setDrafts((ds) => {
+      const next = ds.filter((d) => d.id !== id);
+      if (next.length === 0) {
+        const fresh = newDraft(ids);
+        setActiveDraftId(fresh.id);
+        return [fresh];
+      }
+      if (id === activeDraftId) setActiveDraftId(next[0].id);
+      return next;
+    });
   }
 
   const evaluation = useMemo(() => {
-    // A fresh row's quantity defaults to "1" (tool-specs/01: "quantity...
-    // initially 1") — that default alone must NOT count as "touched," or
-    // every brand-new blank row would immediately register as an
-    // incomplete line and block printing. Only a changed quantity,
-    // a description, or a price counts as the user having started the row.
-    const touched = lines.filter((l) => l.description.trim() !== '' || l.unitPrice.trim() !== '' || l.quantity.trim() !== '1');
-    const incompleteRows: string[] = [];
-    const validLines: { quantity: Dec; unitSellingPrice: Dec }[] = [];
-
-    for (const l of touched) {
-      const qty = parseDecimalField(l.quantity || null);
-      const price = parseDecimalField(l.unitPrice || null);
-      const descOk = l.description.trim() !== '';
-      if (!descOk || qty.kind !== 'valid' || price.kind !== 'valid') {
-        incompleteRows.push(l.id);
-        continue;
-      }
-      validLines.push({ quantity: qty.value, unitSellingPrice: price.value });
-    }
-
-    const pTax = parseDecimalField(taxPercent);
-    const taxRatio = pTax.kind === 'valid' ? pTax.value.dividedBy(100) : new PEP(0);
-    const totals = computeDocumentTotals(validLines, taxEnabled && pTax.kind === 'valid', taxRatio);
-
-    return { incompleteRows, canPrintPriced: incompleteRows.length === 0 && validLines.length > 0, totals };
-  }, [lines, taxEnabled, taxPercent]);
+    const { incompleteRowIds, validLines } = evaluateLines(draft.lines);
+    const taxValidation = validateTaxPercent(draft.taxEnabled, draft.taxPercent);
+    const taxRatio = taxValidation.kind === 'valid' ? taxValidation.ratio : new PEP(0);
+    const taxApplies = draft.taxEnabled && taxValidation.kind === 'valid';
+    const totals = computeDocumentTotals(validLines, taxApplies, taxRatio);
+    const eligibility = evaluatePrintEligibility({
+      incompleteRowIds,
+      validLineCount: validLines.length,
+      taxValidation,
+      total: totals.total,
+      noChargeConfirmed: draft.noChargeConfirmed,
+    });
+    return { incompleteRowIds, taxValidation, totals, eligibility };
+  }, [draft]);
 
   return (
     <div className="card p-6 sm:p-7">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Business name" value={businessName} onChange={setBusinessName} />
-        <Field label="Customer name" value={customerName} onChange={setCustomerName} />
+      <div className="print:hidden">
+        <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
+          {drafts.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => setActiveDraftId(d.id)}
+              className={`btn ${d.id === draft.id ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              {d.estimateNumber || 'Untitled'}
+            </button>
+          ))}
+          <button type="button" className="btn btn-secondary" onClick={newEstimate}>
+            + New estimate
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-ink-soft">
+          Estimate {draft.estimateNumber || '(unsaved)'} · saved locally in your browser.
+          {drafts.length > 1 && (
+            <button type="button" className="text-link ml-2 text-xs" onClick={() => deleteEstimate(draft.id)}>
+              Delete this estimate
+            </button>
+          )}
+        </p>
       </div>
 
-      <div className="mt-6 overflow-x-auto">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 print:hidden">
+        <Field label="Business name" value={draft.businessName} onChange={(v) => updateDraft({ businessName: v })} />
+        <Field label="Customer name" value={draft.customerName} onChange={(v) => updateDraft({ customerName: v })} />
+      </div>
+
+      <div className="mt-6 overflow-x-auto print:hidden">
         <table className="w-full min-w-[520px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-soft">
@@ -86,11 +161,15 @@ export default function EstimateTemplate() {
             </tr>
           </thead>
           <tbody>
-            {lines.map((l) => {
-              const incomplete = evaluation.incompleteRows.includes(l.id);
-              const qty = parseDecimalField(l.quantity || null);
-              const price = parseDecimalField(l.unitPrice || null);
-              const lineTotal = qty.kind === 'valid' && price.kind === 'valid' ? qty.value.times(price.value).toDecimalPlaces(2).toFixed(2) : '—';
+            {draft.lines.map((l) => {
+              const incomplete = evaluation.incompleteRowIds.includes(l.id);
+              const isValidLine = l.description.trim() !== '' && !incomplete && (l.unitPrice.trim() !== '' || l.quantity.trim() !== '1');
+              let lineTotalDisplay = '—';
+              if (isValidLine) {
+                const qtyN = new PEP(l.quantity || '0');
+                const priceN = new PEP(l.unitPrice || '0');
+                lineTotalDisplay = qtyN.times(priceN).toDecimalPlaces(2).toFixed(2);
+              }
               return (
                 <tr key={l.id} className={`border-b border-line-soft ${incomplete ? 'bg-warn-soft/40' : ''}`}>
                   <td className="py-2 pr-3">
@@ -102,7 +181,7 @@ export default function EstimateTemplate() {
                   <td className="py-2 pr-3">
                     <input className="w-24 rounded-btn border border-line px-2 py-1 tabular-nums" value={l.unitPrice} onChange={(e) => updateLine(l.id, { unitPrice: e.target.value })} placeholder="0.00" />
                   </td>
-                  <td className="py-2 pr-3 tabular-nums">{incomplete ? <span className="text-warn">incomplete</span> : `$${lineTotal}`}</td>
+                  <td className="py-2 pr-3 tabular-nums">{incomplete ? <span className="text-warn">incomplete</span> : `$${lineTotalDisplay}`}</td>
                   <td className="py-2">
                     <button type="button" className="text-link text-xs" onClick={() => removeLine(l.id)}>
                       Remove
@@ -115,31 +194,35 @@ export default function EstimateTemplate() {
         </table>
       </div>
 
-      <button type="button" className="btn btn-secondary mt-3" onClick={addLine}>
+      <button type="button" className="btn btn-secondary mt-3 print:hidden" onClick={addLine}>
         + Add line
       </button>
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between print:hidden">
         <label className="block text-sm">
-          <textarea className="mt-1 w-full max-w-sm rounded-btn border border-line px-3 py-2" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes / terms" />
+          <span className="font-medium text-ink-soft">Notes / terms</span>
+          <textarea className="mt-1 w-full max-w-sm rounded-btn border border-line px-3 py-2" rows={2} value={draft.notes} onChange={(e) => updateDraft({ notes: e.target.value })} placeholder="Notes / terms" />
         </label>
 
         <div className="w-full max-w-xs">
           <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={taxEnabled} onChange={(e) => setTaxEnabled(e.target.checked)} /> Apply tax
+            <input type="checkbox" checked={draft.taxEnabled} onChange={(e) => updateDraft({ taxEnabled: e.target.checked, noChargeConfirmed: false })} /> Apply tax
           </label>
-          {taxEnabled && (
+          {draft.taxEnabled && (
             <label className="mt-2 block text-sm">
-              <span className="font-medium text-ink-soft">Tax %</span>
-              <input className="mt-1 w-full rounded-btn border border-line px-3 py-2 tabular-nums" value={taxPercent} onChange={(e) => setTaxPercent(e.target.value)} />
+              <span className="font-medium text-ink-soft">Tax % (0–100)</span>
+              <input className="mt-1 w-full rounded-btn border border-line px-3 py-2 tabular-nums" value={draft.taxPercent} onChange={(e) => updateDraft({ taxPercent: e.target.value, noChargeConfirmed: false })} />
             </label>
           )}
+          {evaluation.taxValidation.kind === 'invalid' && <p className="mt-1 text-xs text-bad">{evaluation.taxValidation.message}</p>}
+          {evaluation.taxValidation.kind === 'valid' && evaluation.taxValidation.warning && <p className="mt-1 text-xs text-warn">{evaluation.taxValidation.warning}</p>}
+
           <dl className="mt-3 space-y-1 text-sm">
             <div className="flex justify-between">
               <dt className="text-ink-soft">Subtotal</dt>
               <dd className="tabular-nums">${evaluation.totals.subtotal.toFixed(2)}</dd>
             </div>
-            {taxEnabled && (
+            {draft.taxEnabled && evaluation.taxValidation.kind === 'valid' && (
               <div className="flex justify-between">
                 <dt className="text-ink-soft">Tax</dt>
                 <dd className="tabular-nums">${evaluation.totals.tax.toFixed(2)}</dd>
@@ -150,22 +233,77 @@ export default function EstimateTemplate() {
               <dd className="tabular-nums">${evaluation.totals.total.toFixed(2)}</dd>
             </div>
           </dl>
+
+          {evaluation.eligibility.isZeroTotal && (
+            <label className="mt-3 flex items-start gap-2 text-xs text-ink">
+              <input type="checkbox" className="mt-0.5" checked={draft.noChargeConfirmed} onChange={(e) => updateDraft({ noChargeConfirmed: e.target.checked })} />
+              I confirm this is an intentional $0 no-charge estimate.
+            </label>
+          )}
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="mt-6 flex flex-wrap gap-3 print:hidden">
         <button type="button" className="btn btn-secondary" onClick={duplicateEstimate}>
           Duplicate
         </button>
-        <button type="button" className="btn btn-primary" disabled={!evaluation.canPrintPriced} onClick={() => window.print()}>
+        <button type="button" className="btn btn-primary" disabled={!evaluation.eligibility.canPrint} onClick={() => window.print()}>
           Print / Save as PDF
         </button>
-        {!evaluation.canPrintPriced && <p className="self-center text-xs text-ink-soft">Add at least one complete line to print a priced estimate.</p>}
       </div>
+      {!evaluation.eligibility.canPrint && (
+        <ul className="mt-2 text-xs text-warn print:hidden">
+          {evaluation.eligibility.reasons.map((r, i) => (
+            <li key={i}>{r}</li>
+          ))}
+        </ul>
+      )}
 
       <div className="hidden print:block">
-        <h2 className="text-lg font-semibold">{businessName || 'Your business'}</h2>
-        <p>Prepared for: {customerName || '______'}</p>
+        <h2 className="text-lg font-semibold">{draft.businessName || 'Your business'}</h2>
+        <p className="text-sm">Prepared for: {draft.customerName || '______'}</p>
+        <p className="text-xs text-ink-soft">
+          Estimate {draft.estimateNumber || '(unsaved)'} — {new Date().toLocaleDateString()}
+        </p>
+        <table className="mt-4 w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-ink text-left">
+              <th className="py-1 pr-3">Description</th>
+              <th className="py-1 pr-3">Qty</th>
+              <th className="py-1 pr-3">Unit price</th>
+              <th className="py-1 pr-3">Line total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {draft.lines
+              .filter((l) => l.description.trim() !== '' && !evaluation.incompleteRowIds.includes(l.id) && (l.unitPrice.trim() !== '' || l.quantity.trim() !== '1'))
+              .map((l) => (
+                <tr key={l.id} className="border-b border-line">
+                  <td className="py-1 pr-3">{l.description}</td>
+                  <td className="py-1 pr-3">{l.quantity}</td>
+                  <td className="py-1 pr-3">${new PEP(l.unitPrice || '0').toFixed(2)}</td>
+                  <td className="py-1 pr-3">${new PEP(l.quantity || '0').times(new PEP(l.unitPrice || '0')).toDecimalPlaces(2).toFixed(2)}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+        <dl className="mt-4 space-y-1 text-sm">
+          <div className="flex justify-between">
+            <dt>Subtotal</dt>
+            <dd>${evaluation.totals.subtotal.toFixed(2)}</dd>
+          </div>
+          {draft.taxEnabled && evaluation.taxValidation.kind === 'valid' && (
+            <div className="flex justify-between">
+              <dt>Tax</dt>
+              <dd>${evaluation.totals.tax.toFixed(2)}</dd>
+            </div>
+          )}
+          <div className="flex justify-between font-semibold">
+            <dt>Total</dt>
+            <dd>${evaluation.totals.total.toFixed(2)}</dd>
+          </div>
+        </dl>
+        {draft.notes && <p className="mt-4 whitespace-pre-wrap text-sm">{draft.notes}</p>}
       </div>
     </div>
   );

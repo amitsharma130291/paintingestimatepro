@@ -1,0 +1,14 @@
+
+ RUN  v5.0.0 C:/Users/amits/SEOSites/paintingestimatepro
+
+
+ Test Files  25 passed (25)
+      Tests  188 passed (188)
+   Start at  02:10:39
+   Duration  1.83s (transform 42%, setup 36%, import 12%, tests 7%, worker 3%)
+
+  Transform  transforming modules took 3.13s · 42% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+
+VITEST_EXIT=0
