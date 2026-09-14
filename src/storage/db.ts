@@ -1,5 +1,5 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project } from '../domain/entities';
+import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, ImportProvenanceRecord } from '../domain/entities';
 
 /**
  * DATA_CONTRACT.md: "Use transactional local persistence (e.g. IndexedDB)
@@ -12,7 +12,10 @@ import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, 
  */
 
 const DB_NAME = 'painting-estimate-pro';
-const DB_VERSION = 1;
+// v2 adds the importProvenance store (item 6/7) — the idempotent
+// `contains()` guards below mean an existing v1 database only gains the
+// one new store on upgrade, and a fresh install gets all of them.
+const DB_VERSION = 2;
 
 export const STORES = {
   businessSettings: 'businessSettings',
@@ -20,6 +23,7 @@ export const STORES = {
   otherMaterials: 'otherMaterials',
   serviceDefinitions: 'serviceDefinitions',
   projects: 'projects',
+  importProvenance: 'importProvenance',
 } as const;
 
 export async function openAppDb(): Promise<IDBPDatabase> {
@@ -30,6 +34,11 @@ export async function openAppDb(): Promise<IDBPDatabase> {
       if (!db.objectStoreNames.contains(STORES.otherMaterials)) db.createObjectStore(STORES.otherMaterials, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(STORES.serviceDefinitions)) db.createObjectStore(STORES.serviceDefinitions, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(STORES.projects)) db.createObjectStore(STORES.projects, { keyPath: 'id' });
+      // Keyed by copiedProjectId (always unique — one provenance record per
+      // successfully-copied project) rather than a compound (exportId,
+      // sourceProjectId) key; "already imported this export" lookups read
+      // the whole (small, infrequent) store and filter in JS.
+      if (!db.objectStoreNames.contains(STORES.importProvenance)) db.createObjectStore(STORES.importProvenance, { keyPath: 'copiedProjectId' });
     },
   });
 }
@@ -132,6 +141,87 @@ export async function writeProjectWithVersionCheck(db: IDBPDatabase, project: Pr
   }
 }
 
+/**
+ * Commits a backup import — every touched record type in ONE atomic
+ * transaction (item 7: "confirmed imports must commit atomically," across
+ * every supported record type, not just projects), with each project's
+ * write version-checked against its CURRENT stored state inside that same
+ * transaction (item 8: "validate the import plan's expected versions...
+ * within the same transaction that performs the write").
+ *
+ * Each entry in `projects` carries the `expectedVersion` captured when the
+ * import PREVIEW was computed — `null` for a brand-new project (add, or a
+ * "keep both" copy with a fresh ID), or the specific version number seen
+ * for a "replace imported" conflict resolution. If ANY project's current
+ * stored version no longer matches (edited/deleted by another tab after
+ * the preview, before this confirm), the ENTIRE transaction aborts and a
+ * `ConflictError` is thrown — a stale import can never partially land or
+ * silently overwrite newer work. `businessSettings`/`paintVariants`/
+ * `otherMaterials`/`serviceDefinitions` are not individually
+ * version-tracked in this data model (only `Project` is), so those are
+ * written unconditionally once the whole transaction is known to be safe
+ * to commit (i.e. no project-level conflict was found).
+ */
+export async function writeImportedBackup(
+  db: IDBPDatabase,
+  writes: {
+    businessSettings?: BusinessSettings;
+    paintVariants?: PaintVariant[];
+    otherMaterials?: OtherMaterial[];
+    serviceDefinitions?: ServiceDefinition[];
+    projects: { project: Project; expectedVersion: number | null }[];
+    provenance?: ImportProvenanceRecord[];
+  }
+): Promise<{ committedProjectVersions: Map<string, number> }> {
+  const storeNames: string[] = [STORES.projects];
+  if (writes.businessSettings) storeNames.push(STORES.businessSettings);
+  if (writes.paintVariants) storeNames.push(STORES.paintVariants);
+  if (writes.otherMaterials) storeNames.push(STORES.otherMaterials);
+  if (writes.serviceDefinitions) storeNames.push(STORES.serviceDefinitions);
+  if (writes.provenance?.length) storeNames.push(STORES.importProvenance);
+
+  const tx = db.transaction(storeNames, 'readwrite');
+  const settled = tx.done.catch((err) => err as unknown);
+  try {
+    const projectsOs = tx.objectStore(STORES.projects);
+    const committedProjectVersions = new Map<string, number>();
+
+    for (const { project, expectedVersion } of writes.projects) {
+      const current = (await projectsOs.get(project.id)) as Project | undefined;
+      if (expectedVersion === null && current) {
+        throw new ConflictError(`A project with id "${project.id}" already exists.`, current);
+      }
+      if (expectedVersion !== null && !current) {
+        throw new ConflictError('A project targeted by this import no longer exists — it may have been deleted elsewhere. Refresh the import preview and try again.', undefined);
+      }
+      if (expectedVersion !== null && current && current.version !== expectedVersion) {
+        throw new ConflictError(`"${project.title}" was changed elsewhere since you previewed this import (now at version ${current.version}). Refresh the import preview and try again.`, current);
+      }
+      const nextVersion = (current?.version ?? 0) + 1;
+      await projectsOs.put({ ...project, version: nextVersion });
+      committedProjectVersions.set(project.id, nextVersion);
+    }
+
+    if (writes.businessSettings) await tx.objectStore(STORES.businessSettings).put(writes.businessSettings);
+    if (writes.paintVariants) for (const v of writes.paintVariants) await tx.objectStore(STORES.paintVariants).put(v);
+    if (writes.otherMaterials) for (const m of writes.otherMaterials) await tx.objectStore(STORES.otherMaterials).put(m);
+    if (writes.serviceDefinitions) for (const s of writes.serviceDefinitions) await tx.objectStore(STORES.serviceDefinitions).put(s);
+    if (writes.provenance) for (const p of writes.provenance) await tx.objectStore(STORES.importProvenance).put(p);
+
+    await tx.done;
+    return { committedProjectVersions };
+  } catch (err) {
+    try {
+      tx.abort();
+    } catch {
+      /* already aborted/finished */
+    }
+    await settled;
+    if (err instanceof ConflictError) throw err;
+    throw new SaveFailedError('Import failed — your previous data was not changed.', err);
+  }
+}
+
 export async function readAll<T>(db: IDBPDatabase, store: string): Promise<T[]> {
   return db.getAll(store);
 }
@@ -150,15 +240,17 @@ export interface AppSnapshot {
   otherMaterials: OtherMaterial[];
   serviceDefinitions: ServiceDefinition[];
   projects: Project[];
+  importProvenance: ImportProvenanceRecord[];
 }
 
 export async function readAppSnapshot(db: IDBPDatabase): Promise<AppSnapshot> {
-  const [businessSettings, paintVariants, otherMaterials, serviceDefinitions, projects] = await Promise.all([
+  const [businessSettings, paintVariants, otherMaterials, serviceDefinitions, projects, importProvenance] = await Promise.all([
     readAll<BusinessSettings>(db, STORES.businessSettings),
     readAll<PaintVariant>(db, STORES.paintVariants),
     readAll<OtherMaterial>(db, STORES.otherMaterials),
     readAll<ServiceDefinition>(db, STORES.serviceDefinitions),
     readAll<Project>(db, STORES.projects),
+    readAll<ImportProvenanceRecord>(db, STORES.importProvenance),
   ]);
-  return { businessSettings, paintVariants, otherMaterials, serviceDefinitions, projects };
+  return { businessSettings, paintVariants, otherMaterials, serviceDefinitions, projects, importProvenance };
 }
