@@ -1,24 +1,30 @@
 import { useMemo, useState } from 'react';
-import { PEP, type Dec } from '../../engine/decimal';
-import { parseDecimalField } from '../../engine/parse';
-import { directCost, overheadAmount, estimatedJobCost } from '../../engine/cost';
-import { evaluatePrice } from '../../engine/pricing';
 import { money, percent, statusBadge } from './shared';
+import { evaluateJobCost, newOtherExpenseLine, type MaterialsMode, type LaborMode, type OverheadMode, type PricingMode, type OtherExpenseLine } from './jobCostCalculatorLogic';
 
-type OverheadMode = 'percent' | 'flat';
-type PricingMode = 'solveForPrice' | 'enterPrice';
+let nextLineId = 1;
 
 /**
- * Free job-cost calculator (tool-specs/02). Every cost field is
- * independent text state so a blank field is genuinely "missing" (not
- * silently 0) until the user types something — the tool only computes
- * once the active fields for the active modes are all valid.
+ * Free job-cost calculator (tool-specs/02). Materials and labor each have
+ * two modes (lumpSum/itemized, direct/hoursRate) that never blend stale
+ * values from the inactive one — see jobCostCalculatorLogic.ts for the
+ * pure, tested rules this component wires up.
  */
 export default function JobCostCalculator() {
-  const [materials, setMaterials] = useState('');
+  const [materialsMode, setMaterialsMode] = useState<MaterialsMode>('lumpSum');
+  const [materialsAmount, setMaterialsAmount] = useState('');
+  const [paintGallons, setPaintGallons] = useState('');
+  const [paintPricePerGal, setPaintPricePerGal] = useState('');
+  const [suppliesAmount, setSuppliesAmount] = useState('');
+
+  const [laborMode, setLaborMode] = useState<LaborMode>('direct');
   const [laborAmount, setLaborAmount] = useState('');
-  const [travel, setTravel] = useState('');
-  const [otherExpense, setOtherExpense] = useState('');
+  const [laborHours, setLaborHours] = useState('');
+  const [loadedHourlyRate, setLoadedHourlyRate] = useState('');
+
+  const [travelAmount, setTravelAmount] = useState('');
+  const [otherExpenseLines, setOtherExpenseLines] = useState<OtherExpenseLine[]>([]);
+
   const [overheadMode, setOverheadMode] = useState<OverheadMode>('percent');
   const [overheadPercent, setOverheadPercent] = useState('15');
   const [overheadFlat, setOverheadFlat] = useState('');
@@ -26,67 +32,27 @@ export default function JobCostCalculator() {
   const [pricingMode, setPricingMode] = useState<PricingMode>('solveForPrice');
   const [enteredPrice, setEnteredPrice] = useState('');
 
-  const result = useMemo(() => {
-    const errors: string[] = [];
-    // tool-specs/02: "At first render show empty guidance until the user
-    // supplies/confirms cost data... missing active inputs block results."
-    // Materials and Labor are the active cost inputs in this simplified
-    // (non-itemized) build — a blank field must stay `missing` and block
-    // the result, never silently become a valid $0. Travel/Other expenses
-    // are genuinely optional additive line items (a job may have none),
-    // so those default to $0 when blank without blocking anything.
-    const pMaterials = parseDecimalField(materials);
-    const pLabor = parseDecimalField(laborAmount);
-    const pTravel = parseDecimalField(travel || '0');
-    const pOther = parseDecimalField(otherExpense || '0');
-    const pTargetPct = parseDecimalField(targetPercent);
-    const pOverheadPct = parseDecimalField(overheadPercent);
-    const pOverheadFlat = parseDecimalField(overheadFlat || '0');
+  function addExpenseLine() {
+    setOtherExpenseLines((ls) => [...ls, newOtherExpenseLine(`job-line-${nextLineId++}`)]);
+  }
+  function updateExpenseLine(id: string, patch: Partial<OtherExpenseLine>) {
+    setOtherExpenseLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  }
+  function removeExpenseLine(id: string) {
+    setOtherExpenseLines((ls) => ls.filter((l) => l.id !== id));
+  }
 
-    for (const [label, f] of [
-      ['Materials', pMaterials],
-      ['Labor', pLabor],
-      ['Travel', pTravel],
-      ['Other expenses', pOther],
-      ['Target margin', pTargetPct],
-    ] as const) {
-      if (f.kind === 'invalid') errors.push(`${label}: ${f.message}`);
-    }
-    if (overheadMode === 'percent' && pOverheadPct.kind === 'invalid') errors.push(`Overhead %: ${pOverheadPct.message}`);
-    if (overheadMode === 'flat' && pOverheadFlat.kind === 'invalid') errors.push(`Overhead: ${pOverheadFlat.message}`);
-
-    if (pMaterials.kind === 'missing' || pLabor.kind === 'missing') {
-      return { errors, cost: null } as const; // genuinely incomplete — no guidance-blocking error text needed, just no result yet
-    }
-    if (errors.length > 0 || pMaterials.kind !== 'valid' || pLabor.kind !== 'valid' || pTravel.kind !== 'valid' || pOther.kind !== 'valid' || pTargetPct.kind !== 'valid') {
-      return { errors, cost: null } as const;
-    }
-
-    const targetRatio = pTargetPct.value.dividedBy(100);
-    if (targetRatio.greaterThanOrEqualTo(1) || targetRatio.isNegative()) {
-      return { errors: ['Target margin must be between 0% and 99%.'], cost: null } as const;
-    }
-
-    const dc = directCost(pMaterials.value, pLabor.value, pTravel.value.plus(pOther.value));
-    let oh: Dec;
-    if (overheadMode === 'percent') {
-      if (pOverheadPct.kind !== 'valid') return { errors, cost: null } as const;
-      oh = overheadAmount(dc, pOverheadPct.value.dividedBy(100));
-    } else {
-      oh = pOverheadFlat.kind === 'valid' ? pOverheadFlat.value : new PEP(0);
-    }
-    const cost = estimatedJobCost(dc, oh);
-
-    let priceInput: Dec | null = null;
-    if (pricingMode === 'enterPrice') {
-      const pEntered = enteredPrice.trim() === '' ? null : parseDecimalField(enteredPrice);
-      if (pEntered && pEntered.kind === 'invalid') return { errors: [`Price: ${pEntered.message}`], cost: null } as const;
-      priceInput = pEntered && pEntered.kind === 'valid' ? pEntered.value : null;
-    }
-
-    const price = evaluatePrice({ cost, price: priceInput, targetMarginRatio: targetRatio });
-    return { errors: [] as string[], cost, directCostValue: dc, overhead: oh, price } as const;
-  }, [materials, laborAmount, travel, otherExpense, overheadMode, overheadPercent, overheadFlat, targetPercent, pricingMode, enteredPrice]);
+  const result = useMemo(
+    () =>
+      evaluateJobCost({
+        materialsMode, materialsAmount, paintGallons, paintPricePerGal, suppliesAmount,
+        laborMode, laborAmount, laborHours, loadedHourlyRate,
+        travelAmount, otherExpenseLines,
+        overheadMode, overheadPercent, overheadFlat,
+        targetPercent, pricingMode, enteredPrice,
+      }),
+    [materialsMode, materialsAmount, paintGallons, paintPricePerGal, suppliesAmount, laborMode, laborAmount, laborHours, loadedHourlyRate, travelAmount, otherExpenseLines, overheadMode, overheadPercent, overheadFlat, targetPercent, pricingMode, enteredPrice]
+  );
 
   return (
     <div className="card p-6 sm:p-7">
@@ -94,10 +60,64 @@ export default function JobCostCalculator() {
         <div>
           <h3 className="text-base font-semibold text-ink">Costs</h3>
           <div className="mt-3 space-y-3">
-            <Field label="Materials ($)" value={materials} onChange={setMaterials} placeholder="0.00" />
-            <Field label="Labor ($)" value={laborAmount} onChange={setLaborAmount} placeholder="0.00" />
-            <Field label="Travel ($)" value={travel} onChange={setTravel} placeholder="0.00" />
-            <Field label="Other expenses ($)" value={otherExpense} onChange={setOtherExpense} placeholder="0.00" />
+            <div>
+              <div className="flex gap-2">
+                <button type="button" className={`btn ${materialsMode === 'lumpSum' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMaterialsMode('lumpSum')}>
+                  Materials: one amount
+                </button>
+                <button type="button" className={`btn ${materialsMode === 'itemized' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMaterialsMode('itemized')}>
+                  Materials: paint + supplies
+                </button>
+              </div>
+              {materialsMode === 'lumpSum' ? (
+                <Field label="Materials ($)" value={materialsAmount} onChange={setMaterialsAmount} placeholder="0.00" className="mt-2" />
+              ) : (
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <Field label="Paint (gal)" value={paintGallons} onChange={setPaintGallons} placeholder="0" />
+                  <Field label="Price/gal ($)" value={paintPricePerGal} onChange={setPaintPricePerGal} placeholder="0.00" />
+                  <Field label="Supplies ($)" value={suppliesAmount} onChange={setSuppliesAmount} placeholder="0.00" />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="flex gap-2">
+                <button type="button" className={`btn ${laborMode === 'direct' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLaborMode('direct')}>
+                  Labor: one amount
+                </button>
+                <button type="button" className={`btn ${laborMode === 'hoursRate' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLaborMode('hoursRate')}>
+                  Labor: hours × rate
+                </button>
+              </div>
+              {laborMode === 'direct' ? (
+                <Field label="Labor ($)" value={laborAmount} onChange={setLaborAmount} placeholder="0.00" className="mt-2" />
+              ) : (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Field label="Hours" value={laborHours} onChange={setLaborHours} placeholder="0" />
+                  <Field label="Loaded rate ($/hr)" value={loadedHourlyRate} onChange={setLoadedHourlyRate} placeholder="0.00" />
+                </div>
+              )}
+            </div>
+
+            <Field label="Travel ($)" value={travelAmount} onChange={setTravelAmount} placeholder="0.00" />
+
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-ink-soft">Other expenses</span>
+                <button type="button" className="text-link text-xs" onClick={addExpenseLine}>
+                  + Add line
+                </button>
+              </div>
+              {otherExpenseLines.map((line) => (
+                <div key={line.id} className="mt-1 flex gap-2">
+                  <input className="w-full rounded-btn border border-line px-2 py-1 text-sm" value={line.description} onChange={(e) => updateExpenseLine(line.id, { description: e.target.value })} placeholder="Description" />
+                  <input className="w-24 rounded-btn border border-line px-2 py-1 text-sm tabular-nums" value={line.amount} onChange={(e) => updateExpenseLine(line.id, { amount: e.target.value })} placeholder="0.00" />
+                  <button type="button" className="text-link text-xs" onClick={() => removeExpenseLine(line.id)}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
 
             <div>
               <label className="text-sm font-medium text-ink-soft">Overhead</label>
@@ -132,7 +152,9 @@ export default function JobCostCalculator() {
           </div>
           {pricingMode === 'enterPrice' && <Field label="Your price ($)" value={enteredPrice} onChange={setEnteredPrice} placeholder="Leave blank for unpriced" className="mt-3" />}
 
-          {result.errors.length > 0 && (
+          {result.state === 'incomplete' && <p className="mt-4 text-sm text-ink-soft">Enter materials, labor, and a target margin to see your estimated total.</p>}
+
+          {result.state === 'invalid' && (
             <div className="mt-4 rounded-[calc(var(--radius-card)-8px)] border border-bad-line bg-bad-soft p-3 text-sm text-bad">
               {result.errors.map((e, i) => (
                 <p key={i}>{e}</p>
@@ -140,22 +162,21 @@ export default function JobCostCalculator() {
             </div>
           )}
 
-          {result.errors.length === 0 && !result.cost && (materials.trim() === '' || laborAmount.trim() === '') && (
-            <p className="mt-4 text-sm text-ink-soft">Enter materials and labor cost to see your estimated total.</p>
-          )}
-
-          {result.cost && (
+          {result.state === 'complete' && (
             <dl className="mt-4 space-y-2 text-sm">
+              <Row label="Materials" value={money(result.materials)} />
+              <Row label="Labor" value={money(result.labor)} />
+              <Row label="Other expenses (incl. travel)" value={money(result.otherExpenses)} />
               <Row label="Direct cost" value={money(result.directCostValue)} />
               <Row label="Overhead" value={money(result.overhead)} />
               <Row label="Total estimated cost" value={money(result.cost)} strong />
-              {pricingMode === 'solveForPrice' && result.price && (
+              {pricingMode === 'solveForPrice' && (
                 <>
                   <Row label="Approx. price (nearest cent)" value={money(result.price.approxPrice)} />
                   <Row label="Suggested price (meets target)" value={money(result.price.minimumTargetPrice)} strong />
                 </>
               )}
-              {pricingMode === 'enterPrice' && result.price && (
+              {pricingMode === 'enterPrice' && (
                 <>
                   <Row label="Profit" value={money(result.price.profit)} />
                   <Row label="Margin" value={percent(result.price.marginRatio)} strong />

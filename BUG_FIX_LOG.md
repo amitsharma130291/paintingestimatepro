@@ -254,6 +254,20 @@ Separately: "Duplicate" only re-assigned line IDs on the SAME in-memory form (`s
 
 ---
 
+## 17. Free job-cost calculator was missing its specified materialsMode/laborMode toggles and a real other-expenses list (JOB-005/006/007/008)
+
+**Found by:** Verifying "the full free job-cost workflow against its required inputs, outputs, validation, and rounding rules" per tool-specs/02, which specifies `materialsMode lumpSum|itemized`, `laborMode direct|hoursRate`, and `otherExpenseLines` as a real list — the shipped tool only had a single flat "Materials," "Labor," and "Other expenses" field each, with no itemized/hours×rate path and no way to add more than one other-expense line.
+
+**Fix:** Extracted the full spec-shaped calculation into a pure, tested module (`src/components/tools/jobCostCalculatorLogic.ts`) and rebuilt `JobCostCalculator.tsx` around it: a materials mode toggle (one amount, or paint gallons × price/gal + supplies), a labor mode toggle (one amount, or hours × loaded rate), and a real add/remove list of other-expense lines alongside travel. Each mode strictly reads only its own active fields — switching modes never blends stale values from the inactive one, per the spec's explicit requirement.
+
+**Regression test:** `tests/ui/jobCostCalculatorLogic.test.ts` (14 tests) — includes the spec's own "original brief acceptance" worked example (42hr×$32 labor, 22gal×$42+$180 supplies, $100 travel, $75 other) as an independently-derived oracle (the numbers come straight from the spec text, not from running the function under test), plus mode-isolation tests (each mode ignores the other's stale text), the JOB-001/002 missing-vs-explicit-zero distinction, multi-line expense summation, and pricing-status forwarding (unpriced/below-cost never suppressed).
+
+**Verification — live in the browser:** switched to "paint + supplies" and "hours × rate" modes, entered the exact spec fixture values, and observed Materials $1104.00 / Labor $1344.00 / Other expenses $175.00 / Direct cost $2623.00 / Overhead $393.45 / Total $3016.45 / Approx $4640.69 / Suggested $4640.70 — an exact match to every figure in tool-specs/02's worked example.
+
+**Verification (automated):** 233/233 tests pass (14 new); `astro check` 0 errors; `astro build` succeeds.
+
+---
+
 ## Not a bug (documented false alarm)
 
 While writing `PROPERTY 11` (application labor linearity), a strict `.equals()` assertion failed on the counterexample `area=1, coats=1, throughput=290`. Investigation showed `area*coats/290` is a non-terminating decimal (290 = 2×5×29); computing it once and doubling versus computing `(2×area)/290` directly are two independently-rounded results at the engine's 50-significant-digit precision floor, differing by `1e-52` — twelve digits past the spec's required 40-significant-digit floor and financially meaningless at any real display precision. The linearity formula itself is correct; the test's exactness requirement was wrong. Fixed by using a `1e-40` tolerance instead of bit-exact equality. See the comment in `tests/property/geometry.property.test.ts` for the full reasoning — recorded here so it isn't mistaken for an unresolved defect.
