@@ -70,13 +70,11 @@ export function issueRevision(
   ids: IdSource
 ): EstimateRevision {
   const now = ids.now();
-  return {
-    ...structuredClone(revision),
-    state: 'issued',
-    issuedAt: now,
-    updatedAt: now,
-    customerDocumentSnapshot: buildCustomerDocument(revision),
-  };
+  // BUG_FIX_LOG #4: build the document from the ALREADY-issued revision, not
+  // the pre-issue draft — otherwise the callback sees state:'draft' and every
+  // issued customer document is permanently stamped "draft".
+  const issued: EstimateRevision = { ...structuredClone(revision), state: 'issued', issuedAt: now, updatedAt: now };
+  return { ...issued, customerDocumentSnapshot: buildCustomerDocument(issued) };
 }
 
 /** DATA_CONTRACT #5: editing an issued revision NEVER mutates it — it

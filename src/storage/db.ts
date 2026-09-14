@@ -73,6 +73,52 @@ export async function writeAll(db: IDBPDatabase, writes: { store: string; record
   }
 }
 
+export class ConflictError extends Error {
+  constructor(message: string, public currentRecord: unknown) {
+    super(message);
+    this.name = 'ConflictError';
+  }
+}
+
+/**
+ * Optimistic-concurrency write for a single project (task item 5: "version
+ * each persisted project, check the version inside the write transaction,
+ * reject stale writes with a conflict message"). Uses the project's own
+ * `updatedAt` as the version token rather than adding a new schema field —
+ * every domain operation already bumps it on every mutation, so it is
+ * already a correct monotonic version for this purpose.
+ *
+ * `expectedUpdatedAt` is the `updatedAt` the caller last read/saved.
+ * `null` means "I have no prior version" (a brand-new project) and skips
+ * the check. If the stored record's `updatedAt` no longer matches, this
+ * throws `ConflictError` with the current stored record attached — the
+ * caller's own in-memory edit is untouched by this rejection, so it can
+ * still offer "reload" (discard local edit) or "save as copy" (keep it
+ * under a new ID) instead of silently overwriting another tab's save.
+ */
+export async function writeProjectWithVersionCheck(db: IDBPDatabase, project: Project, expectedUpdatedAt: string | null): Promise<void> {
+  const tx = db.transaction(STORES.projects, 'readwrite');
+  const settled = tx.done.catch((err) => err as unknown);
+  try {
+    const os = tx.objectStore(STORES.projects);
+    const current = (await os.get(project.id)) as Project | undefined;
+    if (current && expectedUpdatedAt !== null && current.updatedAt !== expectedUpdatedAt) {
+      throw new ConflictError(`This project was changed elsewhere (last saved ${current.updatedAt}). Reload or save as a copy instead of overwriting.`, current);
+    }
+    await os.put(project);
+    await tx.done;
+  } catch (err) {
+    try {
+      tx.abort();
+    } catch {
+      /* already aborted/finished */
+    }
+    await settled;
+    if (err instanceof ConflictError) throw err;
+    throw new SaveFailedError('Save failed — your previous data was not changed.', err);
+  }
+}
+
 export async function readAll<T>(db: IDBPDatabase, store: string): Promise<T[]> {
   return db.getAll(store);
 }

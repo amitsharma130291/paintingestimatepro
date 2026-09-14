@@ -1,6 +1,6 @@
 # Bug fix log
 
-Three real defects were found during this implementation — two via automated tests failing red-then-green, one via manual browser testing. None were pre-existing; all were introduced and caught within this same session.
+Four real defects were found during this implementation — three via automated tests failing red-then-green, one via manual browser testing. None were pre-existing; all were introduced and caught within this same session. A fifth is recorded further down as a continuation-session finding.
 
 ---
 
@@ -47,6 +47,24 @@ Three real defects were found during this implementation — two via automated t
 **Regression test:** `tests/ui/shared.test.ts` — asserts positive, negative, zero, and null formatting.
 
 **Verification:** New test passes; full suite (133/133) still passes after the change; `astro build` and `astro check` still clean.
+
+---
+
+## 4. Issued customer document was permanently stamped "draft" (continuation session)
+
+**Found by:** `tests/integration/draftIssuedIsolation.test.ts` (new, this continuation session), step 11 of the 11-step draft/issued isolation sequence required by the task — the very first run of this new integration test failed red on `expect(originalIssuedAfterEdit.customerDocumentSnapshot!.status).toBe('issued')`, receiving `'draft'` instead.
+
+**Reproduction:** Call `issueRevision(draft, buildCustomerDocument, ids)` on any draft and inspect `issued.customerDocumentSnapshot.status`. Expected `'issued'`; actual `'draft'`, on every single issued estimate ever produced by the app — this was a 100%-reproducible defect, not an edge case, that the prior session's 133-test suite never caught because no test asserted the document's `status` field value, only that a document existed.
+
+**Root cause:** `src/domain/project.ts`'s `issueRevision()` called `buildCustomerDocument(revision)` using the ORIGINAL pre-issue `revision` argument (`state: 'draft'`) instead of the newly-issued copy being constructed in the same function. `buildCustomerDocument()` in turn derives `status` from `revision.state === 'issued' ? 'issued' : 'draft'` — so it always saw `'draft'` at the exact moment an estimate was issued, and that wrong value was then frozen into the immutable `customerDocumentSnapshot` forever (the whole point of freezing is that it never gets a chance to self-correct later).
+
+**Customer impact:** every issued estimate a customer receives — including ones already "verified" as immutable in the prior session's manual browser pass — would display "DRAFT" instead of a finalized status, undermining trust in exactly the estimate meant to look final and professional.
+
+**Fix:** `issueRevision()` now constructs the `state: 'issued'` object first, then calls `buildCustomerDocument(issued)` on that, so the callback always observes the correct final state.
+
+**Regression test:** Added an explicit assertion to the existing `tests/domain/lifecycle.test.ts::LIFE-D02` case (`expect(issued.customerDocumentSnapshot!.status).toBe('issued')`), plus full coverage via the new `tests/integration/draftIssuedIsolation.test.ts` (both pricing modes).
+
+**Verification:** Both tests pass; full suite (158/158 at time of fix) passes with no regressions; `astro check` clean (0 errors).
 
 ---
 

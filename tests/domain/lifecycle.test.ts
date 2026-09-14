@@ -79,6 +79,10 @@ describe('LIFE-D02: issuing freezes a revision; editing after issue creates a NE
     const issued = issueRevision(draft, (r) => buildCustomerDocument(r, { estimateNumber: 'E-1', estimateDate: '2026-01-02', projectAddress: '', revisionLabel: 'Rev 1' }), ids);
     expect(issued.state).toBe('issued');
     expect(issued.customerDocumentSnapshot).not.toBeNull();
+    // BUG_FIX_LOG #4 regression: the customer document must show "issued",
+    // not the pre-issue draft's state — a customer must never see a freshly
+    // issued estimate stamped "draft".
+    expect(issued.customerDocumentSnapshot!.status).toBe('issued');
 
     const issuedSnapshotBefore = JSON.parse(JSON.stringify(issued));
 
