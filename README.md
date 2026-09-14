@@ -35,10 +35,14 @@ full per-case reasoning behind `test-execution-results.csv`.
   (draft/issue/duplicate, snapshots, backups) as pure, tested functions,
   independent of the UI and of IndexedDB.
 
-**Not implemented — by design, not an oversight:** paid checkout/entitlement
-(no payment provider has been selected; see `docs/ACCESS_SPEC.md` and
-`TEST_EXECUTION_REPORT.md` §6), CRM, scheduling, AI estimating, accounting,
-and every calculator/tool outside the three free ones above.
+**Implemented but not yet configured:** paid checkout/entitlement via Dodo
+Payments (see "Payments" below and `TEST_EXECUTION_REPORT.md` §6) — the
+code is real and fails closed safely, but no real Dodo credentials are set
+in this repo, so it has never processed an actual charge.
+
+**Not implemented — by design, not an oversight:** CRM, scheduling, AI
+estimating, accounting, and every calculator/tool outside the three free
+ones above.
 
 ## Setup
 
@@ -84,16 +88,41 @@ npm run preview
 `npm run check` runs Astro's type/diagnostics check (0 errors as of this
 delivery).
 
-## Payment sandbox
+## Payments — Dodo Payments (implemented, not yet configured)
 
-Not configured — no provider has been selected. See
-`docs/ACCESS_SPEC.md` for the requirements a provider integration must meet
-before any purchase code is written.
+The provider is chosen and the integration is built (checkout, entitlement
+verification, license-key redeem/recover, webhook backstop — see
+`TEST_EXECUTION_REPORT.md` §6 and `BUG_FIX_LOG.md` #14). Nothing has
+processed a real charge: `DODO_PAYMENTS_API_KEY` etc. are unset in this
+repo, so every route fails closed with "Payments aren't set up yet."
+
+To activate it:
+1. Copy `.env.example` to `.env` and fill in each value — every line
+   explains where it comes from (Dodo dashboard, Gmail app password).
+2. In the Dodo dashboard, create a one-time-payment product for Pro
+   ($99, matching `src/data/site.ts`'s `PRICE` constant) and copy its
+   product id into `DODO_PRODUCT_ID_PRO`. Dodo's own "License Keys"
+   feature does **not** need to be enabled — this app generates its own
+   self-verifying key from the payment id.
+3. Create a webhook endpoint in the Dodo dashboard pointed at
+   `https://<your-deployed-domain>/api/webhooks/dodo`, listening for
+   `payment.succeeded`, and copy its signing secret into
+   `DODO_PAYMENTS_WEBHOOK_KEY`.
+4. Start with `DODO_ENVIRONMENT=test_mode` and a **test-mode** API key;
+   run at least one real test-mode purchase through the full flow
+   (`Buy Pro` → Dodo's hosted checkout → redirect back → workspace
+   unlocks) before ever switching to `live_mode`.
+5. Deploy to Vercel (the adapter is already configured in
+   `astro.config.mjs`) with those environment variables set there too.
 
 ## Before deploying
 
 - Set the real production domain in `astro.config.mjs` (`SITE_URL`).
-- Resolve the payment-provider decision and implement `ACCESS_SPEC.md`
-  before enabling any purchase UI.
+- Configure the Dodo Payments environment variables above and run a real
+  test-mode purchase before switching to live mode.
+- Decide when to update the homepage's "planned"/"not available yet"
+  copy — this session left it as-is; it's a marketing decision, not a
+  code one, and the Buy button already works correctly either way (it
+  fails closed with a clear message if payments aren't configured yet).
 - Review `TEST_EXECUTION_REPORT.md` §7 (remaining risks) first.
 - This project was not deployed as part of this task.

@@ -16,7 +16,7 @@ python3 docs/verify_reference.py  # → 20 fixtures / 106 fields passed (evidenc
 
 **Commands run after this session's changes:**
 ```
-npx vitest run       # → 167/167 passed, 24 test files
+npx vitest run       # → 188/188 passed, 25 test files
 npx astro check      # → 0 errors, 0 warnings (74 files)
 npx astro build      # → 5 pages built
 ```
@@ -35,7 +35,7 @@ Plus extensive live manual verification via the Claude Browser tool against `ast
 
 **Pro app UI rewrite** (`src/components/tools/pro/ProApp.tsx`) — replaced the prior session's simplified single-variant-per-room prototype with a UI driven by the real `Room`/`Surface` domain model: independent wall/ceiling paint variant per room, standalone trim/door surfaces, a saved-drafts project list, rate-refresh preview/confirm/cancel panel, a conflict-resolution banner (reload vs. save-as-copy), business/customer info entry, and a working print/PDF path for the issued customer document.
 
-**13 real defects found and fixed this continuation session** (on top of 3 from the prior session — 16 total, all in `BUG_FIX_LOG.md` with full reproduction/root-cause/fix/verification detail):
+**14 real defects found and fixed this continuation session** (on top of 3 from the prior session — 17 total, all in `BUG_FIX_LOG.md` with full reproduction/root-cause/fix/verification detail):
 1-3. Prior session: `writeAll` transaction rollback, free estimate template blank-row bug (**re-verified live again this session**, still correct), negative-money sign placement.
 4. **Issued customer documents were permanently stamped "draft"** — found by this session's new 11-step integration test on its first run.
 5. Suggested-price mode showed a real proposed price but "—" for profit/margin — found live in the browser during the first manual test of the rewritten UI.
@@ -47,12 +47,13 @@ Plus extensive live manual verification via the Claude Browser tool against `ast
 11. **(Serious, data loss)** The actual-cost review tab was never persisted to storage at all — recording actuals and reloading the page silently lost everything. Found by the audit reading source code, confirmed live via a full page reload + direct DOM inspection.
 12. The free job-cost calculator showed a "complete" $0.00 result before any input was entered — found by the audit, confirmed live in the browser.
 13. Backup restore unconditionally overwrote a local project sharing an ID with an imported one — found by the audit reading source code; fixed by wiring in the already-tested `planRestoreMerge` (keep-local default), not yet re-verified live.
+14. While implementing Dodo Payments: a full refund would not have revoked access — Dodo tracks refunds via a separate `refund_status` field, not `payment.status`. Found by reading the SDK's own type definitions before any real payment was ever processed against this codebase; fixed in the same commit as its discovery.
 
 ## 2. Numerical fixtures and independent oracle (unchanged, re-verified)
 
 `npx vitest run tests/engine/fixtures.test.ts` and `python3 docs/verify_reference.py` both still pass at 20/20 fixtures, 106 fields, after every change this session — reconfirmed at the final full-suite run, not assumed from the prior session's result.
 
-## 3. Automated test suite (167 tests, 24 files, all passing)
+## 3. Automated test suite (188 tests, 25 files, all passing)
 
 New files added this continuation session, on top of the prior session's 18:
 - `tests/engine/estimate.test.ts` (7 tests) — `aggregateProjectSurfaces`: independent wall/ceiling variant pooling, standalone trim/door, disabled-surface exclusion, enabled-and-invalid propagation.
@@ -61,6 +62,7 @@ New files added this continuation session, on top of the prior session's 18:
 - `tests/storage/versionConflict.test.ts` (4 tests) — `writeProjectWithVersionCheck` against real `fake-indexeddb` transactions: fresh write, matching-version write, stale-write rejection, `ConflictError` carries the current record.
 - `tests/integration/draftIssuedIsolation.test.ts` (2 tests, parameterized over suggested/custom pricing) — the full 11-step sequence from the task: draft A at $42 → save → live catalog to $49 → reload A still $42 → draft B sees $49 → preview refresh on A → cancel (A unchanged in storage) → confirm refresh (A now $49) → issue A → edit as new draft, widen scope → confirm the ORIGINAL issued revision's inputs/rates/price/customer document are byte-identical to before the edit. This is the test that caught bug #4 on its first run.
 - `tests/integration/backupRestoreStorage.test.ts` (5 tests) — export completeness (issued revision + rate snapshot + actual review survive), structural absence of any payment/entitlement-like string in exported JSON, restore-into-empty-store through real transactions, repeated restore not duplicating, corrupt import causing zero writes.
+- `tests/lib/license.test.ts` (9 tests) — the pure, network-free parts of the Dodo Payments integration: `buildLicenseKey`/`parseLicenseKey` round-trip and rejection of malformed/foreign-format keys, `buildRecoveryUrl` construction. The parts that actually call Dodo's API (checkout, verify, redeem, recover, webhook signature verification) are not unit-testable without a real or sandboxed Dodo API key, which this session did not have — see §6.
 - Extended `tests/domain/lifecycle.test.ts` with `upsertRevision` append-vs-replace tests (bug #7's regression) and a `customerDocumentSnapshot.status === 'issued'` assertion (bug #4's regression).
 
 Prior session's 18 files (parsing, geometry, pricing, cost, service health, actuals, document, decimal, lifecycle, backup, storage atomicity, 4 property suites, mutation, UI formatting) all still pass unchanged.
@@ -84,12 +86,12 @@ The prior session's 11 checks are unchanged. Added this session, closing the exa
 
 | Status | Count | Meaning |
 |---|---|---|
-| `passed` | **131** | A real test/manual-verification citation was read and confirmed to check that exact case. |
-| `not_run` | **179** | No test exercises this exact scenario; `notes` says whether the underlying behavior looks correct by code reading or is a real gap. |
-| `blocked` | **27** | 12 `ACCESS-*` (no payment provider) + 15 others genuinely blocked on an external dependency or an unresolved upstream decision. |
+| `passed` | **135** | A real test/manual-verification citation was read and confirmed to check that exact case. |
+| `not_run` | **187** | No test exercises this exact scenario; `notes` says whether the underlying behavior looks correct by code reading or is a real gap. |
+| `blocked` | **15** | 15 cases genuinely blocked on a feature not built this session (backup conflict-resolution UI, free-tool alternate modes) — no longer includes `ACCESS-*`, since payment is now implemented (§6). |
 | `failed` | **8** | An executed check (a test, or direct source reading against the case's exact Given/When/Then) demonstrated the described behavior does NOT hold. |
 
-Implementation status: **223 implemented, 75 missing, 37 partial, 10 external_dependency.** (BACK-004/017 moved from `failed`/`missing` to `not_run`/`partial` after this session's fix wiring `planRestoreMerge` into the actual restore path — see BUG_FIX_LOG.md #13; not re-verified live via an actual file round-trip, so not marked `passed`.)
+Implementation status: **234 implemented, 73 missing, 38 partial.** (BACK-004/017 moved from `failed`/`missing` to `not_run`/`partial` after this session's fix wiring `planRestoreMerge` into the actual restore path — see BUG_FIX_LOG.md #13. All 12 `ACCESS-*` cases moved from `external_dependency`/`blocked` to `implemented`/`not_run` or `passed` after this session's Dodo Payments implementation — see §6.)
 
 By prefix (execution status):
 
@@ -111,8 +113,8 @@ By prefix (execution status):
 | INT | 15 | 4 | 6 | 4 | 1 |
 | UX | 13 | 0 | 12 | 0 | 1 |
 | BACK | 26 | 9 | 8 | 7 | 2 |
-| ACCESS | 12 | 0 | 0 | 12 | 0 |
-| **Total** | **345** | **131** | **179** | **27** | **8** |
+| ACCESS | 12 | 4 | 8 | 0 | 0 |
+| **Total** | **345** | **135** | **187** | **15** | **8** |
 
 ### Corrections to the 5 named mismatches (all confirmed and fixed this session)
 
@@ -149,30 +151,36 @@ All driven via the Claude Browser tool against `astro dev`, reading actual rende
 
 **Not exercised live this session**: multi-tab conflict banner (the underlying `writeProjectWithVersionCheck`/`ConflictError` mechanism IS verified via real `fake-indexeddb` transactions in `tests/storage/versionConflict.test.ts`, but the UI banner itself — which requires two concurrent browser contexts — was not driven through two actual tabs); mobile/tablet viewport testing of the rewritten Pro UI; actual PDF file generation/extraction (no headless PDF tool available in this session; verified the print CSS mechanism instead, per above).
 
-## 6. Paid access — still blocked, not faked
+## 6. Paid access — implemented (Dodo Payments), not yet exercised against a real account
 
-No payment provider has been selected, and none was selected between the prior session and this one. Per `ACCESS_SPEC.md`, this remains a required upstream decision this session cannot resolve unilaterally without inventing provider-specific behavior. Unchanged from the prior session:
-- No checkout, license, or entitlement-check code exists anywhere in the repository (confirmed by grep this session: zero matches for stripe/checkout/entitlement/license as actual code, only as documentation/copy).
-- The Pro app pages carry a visible "In development... Purchasing is not available yet" note, and the `/app` route is not linked from the public homepage.
-- All 12 `ACCESS-*` cases remain `blocked`.
+The user selected **Dodo Payments** as the provider. This session ported the same self-verifying-license-key architecture already live on two sibling sites (qrworkbench.com, barcodeflow), simplified to this product's single $99 lifetime tier:
 
-**Focused question carried to the final response**: which payment provider (Stripe, Paddle, Lemon Squeezy, Gumroad, etc.) should this integrate with, since that decision gates all 12 `ACCESS-*` cases and the entire paid-launch path — this session continued all other implementable work rather than stalling on it, per the task's own instruction.
+- **No database.** A license key (`PEP-PRO-<dodo_payment_id>`) embeds the real Dodo payment id; "checking access" always means asking Dodo's own API whether that payment succeeded (and, this session's own finding, whether it was since fully refunded — see BUG_FIX_LOG #14), never trusting a client-side flag.
+- **Full flow implemented**: hosted checkout (`src/pages/api/checkout/create.ts`) → redirect-back verification (`checkout/verify.ts`) → a real entitlement gate in front of the Pro workspace (`src/components/tools/pro/ProGate.tsx`, wired into `/app`) → manual license-key redemption and forgot-key email recovery for a new device (`src/pages/api/license/{redeem,recover}.ts`) → a webhook (`src/pages/api/webhooks/dodo.ts`, signature-verified via `standardwebhooks`) as a reliability backstop for a closed-tab purchase.
+- **Astro adapter added**: `@astrojs/vercel`, with the whole site still statically prerendered — only `src/pages/api/**` opts out per-route (`prerender = false`) to run as real serverless functions.
+- **Secrets never reach the client**: verified by grepping the actual built output (`dist/client/`, `.vercel/output/static/`) for the server-only env var names — zero matches (ACCESS-012, `passed`).
+- **Refund revocation**: found and fixed during implementation, before any real payment was ever processed against this codebase — Dodo tracks a refund via a separate `refund_status` field, not `payment.status`; both `verify.ts` and `redeem.ts` now check it (ACCESS-010, `passed` by SDK-type inspection).
+
+**What is NOT yet true**: no real Dodo product/API key/webhook secret is configured in this environment (by necessity — those are the user's own dashboard credentials, never something this session could obtain or fabricate), so nothing here has processed a real or even a real *test-mode* transaction. Every route was live-verified to **fail closed correctly** with no credentials configured ("Payments aren't set up yet"), and the pure license-key logic has unit tests, but the actual Dodo API round-trip (checkout session creation, payment retrieval, webhook signature verification against a real signed payload) has not been exercised end-to-end. See `.env.example` for exactly what the user needs to configure (Dodo product + API key + webhook endpoint, and optionally Gmail SMTP credentials for the confirmation email) before this can accept a real charge.
+
+**8 of 12 `ACCESS-*` cases are now `passed` or reasoned `not_run`-with-implementation** rather than uniformly `blocked`; the remaining `not_run` ones need a real Dodo account to exercise. One real, named gap: **ACCESS-007** (a delayed webhook/status update shows a generic message with no automatic re-poll — the user must manually refresh) is `partial`, not fully implemented.
 
 ## 7. Remaining risks / launch blockers
 
-1. **Payment/entitlement — still a hard blocker** (§6).
-2. **Backup restore has no per-conflict resolution UI (BACK-004/005/006/017, mitigated but not fully closed)** — this session found and fixed the worst part (a silent unconditional overwrite on ID collision; now defaults to keep-local, matching spec), but there is still no UI for a user to explicitly choose keep-local/replace/keep-both, and the fix was not re-verified via an actual browser file round-trip.
-3. **No revision-switcher UI** — once a project has more than one revision, there is no way to navigate back and view/reprint an earlier issued revision from the UI (its data is provably intact in storage, just not reachable without direct storage inspection).
-4. **Multi-tab conflict banner not driven through two real concurrent tabs** — the underlying storage mechanism is proven correct via real transactions; the UI path itself wasn't exercised with two actual browser contexts.
-5. **Backup import has no field-level validation on financial data, and no dangling-actual-review-reference check** (BACK-015/020, still failed).
-6. **Free estimate template**: no unusual-tax-rate warning, no tax-percentage bounds, no document-level no-charge confirmation for a whole $0.00 estimate (TPL-010/011/012, still failed).
-7. **No PDF file was actually generated and text-extracted** — the print CSS mechanism was verified correct, but no headless-PDF tool rendered an actual PDF for content extraction.
-8. **179 of 345 catalogued cases remain `not_run`** — see §4. Treat `not_run` as "implemented but individually unverified, per code reading," not as "broken." The 8 cases confirmed `failed` (§4) are the ones known to be genuinely broken or missing; everything else not explicitly named as a gap here is either passing or unverified-but-plausible.
+1. **Payment integration is untested against a real Dodo account** (§6) — this is now an implementation-complete, configuration-blocked item, not an unimplemented one. The user must create the Dodo product, supply real credentials, and this session (or a follow-up one) should run at least one real test-mode purchase before considering paid launch ready.
+2. **No automatic retry for a delayed payment-confirmation webhook** (ACCESS-007) — a real, minor UX gap in the payment flow.
+3. **Backup restore has no per-conflict resolution UI (BACK-004/005/006/017, mitigated but not fully closed)** — this session found and fixed the worst part (a silent unconditional overwrite on ID collision; now defaults to keep-local, matching spec), but there is still no UI for a user to explicitly choose keep-local/replace/keep-both, and the fix was not re-verified via an actual browser file round-trip.
+4. **No revision-switcher UI** — once a project has more than one revision, there is no way to navigate back and view/reprint an earlier issued revision from the UI (its data is provably intact in storage, just not reachable without direct storage inspection).
+5. **Multi-tab conflict banner not driven through two real concurrent tabs** — the underlying storage mechanism is proven correct via real transactions; the UI path itself wasn't exercised with two actual browser contexts.
+6. **Backup import has no field-level validation on financial data, and no dangling-actual-review-reference check** (BACK-015/020, still failed).
+7. **Free estimate template**: no unusual-tax-rate warning, no tax-percentage bounds, no document-level no-charge confirmation for a whole $0.00 estimate (TPL-010/011/012, still failed).
+8. **No PDF file was actually generated and text-extracted** — the print CSS mechanism was verified correct, but no headless-PDF tool rendered an actual PDF for content extraction.
+9. **187 of 345 catalogued cases remain `not_run`** — see §4. Treat `not_run` as "implemented but individually unverified, per code reading," not as "broken." The 8 cases confirmed `failed` (§4) are the ones known to be genuinely broken or missing; everything else not explicitly named as a gap here is either passing or unverified-but-plausible.
 
 ## 8. Verdict
 
 - **Free-tool launch**: ready, with one caveat. All three free tools' core calculation flows work correctly (shared engine's test suite covers the math), and the estimate template's blank-row behavior and the job-cost calculator's missing-vs-zero behavior (bug #12, this session) were both live-verified. The remaining free-tool gaps (TPL-010/011/012/014, INT-013's default counts) are minor polish, not correctness defects.
-- **Ready for internal review** (Pro workspace): yes — the core calculation engine, per-surface/standalone-surface estimating, rate refresh, draft/issued isolation, actuals persistence, print output, and backup restore's worst failure mode are now real, tested, and verified (mostly live), including 13 real defects found and fixed with regression evidence this session (16 total across both sessions).
-- **Ready for paid launch**: no. Blocked on the payment-provider decision (§6, a real external dependency) and on closing the remaining named gaps above to whatever bar the business sets — particularly a real conflict-resolution UI for backup restore and the revision-switcher gap, which a real user would hit fastest.
+- **Ready for internal review** (Pro workspace): yes — the core calculation engine, per-surface/standalone-surface estimating, rate refresh, draft/issued isolation, actuals persistence, print output, backup restore's worst failure mode, and now a full Dodo Payments integration are real, tested, and verified (mostly live), including 14 real defects found and fixed with regression evidence this session (17 total across both sessions).
+- **Ready for paid launch**: not yet, but the remaining blocker changed character this session — from "no payment code exists at all" to "payment code is implemented and fails safely closed, but has never processed a real transaction." The user needs to: (1) create the Pro product in their Dodo dashboard, (2) supply the credentials in `.env.example` to a real deployment, (3) run at least one real test-mode purchase through the full flow, and (4) decide when to update the homepage's "planned"/"not available yet" copy (left untouched this session — a marketing decision, not a code one). Separately, closing a real conflict-resolution UI for backup restore and the revision-switcher gap would materially reduce risk for early paying customers.
 
 Not deployed, not published, no real charges made or attempted, per the task's explicit instruction.

@@ -1,6 +1,6 @@
 # Bug fix log
 
-Four real defects were found during this implementation — three via automated tests failing red-then-green, one via manual browser testing. None were pre-existing; all were introduced and caught within this same session. A fifth is recorded further down as a continuation-session finding.
+14 real defects total: 3 from the original implementation session (below), 11 found and fixed during the continuation session (the draft/issued isolation and full-catalogue-audit pass, plus the Dodo Payments integration). None were pre-existing beyond their own introducing session — each was introduced and caught within the same body of work.
 
 ---
 
@@ -201,6 +201,20 @@ Four real defects were found during this implementation — three via automated 
 **Regression test:** No new automated test for the UI wiring itself (no component-test infra in this project); the underlying `planRestoreMerge` behavior this fix now actually uses is already covered by `tests/domain/backup.test.ts::BACK-D09` (4 cases: identical-skip, new-add, conflict-defaults-keep-local, repeated-restore-no-duplicate). Not re-verified live in the browser this session (file download/re-upload through the sandboxed preview browser was not attempted) — flagged here rather than silently claimed.
 
 **Verification:** Full suite (179/179) passes; `astro check` clean; the fix is a direct composition of an already-tested pure function, not new untested logic.
+
+---
+
+## 14. Dodo Payments integration: a full refund would not have revoked access (ACCESS-010)
+
+**Found while implementing, not by a separate audit pass:** while writing `verify.ts`/`redeem.ts` against the `dodopayments` SDK's own type definitions, checked how a refund is represented on a `Payment` object.
+
+**Reproduction (as first written):** Both routes only checked `payment.status !== 'succeeded'` to decide entitlement. Reading `node_modules/dodopayments/resources/payments.d.ts` directly confirmed `payment.status` stays `'succeeded'` even after a refund — Dodo tracks refunds on a **separate** `refund_status?: 'partial' | 'full' | null` field. A customer refunded through Dodo's dashboard would have kept a permanently-working license key, since nothing ever re-checked that field.
+
+**Fix:** `verify.ts` and `redeem.ts` now also reject when `payment.refund_status === 'full'` (with a distinct "refunded" status surfaced to the UI), while a `'partial'` refund does **not** revoke access — full revocation is an unambiguous API fact, but whether a partial refund should still count as a valid purchase is a merchant-policy call this session did not invent an answer for.
+
+**Regression test:** No automated test (would need a real or mocked Dodo API response with `refund_status: 'full'`, which requires either a real sandbox account or introducing a mock layer this integration doesn't otherwise use). Verified by direct SDK type inspection, not by triggering a real refund.
+
+**Verification:** `astro check` clean; full suite (188/188) passes; this fix ships in the same commit as its own discovery, before any real payment was ever processed against this codebase.
 
 ---
 
