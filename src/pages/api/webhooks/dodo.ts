@@ -12,6 +12,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { Webhook } from 'standardwebhooks';
+import { evaluatePaymentEntitlement, type DodoPayment } from '../../../lib/server/dodo';
 import { buildLicenseKey, buildRecoveryUrl, sendLicenseEmails } from '../../../lib/server/license';
 
 export const POST: APIRoute = async ({ request }) => {
@@ -44,15 +45,22 @@ export const POST: APIRoute = async ({ request }) => {
 
   if (event.type === 'payment.succeeded') {
     try {
-      // event.data is a Payment object — payment_id and customer.{email,name}
-      // are the fields this route depends on.
-      const data = (event.data ?? {}) as { payment_id?: string; customer?: { email?: string; name?: string } };
+      // event.data IS a full Payment object (WebhookPayload.Payment extends
+      // PaymentsAPI.Payment per the SDK's own types) — the same shared
+      // entitlement decision used by verify.ts/redeem.ts applies directly
+      // to it, with no extra Dodo API call needed. ACCESS-013: a
+      // payment.succeeded event for an unrelated product must never email
+      // out a working Pro license key.
+      const data = (event.data ?? {}) as unknown as DodoPayment;
       const paymentId = data.payment_id;
       const customerEmail = data.customer?.email ?? null;
       const customerName = data.customer?.name ?? null;
+      const decision = paymentId ? evaluatePaymentEntitlement(data) : { ok: false as const, status: 'missing_payment_id' };
 
       if (!paymentId) {
         console.error("Dodo webhook: payment.succeeded with no payment_id -- can't build a license key.", data);
+      } else if (!decision.ok) {
+        console.error(`Dodo webhook: payment.succeeded event for ${paymentId} did not pass entitlement checks (${decision.status}) -- not emailing a license key.`, data);
       } else if (!customerEmail) {
         console.error("Dodo webhook: payment.succeeded with no customer email -- can't send it.", data);
       } else {

@@ -6,7 +6,7 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
-import { getDodoClient, jsonResponse } from '../../../lib/server/dodo';
+import { getDodoClient, evaluatePaymentEntitlement, PRO_PRODUCT, jsonResponse } from '../../../lib/server/dodo';
 import { buildLicenseKey, buildRecoveryUrl, sendLicenseEmails } from '../../../lib/server/license';
 
 export const GET: APIRoute = async ({ url }) => {
@@ -18,8 +18,8 @@ export const GET: APIRoute = async ({ url }) => {
   }
 
   const client = getDodoClient();
-  if (!client) {
-    console.error('Dodo Payments not configured (missing API key).');
+  if (!client || !PRO_PRODUCT.id) {
+    console.error('Dodo Payments not configured (missing API key or product id).');
     return jsonResponse({ error: "Payments aren't set up yet." }, 500);
   }
 
@@ -37,16 +37,13 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     const payment = await client.payments.retrieve(resolvedPaymentId);
-    const status = String(payment.status ?? '').toLowerCase();
-    if (status !== 'succeeded') {
-      return jsonResponse({ ok: false, status: status || 'unknown' });
-    }
-    // Dodo tracks a refund as a SEPARATE field, not a payment.status value
-    // — payment.status stays "succeeded" even after a full refund. A
-    // partial refund doesn't revoke access (a merchant policy call, not an
-    // API fact); a full refund does.
-    if (payment.refund_status === 'full') {
-      return jsonResponse({ ok: false, status: 'refunded' });
+    // ACCESS-013: a succeeded, non-refunded payment is necessary but NOT
+    // sufficient — it must also have actually purchased the CONFIGURED Pro
+    // product. evaluatePaymentEntitlement() is the one shared decision
+    // used identically here, in license/redeem.ts, and in the webhook.
+    const decision = evaluatePaymentEntitlement(payment);
+    if (!decision.ok) {
+      return jsonResponse({ ok: false, status: decision.status });
     }
 
     const licenseKey = buildLicenseKey(payment.payment_id);
