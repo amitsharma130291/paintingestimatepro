@@ -308,7 +308,7 @@ export default function ProApp() {
     const proposedPrice = draftEdit.priceMode === 'custom' ? customPriceRaw : summary.effectivePrice?.toFixed(2) ?? null;
     const ready: EstimateRevision = { ...draftEdit, calculationState: 'complete', proposedPrice, title: draftEdit.title || activeProject.title };
     const issueNumber = `E-${activeProject.id.slice(-6)}-${draftEdit.revisionNumber}`;
-    const issued = issueRevision(ready, (r) => buildCustomerDocument(r, { estimateNumber: issueNumber, estimateDate: now().slice(0, 10), projectAddress: '', revisionLabel: `Rev ${draftEdit.revisionNumber}` }), ids);
+    const issued = issueRevision(ready, (r) => buildCustomerDocument(r, { estimateNumber: issueNumber, estimateDate: now().slice(0, 10), projectAddress: draftEdit.customerInfo.address, revisionLabel: `Rev ${draftEdit.revisionNumber}` }), ids);
     const nextProject: Project = { ...upsertRevision(activeProject, issued), activeRevisionId: issued.id, updatedAt: now() };
     try {
       await saveProjectSafely(nextProject, draftBaselineUpdatedAt);
@@ -502,6 +502,21 @@ export default function ProApp() {
                 </button>
               )}
             </div>
+
+            {draftEdit.state === 'draft' && (
+              <div className="card p-6 print:hidden">
+                <h3 className="font-semibold">Business &amp; customer info</h3>
+                <p className="mt-1 text-xs text-ink-soft">Appears on the customer-facing document when you issue this estimate.</p>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <TextField label="Your business name" value={draftEdit.businessInfo.name} onChange={(v) => mutateDraft((r) => ({ ...r, businessInfo: { ...r.businessInfo, name: v }, updatedAt: ids.now() }))} />
+                  <TextField label="Your contact (phone/email)" value={draftEdit.businessInfo.contact} onChange={(v) => mutateDraft((r) => ({ ...r, businessInfo: { ...r.businessInfo, contact: v }, updatedAt: ids.now() }))} />
+                  <TextField label="Your business address" value={draftEdit.businessInfo.address} onChange={(v) => mutateDraft((r) => ({ ...r, businessInfo: { ...r.businessInfo, address: v }, updatedAt: ids.now() }))} />
+                  <TextField label="Customer name" value={draftEdit.customerInfo.name} onChange={(v) => mutateDraft((r) => ({ ...r, customerInfo: { ...r.customerInfo, name: v }, updatedAt: ids.now() }))} />
+                  <TextField label="Customer contact" value={draftEdit.customerInfo.contact} onChange={(v) => mutateDraft((r) => ({ ...r, customerInfo: { ...r.customerInfo, contact: v }, updatedAt: ids.now() }))} />
+                  <TextField label="Job site / customer address" value={draftEdit.customerInfo.address} onChange={(v) => mutateDraft((r) => ({ ...r, customerInfo: { ...r.customerInfo, address: v }, updatedAt: ids.now() }))} />
+                </div>
+              </div>
+            )}
 
             {draftEdit.state === 'draft' && (
               <>
