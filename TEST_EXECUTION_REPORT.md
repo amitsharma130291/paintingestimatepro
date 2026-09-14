@@ -1,26 +1,72 @@
 # Test execution report
 
-**This is a continuation session.** The prior session's report claimed 85/12/248 (passed/blocked/not_run) across the 345-case catalogue and built a working vertical slice, but this continuation session's audit found several of those "passed" claims did not actually verify what they claimed to (see §4). This report supersedes the prior version entirely — treat any earlier copy as stale.
+**This is a v3 continuation session**, working from `painting-estimate-pro-specs-v2.1-final.zip` (authoritative spec), `painting-estimate-pro-comprehensive-tdd-v2.1.zip` (test catalogue), and `painting-estimate-pro-test-reports.zip` (the prior session's own reports, reproduced below under §§1-8 as history). This top section (§0) documents this v3 session's own baseline reconciliation, changes, and final counts; everything below it is the prior session's report, left intact as a record rather than silently overwritten.
 
-**Package under test:** `painting-estimate-pro-specs-v2.1-final.zip` (authoritative) + `painting-estimate-pro-comprehensive-tdd-v2.1.zip` (test catalogue).
+**Package under test:** same spec/TDD documents — confirmed byte-identical to what was already checked into `docs/` via `diff -q`, so no spec-vs-code reconciliation was needed this session.
 
-**Repository / commits:** `paintingestimatepro`, git-initialized this continuation session (it had no `.git` before). Baseline snapshot commit `2c92110`, then incremental commits for each verified milestone — see `git log` for the full list; `BUG_FIX_LOG.md` cross-references the relevant commit for each fix. Environment: Node, Windows, Astro 7, Vitest 5, `decimal.js` 10, `fast-check` 4, `fake-indexeddb` 6, React 19.
+---
 
-**Baseline commands run before any edit this session** (raw output captured in `evidence/baseline/`):
-```
-npx vitest run                    # → 133/133 passed, 18 test files   (evidence/baseline/vitest.log)
-npx astro check                   # → 0 errors, 0 warnings (65 files) (evidence/baseline/astro-check.log)
-npx astro build                   # → 5 pages built                   (evidence/baseline/build.log)
-python3 docs/verify_reference.py  # → 20 fixtures / 106 fields passed (evidence/baseline/verify_reference.log)
-```
+## 0. v3 continuation session (this session)
 
-**Commands run after this session's changes:**
+### 0.1 Baseline reconciliation (task item 1)
+
+The task's own framing cited "179 passing automated tests" against "345 named acceptance cases" and warned explicitly not to conflate the two. Both numbers needed correcting before use:
+
+- **Automated test count**: the actual count at the start of this session (i.e., the end of the prior continuation session, after its Dodo Payments work) was **237 tests, 29 files** — not 179. 179 was a stale figure from an earlier point in the project's history; this session used the real, freshly-measured number instead of the one quoted in the task.
+- **Acceptance-case count**: `test-execution-results.csv` (345 rows) is a *different measurement* from the automated test count — one row can be verified by a pure unit test, a live browser action, a source-reading judgment call, or nothing at all (`not_run`). The task's own quoted breakdown ("131 passed, 179 not run, 27 blocked, 8 failed") does not match either this session's starting CSV (135 passed / 187 not_run / 15 blocked / 8 failed — see the prior session's §4 below) or any interim state this session could locate; it is treated as stale and superseded by the actual CSV state at each point cited below, per the task's own instruction not to conflate different measurements.
+
+### 0.2 Commands run this session
+
 ```
-npx vitest run       # → 188/188 passed, 25 test files
-npx astro check      # → 0 errors, 0 warnings (74 files)
-npx astro build      # → 5 pages built
+npx vitest run       # start of session: 237/237 passed, 29 files
+npx astro check      # 0 errors throughout
+npx astro build      # succeeds throughout
 ```
-Plus extensive live manual verification via the Claude Browser tool against `astro dev` at `localhost:4333` — see §5.
+Re-run after every fix in this session (see `BUG_FIX_LOG.md` entries #19-#21 for the exact before/after count at each step):
+```
+npx vitest run       # end of session: 252/252 passed, 29 files (15 new tests this session)
+npx astro check      # 0 errors, 0 warnings, 3 pre-existing FormEvent-deprecation hints (unrelated)
+npx astro build      # 5 pages prerendered, server bundle built, succeeds
+```
+No `verify_reference.py` fixtures changed this session (no calculation-contract code was touched — see item 8's scope below), so its 20/20-fixture result from the prior session stands unchanged.
+
+### 0.3 What this session fixed
+
+Continuing directly from the prior session's named gaps (§7 below), this session:
+
+1. **BACK-015/020** (`BUG_FIX_LOG.md` #19): `validateBackupEnvelope` now rejects a dangling `actualReviews[].baselineIssuedRevisionId`, and rejects negative/non-decimal financial scalars and unknown enum values in imported paint variants and revisions — all before any write. Also closed a related latent bug in `planImportAsCopies`: an actual review whose baseline can't be remapped is now dropped rather than carried over with a dangling reference.
+2. **BACK-004/005/006/017 — the real conflict-resolution UI** (`BUG_FIX_LOG.md` #20): backup import now computes a full preview (`planFullRestoreMerge`, covering projects, the paint catalog, and the business-settings singleton) before any write, lets the user choose Keep local / Use imported / Keep both per conflict, and commits everything in one atomic transaction only on explicit confirmation; cancelling writes nothing. This closes the exact gap the prior session's §7 risk #3 named. Export was also fixed to read `otherMaterials`/`serviceDefinitions` from live storage instead of hardcoding `[]`.
+3. **INT-013/UX-013** (`BUG_FIX_LOG.md` #21): the free interior calculator now defaults door/window counts to explicit `0` (not blank), labels sample data explicitly, and a real free-to-Pro handoff (`src/domain/interiorHandoff.ts`) carries supported fields exactly, explains unsupported ones, and never fabricates a default.
+4. **TPL-010/011/012/014** (`BUG_FIX_LOG.md` #15, from just before this session's compaction boundary but verified again as part of this session's full-suite reruns): the complete tax validation-to-output path, zero-total no-charge confirmation, and duplicate independence in the free estimate template.
+5. **JOB-005/006/007/008** (`BUG_FIX_LOG.md` #17, same note as above): materials/labor mode toggles and a real multi-line other-expenses list in the free job-cost calculator.
+6. **ACCESS-002** (`BUG_FIX_LOG.md` #16, same note as above): the `NetworkFailure` fail-open/fail-closed security fix, live-verified both before and after with a forged `localStorage` payment record.
+7. **Revision selector** (`BUG_FIX_LOG.md` #18, same note): previously issued revisions are now reachable/reprintable from the Pro workspace UI.
+
+None of this session's own new work (items 1-2 above) could be live-verified in the browser: the backup/import UI lives inside the Pro workspace, and this environment has no real Dodo Payments credentials to unlock it — the same disclosed limitation that already applied to the revision selector. All of it is verified by the passing automated suite (15 new tests this session: 7 for BACK-015/020, 7 for the conflict UI, plus the interior handoff round-trip already existed) and direct code reading, never claimed as browser-verified.
+
+### 0.4 Acceptance matrix — corrected counts (task item 9)
+
+`ACCEPTANCE_MATRIX.csv` (this session's deliverable, superseding `test-execution-results.csv`) was updated for every case this session touched, and — per the task's explicit instruction that "missing implementation is unfinished work, not an external blocker" — **9 cases previously marked `blocked` were relabeled `not_run`** because their actual status was an unimplemented feature (a `replaceAll` import mode with no code behind it at all — BACK-010/011; logo embedding, also entirely unimplemented — BACK-019/025; three free interior-calculator feature gaps — INT-008/009/010/014), not an external dependency. Conversely, **5 `ACCESS-*` cases were relabeled from `not_run` to `blocked`**, since their own notes already named the same concrete external dependency (a real Dodo Payments test-mode account) preventing execution — `blocked` is the semantically correct status for those, not `not_run`. `BACK-026` remains `blocked` for a different, genuine reason: its own case text names an unresolved product/policy decision ("Resolve display-compatibility policy before implementation") that this engineering session cannot make unilaterally.
+
+| Status | Start of this session | End of this session |
+|---|---|---|
+| `passed` | 135 | **153** |
+| `not_run` | 187 | **186** |
+| `blocked` | 15 | **6** |
+| `failed` | 8 | **0** |
+
+Implementation status: **250 implemented** (was 234), **61 missing** (was 73), **34 partial** (was 38).
+
+**Newly discovered regression/gap cases this session** (distinguishable from the original 345, per the task's explicit instruction): none — every fix this session closed an existing named case from the original 345-case catalogue; no new case IDs were invented. The `planImportAsCopies` dangling-fallback defense-in-depth fix (§0.3 item 1) is covered under BACK-015's existing test evidence, not a new case.
+
+### 0.5 What remains unfinished (not blocked) — honest backlog, not claimed as done
+
+- **BACK-010/011** (replaceAll import mode): no implementation exists. Scoped but not built this session — a real feature, not a quick fix.
+- **BACK-019/025** (logo embedding in backup/print): no implementation exists (`BusinessInfo.logo` is an unused optional field).
+- **INT-008/009/010/014** (interior calculator: ceiling-only mode, quick/detailed opening-mode switching, an extra labor/prep-hours line): real, scoped gaps in the free tool, not built this session.
+- **ACCESS-001/003/004/005/008** (genuinely blocked): need a real Dodo Payments test-mode account to exercise end-to-end — the concrete external dependency named in task item 9's own guidance.
+- **BACK-026**: needs an explicit product/policy decision from the user before implementation.
+- The **186 `not_run` cases** carry forward from the prior session's own §4/§7 disclosure below — most are pure calculation-contract cases already covered by extensive existing engine test suites (CORE/GEO/NUM/COST/HEALTH/BOUND) but not individually cross-referenced case-by-case; a small number are real, disclosed UI/UX polish gaps (§7 below).
 
 ---
 
@@ -165,7 +211,10 @@ The user selected **Dodo Payments** as the provider. This session ported the sam
 
 **8 of 12 `ACCESS-*` cases are now `passed` or reasoned `not_run`-with-implementation** rather than uniformly `blocked`; the remaining `not_run` ones need a real Dodo account to exercise. One real, named gap: **ACCESS-007** (a delayed webhook/status update shows a generic message with no automatic re-poll — the user must manually refresh) is `partial`, not fully implemented.
 
-## 7. Remaining risks / launch blockers
+## 7. Remaining risks / launch blockers (historical — see §0.5 above for this session's current backlog)
+
+**Superseded by §0 above**: items 3 (backup conflict UI), 4 (revision switcher), 6 (BACK-015/020), and 7 (TPL-010/011/012) below were all fixed in the v3 continuation session. They are left as originally written for historical accuracy; do not treat them as current.
+
 
 1. **Payment integration is untested against a real Dodo account** (§6) — this is now an implementation-complete, configuration-blocked item, not an unimplemented one. The user must create the Dodo product, supply real credentials, and this session (or a follow-up one) should run at least one real test-mode purchase before considering paid launch ready.
 2. **No automatic retry for a delayed payment-confirmation webhook** (ACCESS-007) — a real, minor UX gap in the payment flow.
@@ -184,3 +233,5 @@ The user selected **Dodo Payments** as the provider. This session ported the sam
 - **Ready for paid launch**: not yet, but the remaining blocker changed character this session — from "no payment code exists at all" to "payment code is implemented and fails safely closed, but has never processed a real transaction." The user needs to: (1) create the Pro product in their Dodo dashboard, (2) supply the credentials in `.env.example` to a real deployment, (3) run at least one real test-mode purchase through the full flow, and (4) decide when to update the homepage's "planned"/"not available yet" copy (left untouched this session — a marketing decision, not a code one). Separately, closing a real conflict-resolution UI for backup restore and the revision-switcher gap would materially reduce risk for early paying customers.
 
 Not deployed, not published, no real charges made or attempted, per the task's explicit instruction.
+
+**This §8 verdict is historical (from before this v3 session's fixes). See `RELEASE_READINESS.md` for the current, separate verdicts on free tools, paid workflows, and payment/access readiness.**

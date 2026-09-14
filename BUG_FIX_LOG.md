@@ -307,6 +307,20 @@ Separately: "Duplicate" only re-assigned line IDs on the SAME in-memory form (`s
 
 ---
 
+## 21. Free interior calculator defaulted door/window counts to blank (not zero) and had no compatible free-to-Pro handoff (INT-013/UX-013)
+
+**Found by:** Task item 4, naming both cases directly: INT-013 ("default interior door/window counts to zero per spec, keep blank distinct from explicit zero, clearly label sample data with an intentional load action") and UX-013 (the free-to-Pro handoff must "preserve supported inputs/units/assumptions, validate transferred data, explain unsupported fields, never silently insert defaults or discard user data"). The shipped `InteriorCalculator.tsx` left `doorCount`/`windowCount` blank by default (spec requires an explicit `0` default, since a room legitimately has zero doors/windows far more often than it has an unentered count) and had no "continue in Pro" path at all — a user finishing the free tool had no way to carry that work into a Pro estimate without retyping everything.
+
+**Fix:** Set `DEFAULTS.doorCount`/`DEFAULTS.windowCount` to `'0'` (explicit zero, distinct from the still-blank `length`/`width`, which remain genuinely unset until the user measures them) and added a labeled `loadSampleData()` action plus "(sample)" field annotations so sample values are never confused with the user's own entries. Built `src/domain/interiorHandoff.ts` — `writeInteriorHandoff`/`readInteriorHandoff` (a `sessionStorage`-backed payload, not silently merged into Pro state) and `buildProjectFromInteriorHandoff`, which maps every supported field across exactly, returns an explicit `unsupportedFieldNotes` list for anything the free tool captured that Pro's richer model doesn't (e.g. the free tool's flat labor rate vs. Pro's per-surface throughput model), and never fabricates a default for a field the user didn't actually provide. Wired a "Continue this room in Pro →" button in `InteriorCalculator.tsx` that writes the handoff payload before navigating.
+
+**Regression test:** `tests/domain/interiorHandoff.test.ts` (5 tests) — exact field carry-over, ceiling-surface inclusion, explicit unsupported-field disclosure (labor rate), a full round-trip through the real Pro `assembleProjectEstimate` pipeline reproducing the documented $168/4-gal fixture end to end, and purity (the input payload is never mutated).
+
+**Verification — live in the browser:** loaded the interior calculator with its defaults showing door/window counts as `0` (not blank), used "Load sample data" and confirmed every sample field is labeled "(sample)", and confirmed the default (non-sample) state keeps `length`/`width` genuinely blank while door/window counts read `0` — the missing-vs-explicit-zero distinction the spec requires. The Pro-side landing of "Continue this room in Pro" was **not** verified live (it lands inside the Pro workspace, which this environment cannot unlock without real Dodo credentials); that half is verified by the passing `interiorHandoff.test.ts` round-trip test only.
+
+**Verification (automated):** all tests pass as part of the full 252/252 suite; `astro check` 0 errors; `astro build` succeeds.
+
+---
+
 ## Not a bug (documented false alarm)
 
 While writing `PROPERTY 11` (application labor linearity), a strict `.equals()` assertion failed on the counterexample `area=1, coats=1, throughput=290`. Investigation showed `area*coats/290` is a non-terminating decimal (290 = 2×5×29); computing it once and doubling versus computing `(2×area)/290` directly are two independently-rounded results at the engine's 50-significant-digit precision floor, differing by `1e-52` — twelve digits past the spec's required 40-significant-digit floor and financially meaningless at any real display precision. The linearity formula itself is correct; the test's exactness requirement was wrong. Fixed by using a `1e-40` tolerance instead of bit-exact equality. See the comment in `tests/property/geometry.property.test.ts` for the full reasoning — recorded here so it isn't mistaken for an unresolved defect.
