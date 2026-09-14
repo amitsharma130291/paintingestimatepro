@@ -1,4 +1,4 @@
-import type { EstimateRevision, Project, RateSnapshot, Room, Surface, CustomerDocumentSnapshot } from './entities';
+import type { EstimateRevision, Project, RateSnapshot, Room, Surface, CustomerDocumentSnapshot, ActualReview } from './entities';
 import { ENGINE_VERSION } from './entities';
 import type { IdSource } from './ids';
 
@@ -136,6 +136,21 @@ export function upsertRevision(project: Project, revision: EstimateRevision): Pr
   const exists = project.revisions.some((r) => r.id === revision.id);
   const revisions = exists ? project.revisions.map((r) => (r.id === revision.id ? revision : r)) : [...project.revisions, revision];
   return { ...project, revisions };
+}
+
+/**
+ * ACT-013/014 fix: the actual-cost review UI previously kept its state in
+ * plain React state that was never written to `project.actualReviews` or
+ * IndexedDB at all — reloading the page silently lost every recorded
+ * actual. Same append-or-replace shape as `upsertRevision`, keyed by the
+ * review's own id (one review per issued baseline in the current UI, but
+ * the id is what's authoritative, not the baseline, so re-recording never
+ * accidentally creates two competing reviews for the same id).
+ */
+export function upsertActualReview(project: Project, review: ActualReview): Project {
+  const exists = project.actualReviews.some((r) => r.id === review.id);
+  const actualReviews = exists ? project.actualReviews.map((r) => (r.id === review.id ? review : r)) : [...project.actualReviews, review];
+  return { ...project, actualReviews };
 }
 
 /**

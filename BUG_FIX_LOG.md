@@ -158,6 +158,22 @@ Four real defects were found during this implementation — three via automated 
 
 ---
 
+## 11. Free job-cost calculator showed a "complete" $0.00 result before any input (JOB-001/002)
+
+**Found by:** The parallel test-catalogue audit, reading `JobCostCalculator.tsx`'s source and noticing it contradicted its OWN header comment ("a blank field is genuinely 'missing' (not silently 0) until the user types something"). Confirmed live in the browser this session: loading `/free/job-cost-calculator` fresh showed a full costed result ($0.00 everywhere) immediately, before typing anything.
+
+**Reproduction:** Load the free job-cost calculator with no input. Expected (per `docs/tool-specs/02-free-job-cost-calculator.md`: "At first render show empty guidance until the user supplies/confirms cost data... missing active inputs block results"): no result, guidance text only. Actual: a fully "complete"-looking $0.00 cost/price breakdown rendered immediately.
+
+**Root cause:** `parseDecimalField(materials || '0')` and the equivalent for `laborAmount` — the `|| '0'` fallback replaced a blank (missing) field with the STRING `'0'` before parsing, so `parseDecimalField` returned `{kind: 'valid', value: 0}` instead of `{kind: 'missing'}`. This silently converted "nothing entered yet" into "the user confirmed a $0 job," for the tool's two primary, required cost inputs, on a page anyone can reach with no account.
+
+**Fix:** Materials and Labor are now parsed directly (`parseDecimalField(materials)`, no fallback) and the result short-circuits to "no result yet" (not an error, just nothing) when either is genuinely `missing`. Travel and Other-expenses keep their `|| '0'` fallback — those are legitimately optional additive line items where "I have none" is a normal, common answer, not an active required input. Added a neutral guidance message ("Enter materials and labor cost to see your estimated total") for the genuinely-incomplete state, matching the spec's "show empty guidance" instruction.
+
+**Regression test:** No automated test added (this is a React-component-state bug in a UI with no component-test infrastructure in this project, same category as bug #2). Verified live in the browser: fresh page load now shows only the guidance text; entering Materials alone still shows guidance (Labor still missing); entering both Materials $620 and Labor $1,280 produces Direct cost $1,900.00 / Overhead $285.00 / Total $2,185.00 / Suggested price $3,361.54 — an exact match to the `job-homepage` acceptance fixture.
+
+**Verification:** Full suite (179/179) passes; `astro check` clean; `astro build` succeeds; live browser re-verification as above.
+
+---
+
 ## Not a bug (documented false alarm)
 
 While writing `PROPERTY 11` (application labor linearity), a strict `.equals()` assertion failed on the counterexample `area=1, coats=1, throughput=290`. Investigation showed `area*coats/290` is a non-terminating decimal (290 = 2×5×29); computing it once and doubling versus computing `(2×area)/290` directly are two independently-rounded results at the engine's 50-significant-digit precision floor, differing by `1e-52` — twelve digits past the spec's required 40-significant-digit floor and financially meaningless at any real display precision. The linearity formula itself is correct; the test's exactness requirement was wrong. Fixed by using a `1e-40` tolerance instead of bit-exact equality. See the comment in `tests/property/geometry.property.test.ts` for the full reasoning — recorded here so it isn't mistaken for an unresolved defect.

@@ -3,7 +3,8 @@
 import { describe, it, expect } from 'vitest';
 import { sequentialIdSource } from '../../src/domain/ids';
 import { createSnapshot } from '../../src/domain/snapshot';
-import { createDraftRevision, issueRevision, createDraftFromIssued, supersede, duplicateProject, upsertRevision } from '../../src/domain/project';
+import { createDraftRevision, issueRevision, createDraftFromIssued, supersede, duplicateProject, upsertRevision, upsertActualReview } from '../../src/domain/project';
+import type { ActualReview } from '../../src/domain/entities';
 import { buildCustomerDocument, assertOnlyAllowedFields } from '../../src/domain/customerDocument';
 import type { BusinessSettings, PaintVariant, Project, EstimateRevision } from '../../src/domain/entities';
 
@@ -169,6 +170,32 @@ describe('upsertRevision: saving a NEW draft revision must APPEND it, not silent
 
     expect(updated.revisions).toHaveLength(1);
     expect(updated.revisions[0].title).toBe('Edited');
+  });
+});
+
+describe('upsertActualReview: ACT-013/014 regression — recorded actuals must actually persist onto the project', () => {
+  function makeReview(id: string, revisionId: string, amount: string): ActualReview {
+    return {
+      id, projectId: 'project-1', baselineIssuedRevisionId: revisionId, state: 'inProgress',
+      materials: { confirmed: true, amount }, labor: { confirmed: false, amount: null },
+      otherExpenses: { confirmed: false, amount: null }, overhead: { confirmed: false, amount: null, mode: 'actualFlat' },
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+  }
+
+  it('a first-time save appends a new ActualReview rather than leaving it as unsaved UI state', () => {
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [], activeRevisionId: '', actualReviews: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+    const review = makeReview('ar-1', 'rev-1', '700');
+    const updated = upsertActualReview(project, review);
+    expect(updated.actualReviews).toHaveLength(1);
+    expect(updated.actualReviews[0]).toEqual(review);
+  });
+
+  it('re-saving the same review id updates it in place rather than duplicating', () => {
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [], activeRevisionId: '', actualReviews: [makeReview('ar-1', 'rev-1', '700')], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+    const updated = upsertActualReview(project, makeReview('ar-1', 'rev-1', '900'));
+    expect(updated.actualReviews).toHaveLength(1);
+    expect(updated.actualReviews[0].materials.amount).toBe('900');
   });
 });
 

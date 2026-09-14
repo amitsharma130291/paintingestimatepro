@@ -28,8 +28,15 @@ export default function JobCostCalculator() {
 
   const result = useMemo(() => {
     const errors: string[] = [];
-    const pMaterials = parseDecimalField(materials || '0');
-    const pLabor = parseDecimalField(laborAmount || '0');
+    // tool-specs/02: "At first render show empty guidance until the user
+    // supplies/confirms cost data... missing active inputs block results."
+    // Materials and Labor are the active cost inputs in this simplified
+    // (non-itemized) build — a blank field must stay `missing` and block
+    // the result, never silently become a valid $0. Travel/Other expenses
+    // are genuinely optional additive line items (a job may have none),
+    // so those default to $0 when blank without blocking anything.
+    const pMaterials = parseDecimalField(materials);
+    const pLabor = parseDecimalField(laborAmount);
     const pTravel = parseDecimalField(travel || '0');
     const pOther = parseDecimalField(otherExpense || '0');
     const pTargetPct = parseDecimalField(targetPercent);
@@ -48,6 +55,9 @@ export default function JobCostCalculator() {
     if (overheadMode === 'percent' && pOverheadPct.kind === 'invalid') errors.push(`Overhead %: ${pOverheadPct.message}`);
     if (overheadMode === 'flat' && pOverheadFlat.kind === 'invalid') errors.push(`Overhead: ${pOverheadFlat.message}`);
 
+    if (pMaterials.kind === 'missing' || pLabor.kind === 'missing') {
+      return { errors, cost: null } as const; // genuinely incomplete — no guidance-blocking error text needed, just no result yet
+    }
     if (errors.length > 0 || pMaterials.kind !== 'valid' || pLabor.kind !== 'valid' || pTravel.kind !== 'valid' || pOther.kind !== 'valid' || pTargetPct.kind !== 'valid') {
       return { errors, cost: null } as const;
     }
@@ -128,6 +138,10 @@ export default function JobCostCalculator() {
                 <p key={i}>{e}</p>
               ))}
             </div>
+          )}
+
+          {result.errors.length === 0 && !result.cost && (materials.trim() === '' || laborAmount.trim() === '') && (
+            <p className="mt-4 text-sm text-ink-soft">Enter materials and labor cost to see your estimated total.</p>
           )}
 
           {result.cost && (

@@ -5,7 +5,8 @@ import { computeServiceUnitCost, evaluateServiceHealth } from '../../../engine/s
 import { statusBadge, money, parseCoatsInput } from '../shared';
 import type { BusinessSettings, PaintVariant, Project, Room, Surface, EstimateRevision, ServiceKind } from '../../../domain/entities';
 import { createSnapshot } from '../../../domain/snapshot';
-import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, upsertRevision } from '../../../domain/project';
+import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, upsertRevision, upsertActualReview } from '../../../domain/project';
+import type { ActualReview } from '../../../domain/entities';
 import { assembleProjectEstimate, type ProjectEstimateAssembly } from '../../../domain/estimateAssembly';
 import { previewRateRefresh, applyRateRefresh, type RateRefreshDiff, type VariantResolution } from '../../../domain/rateRefresh';
 import { buildCustomerDocument } from '../../../domain/customerDocument';
@@ -345,6 +346,50 @@ export default function ProApp() {
 
   // ---- Actuals (scoped to the active project's issued revision) ----
   const issuedRevision = activeProject?.revisions.find((r) => r.state === 'issued' && r.id === activeProject.activeRevisionId) ?? activeProject?.revisions.find((r) => r.state === 'issued') ?? null;
+  const existingActualReview = activeProject?.actualReviews.find((ar) => ar.baselineIssuedRevisionId === issuedRevision?.id) ?? null;
+
+  // ACT-013/014 fix: reload previously-saved actuals when switching to a
+  // project/issued revision that already has one — without this, actuals
+  // silently reset to blank on every reload (nothing was ever persisted).
+  useEffect(() => {
+    if (existingActualReview) {
+      setActuals({
+        materials: { confirmed: existingActualReview.materials.confirmed, amount: existingActualReview.materials.amount ?? '' },
+        labor: { confirmed: existingActualReview.labor.confirmed, amount: existingActualReview.labor.amount ?? '' },
+        otherExpenses: { confirmed: existingActualReview.otherExpenses.confirmed, amount: existingActualReview.otherExpenses.amount ?? '' },
+        overhead: { confirmed: existingActualReview.overhead.confirmed, amount: existingActualReview.overhead.amount ?? '' },
+      });
+    } else {
+      setActuals({ materials: { confirmed: false, amount: '' }, labor: { confirmed: false, amount: '' }, otherExpenses: { confirmed: false, amount: '' }, overhead: { confirmed: false, amount: '' } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [issuedRevision?.id]);
+
+  async function saveActuals() {
+    if (!activeProject || !issuedRevision) return;
+    const confirmedCount = (['materials', 'labor', 'otherExpenses', 'overhead'] as const).filter((c) => actuals[c].confirmed).length;
+    const review: ActualReview = {
+      id: existingActualReview?.id ?? ids.nextId(),
+      projectId: activeProject.id,
+      baselineIssuedRevisionId: issuedRevision.id,
+      state: confirmedCount === 4 ? 'final' : 'inProgress',
+      materials: { confirmed: actuals.materials.confirmed, amount: actuals.materials.confirmed && actuals.materials.amount.trim() !== '' ? actuals.materials.amount : null },
+      labor: { confirmed: actuals.labor.confirmed, amount: actuals.labor.confirmed && actuals.labor.amount.trim() !== '' ? actuals.labor.amount : null },
+      otherExpenses: { confirmed: actuals.otherExpenses.confirmed, amount: actuals.otherExpenses.confirmed && actuals.otherExpenses.amount.trim() !== '' ? actuals.otherExpenses.amount : null },
+      overhead: { confirmed: actuals.overhead.confirmed, amount: actuals.overhead.confirmed && actuals.overhead.amount.trim() !== '' ? actuals.overhead.amount : null, mode: 'actualFlat' },
+      updatedAt: now(),
+    };
+    const nextProject = upsertActualReview(activeProject, review);
+    try {
+      await saveProjectSafely(nextProject, activeProject.updatedAt);
+      setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? nextProject : p)));
+      setSaveMessage('Actuals saved.');
+    } catch (err) {
+      if (err instanceof ConflictError) setConflict({ project: err.currentRecord as Project, attempted: nextProject });
+      else setSaveMessage('Save failed — your previous data was not changed.');
+    }
+  }
+
   const actualResult = useMemo(() => {
     if (!issuedRevision || !issuedRevision.proposedPrice) return null;
     const toCategory = (c: { confirmed: boolean; amount: string }): ActualCategory => ({ confirmed: c.confirmed, amount: c.confirmed && c.amount.trim() !== '' ? new PEP(c.amount) : null });
@@ -679,6 +724,7 @@ export default function ProApp() {
                     <input className="w-32 rounded-btn border border-line px-2 py-1 tabular-nums" value={actuals[cat].amount} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], amount: e.target.value } }))} placeholder="0.00" />
                   </div>
                 ))}
+                <button type="button" className="btn btn-secondary" onClick={saveActuals}>Save actuals</button>
                 {actualResult && (
                   <dl className="mt-4 space-y-2 text-sm">
                     {actualResult.state === 'in_progress' ? (
