@@ -75,13 +75,14 @@ describe('BACK-015: an actual-review baseline pointing at a missing revision is 
     if (!result.ok) expect(result.issues.some((i) => /dangling|baseline/i.test(i.message))).toBe(true);
   });
 
-  it('accepts an actualReview whose baseline correctly matches an existing revision', () => {
+  it('accepts an actualReview whose baseline correctly matches an existing ISSUED revision', () => {
     const ids = sequentialIdSource();
     const project = makeProject('p1', ids);
-    const realRevisionId = project.revisions[0].id;
+    const issuedRevision = { ...project.revisions[0], state: 'issued' as const };
     const withValidActual: Project = {
       ...project,
-      actualReviews: [{ id: 'ar-1', projectId: 'p1', baselineIssuedRevisionId: realRevisionId, state: 'final', materials: { confirmed: true, amount: '100' }, labor: { confirmed: true, amount: '100' }, otherExpenses: { confirmed: true, amount: '0' }, overhead: { confirmed: true, amount: '0', mode: 'actualFlat' }, updatedAt: ids.now() }],
+      revisions: [issuedRevision],
+      actualReviews: [{ id: 'ar-1', projectId: 'p1', baselineIssuedRevisionId: issuedRevision.id, state: 'final', materials: { confirmed: true, amount: '100' }, labor: { confirmed: true, amount: '100' }, otherExpenses: { confirmed: true, amount: '0' }, overhead: { confirmed: true, amount: '0', mode: 'actualFlat' }, updatedAt: ids.now() }],
     };
     const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withValidActual], ids);
     const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
@@ -171,6 +172,167 @@ describe('BACK-D09: restore/merge — identical skip, new add, conflicting requi
     expect(firstPlan.toAdd.projects).toHaveLength(0);
     const secondPlan = planRestoreMerge([project], [structuredClone(project)]);
     expect(secondPlan.toAdd.projects).toHaveLength(0);
+  });
+});
+
+describe('BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews', () => {
+  it('a null entry inside projects[].revisions[] is rejected with a structured error, never an uncaught exception', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const corrupted = { ...project, revisions: [null] } as unknown as Project;
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    expect(() => validateBackupEnvelope(envelope, JSON.stringify(envelope).length)).not.toThrow();
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('a null entry inside a revision surfaces[] array is rejected without throwing', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const corrupted = { ...project, revisions: [{ ...project.revisions[0], surfaces: [null] }] } as unknown as Project;
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    expect(() => validateBackupEnvelope(envelope, JSON.stringify(envelope).length)).not.toThrow();
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('a wrong-typed business settings field (overheadRatio as a number, not a decimal string) is rejected', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const badSettings = { ...makeSettings(), overheadRatio: 0.15 as unknown as string };
+    const envelope = exportBackup('install-1', badSettings, [makeVariant()], [], [], [project], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('a malformed (non-decimal) business settings field is rejected', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const badSettings = { ...makeSettings(), targetMarginRatio: 'not-a-number' };
+    const envelope = exportBackup('install-1', badSettings, [makeVariant()], [], [], [project], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('a room missing its required name field is rejected', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const badRoom = { id: 'room-1', lengthFt: null, widthFt: null, heightFt: null, deductionEnabled: false, openingMode: 'quick', quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: [] };
+    const corrupted = { ...project, revisions: [{ ...project.revisions[0], rooms: [badRoom] }] } as unknown as Project;
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('duplicate revision IDs within the same project are rejected', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const rev = project.revisions[0];
+    const corrupted = { ...project, revisions: [rev, { ...rev }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('duplicate room IDs within the same revision are rejected', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const room = { id: 'room-1', name: 'Bedroom', lengthFt: '10', widthFt: '10', heightFt: '8', deductionEnabled: false, openingMode: 'quick' as const, quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: [] };
+    const corrupted = { ...project, revisions: [{ ...project.revisions[0], rooms: [room, { ...room }] }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('duplicate surface IDs within the same revision are rejected', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const surface = { id: 'surf-1', roomId: null, kind: 'wall' as const, enabled: true, measurementMode: 'manual' as const, areaFt2: '100', trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: '0.1', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
+    const corrupted = { ...project, revisions: [{ ...project.revisions[0], surfaces: [surface, { ...surface }] }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('a paint variant with zero coverage (a divide-by-zero risk) is rejected, not merely "non-negative"', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const zeroCoverage = { ...makeVariant(), coverageFt2PerGal: '0' };
+    const envelope = exportBackup('install-1', makeSettings(), [zeroCoverage], [], [], [project], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('a project whose activeRevisionId does not match any of its own revisions is rejected (dangling reference)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const corrupted = { ...project, activeRevisionId: 'revision-that-does-not-exist' };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('a room whose surfaceIds references a surface not present in the revision is rejected (dangling reference)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const room = { id: 'room-1', name: 'Bedroom', lengthFt: '10', widthFt: '10', heightFt: '8', deductionEnabled: false, openingMode: 'quick' as const, quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: ['surface-that-does-not-exist'] };
+    const corrupted = { ...project, revisions: [{ ...project.revisions[0], rooms: [room] }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('a surface whose roomId references a room not present in the revision is rejected (dangling reference)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const surface = { id: 'surf-1', roomId: 'room-that-does-not-exist', kind: 'wall' as const, enabled: true, measurementMode: 'roomDerived' as const, areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: null, loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
+    const corrupted = { ...project, revisions: [{ ...project.revisions[0], surfaces: [surface] }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('an actual review whose baseline targets a DRAFT revision (never issued) is rejected', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids); // its one revision is a 'draft', never issued
+    const draftRevisionId = project.revisions[0].id;
+    const withDraftTargetingActual: Project = {
+      ...project,
+      actualReviews: [{ id: 'ar-1', projectId: 'p1', baselineIssuedRevisionId: draftRevisionId, state: 'final', materials: { confirmed: true, amount: '100' }, labor: { confirmed: true, amount: '100' }, otherExpenses: { confirmed: true, amount: '0' }, overhead: { confirmed: true, amount: '0', mode: 'actualFlat' }, updatedAt: ids.now() }],
+    };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withDraftTargetingActual], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues.some((i) => /issued|draft/i.test(i.message))).toBe(true);
+  });
+
+  it('a negative actual-review category amount is rejected (a cost cannot be negative)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const revisionId = project.revisions[0].id;
+    const issuedLikeProject: Project = { ...project, revisions: [{ ...project.revisions[0], state: 'issued' }] };
+    const withNegativeCost: Project = {
+      ...issuedLikeProject,
+      actualReviews: [{ id: 'ar-1', projectId: 'p1', baselineIssuedRevisionId: revisionId, state: 'final', materials: { confirmed: true, amount: '-50' }, labor: { confirmed: true, amount: '100' }, otherExpenses: { confirmed: true, amount: '0' }, overhead: { confirmed: true, amount: '0', mode: 'actualFlat' }, updatedAt: ids.now() }],
+    };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withNegativeCost], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('still accepts a fully well-formed envelope with rooms, surfaces, and a valid issued-baseline actual review', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const room = { id: 'room-1', name: 'Bedroom', lengthFt: '10', widthFt: '10', heightFt: '8', deductionEnabled: false, openingMode: 'quick' as const, quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: ['surf-1'] };
+    const surface = { id: 'surf-1', roomId: 'room-1', kind: 'wall' as const, enabled: true, measurementMode: 'roomDerived' as const, areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: null, loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
+    const issuedRevision = { ...project.revisions[0], state: 'issued' as const, rooms: [room], surfaces: [surface] };
+    const withValid: Project = {
+      ...project,
+      revisions: [issuedRevision],
+      actualReviews: [{ id: 'ar-1', projectId: 'p1', baselineIssuedRevisionId: issuedRevision.id, state: 'final', materials: { confirmed: true, amount: '100' }, labor: { confirmed: true, amount: '100' }, otherExpenses: { confirmed: true, amount: '0' }, overhead: { confirmed: true, amount: '0', mode: 'actualFlat' }, updatedAt: ids.now() }],
+    };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withValid], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(true);
   });
 });
 
