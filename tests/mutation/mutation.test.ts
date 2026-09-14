@@ -13,6 +13,11 @@ import { evaluatePrice, requiredPriceRaw, minimumTargetPrice, margin } from '../
 import { purchasedGallons, aggregateRawDemandByVariant } from '../../src/engine/paint';
 import { evaluateActualReview } from '../../src/engine/actuals';
 import { computeDocumentTotals } from '../../src/engine/document';
+import { aggregateProjectSurfaces, type ProjectSurface, type VariantPricing } from '../../src/engine/estimate';
+import { sequentialIdSource } from '../../src/domain/ids';
+import { createSnapshot } from '../../src/domain/snapshot';
+import { createDraftRevision, upsertRevision } from '../../src/domain/project';
+import type { BusinessSettings, PaintVariant, Project } from '../../src/domain/entities';
 
 const d = (n: string) => new PEP(n);
 
@@ -142,6 +147,71 @@ describe('MUTATION: use wall throughput for ceiling', () => {
     const realHours = netWall.times(coats).dividedBy(wallRate).plus(ceiling.times(coats).dividedBy(ceilingRate));
     expect(faultyHours.toFixed(2)).not.toBe('12.84');
     expect(realHours.toFixed(2)).toBe('12.84');
+  });
+});
+
+describe('MUTATION: include stale inactive-mode inputs (a disabled surface contributes to the project)', () => {
+  it('would inflate materials/labor with a disabled surface\'s huge garbage geometry, instead of correctly excluding it', () => {
+    const pricing = new Map<string, VariantPricing>([['paint-white', { coveragePerGal: d('350'), pricePerGal: d('40') }]]);
+    const enabledWall: ProjectSurface = {
+      id: 'wall-1', enabled: true, valid: true,
+      geometry: { kind: 'wall', wallOrCeilingAreaFt2: d('400') },
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: d('0.10'), loadedHourlyRate: d('32'), rateOrThroughput: d('150'),
+    };
+    const disabledGarbage: ProjectSurface = {
+      id: 'ceiling-1', enabled: false, valid: true,
+      geometry: { kind: 'ceiling', wallOrCeilingAreaFt2: d('99999') },
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: d('0.10'), loadedHourlyRate: d('32'), rateOrThroughput: d('120'),
+    };
+    // Faulty implementation: forgets to filter by `enabled` before aggregating.
+    const faultyIncludesDisabled = [enabledWall, disabledGarbage].reduce(
+      (sum, s) => sum.plus((s.geometry as { wallOrCeilingAreaFt2: Dec }).wallOrCeilingAreaFt2),
+      new PEP(0)
+    );
+    const { result } = aggregateProjectSurfaces([enabledWall, disabledGarbage], pricing);
+    expect(faultyIncludesDisabled.toFixed(0)).toBe('100399'); // the fault would see ~100,399 sqft of paintable area
+    expect(result!.purchases[0].purchasedGal).toBe(3); // the real function sees only the 400 sqft enabled wall
+  });
+});
+
+describe('MUTATION: copy live rates into a draft\'s snapshot without an explicit refresh', () => {
+  it('would let a live catalog price change retroactively affect an already-saved draft\'s calculation', () => {
+    const ids = sequentialIdSource();
+    const settingsV1: BusinessSettings = {
+      id: 's1', loadedHourlyRate: '32', overheadRatio: '0.15', targetMarginRatio: '0.35', defaultCoats: 2, defaultWasteRatio: '0.10',
+      wallThroughput: '150', ceilingThroughput: '120', trimThroughput: '40', doorHoursPerSidePerCoat: '0.75', defaultTravelAmount: '0',
+      defaultSuppliesAllowance: { mode: 'none', amount: '0', ratio: '0' }, sampleAssumptionsConfirmed: true, createdAt: ids.now(), updatedAt: ids.now(),
+    };
+    const variantV1: PaintVariant = { id: 'paint-1', name: 'White', color: 'white', sheen: 'eggshell', pricePerGal: '42', coverageFt2PerGal: '350', purchaseIncrementGal: '1', createdAt: ids.now(), updatedAt: ids.now() };
+    const snapshot = createSnapshot(settingsV1, [variantV1], [], ids, 'rev-1');
+    const draft = createDraftRevision('project-1', snapshot, ids);
+
+    const liveVariantNow = { ...variantV1, pricePerGal: '99' }; // live catalog changed AFTER the draft was saved
+    // Faulty implementation: reads the price straight off "live" state instead of the frozen snapshot.
+    const faultyPriceUsed = liveVariantNow.pricePerGal;
+    const realPriceUsed = draft.activeRateSnapshot.paintVariants[0].pricePerGal;
+    expect(faultyPriceUsed).not.toBe(realPriceUsed);
+    expect(realPriceUsed).toBe('42'); // the real snapshot never silently drifts
+  });
+});
+
+describe('MUTATION: mutate a revision in place instead of append-or-replace (upsertRevision)', () => {
+  it('would silently drop a brand-new draft revision created from an issued one (BUG_FIX_LOG #7)', () => {
+    const ids = sequentialIdSource();
+    const snapshot = createSnapshot(
+      { id: 's1', loadedHourlyRate: '32', overheadRatio: '0.15', targetMarginRatio: '0.35', defaultCoats: 2, defaultWasteRatio: '0.10', wallThroughput: '150', ceilingThroughput: '120', trimThroughput: '40', doorHoursPerSidePerCoat: '0.75', defaultTravelAmount: '0', defaultSuppliesAllowance: { mode: 'none', amount: '0', ratio: '0' }, sampleAssumptionsConfirmed: true, createdAt: ids.now(), updatedAt: ids.now() },
+      [], [], ids, 'rev-1'
+    );
+    const original = createDraftRevision('project-1', snapshot, ids);
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [original], activeRevisionId: original.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now() };
+    const brandNewRevision = createDraftRevision('project-1', snapshot, ids); // a genuinely new id, e.g. from createDraftFromIssued
+
+    // Faulty implementation: the naive `.map()` this replaced.
+    const faultyRevisions = project.revisions.map((r) => (r.id === brandNewRevision.id ? brandNewRevision : r));
+    const real = upsertRevision(project, brandNewRevision);
+
+    expect(faultyRevisions).toHaveLength(1); // the fault silently drops the new revision
+    expect(real.revisions).toHaveLength(2); // the real function appends it
   });
 });
 
