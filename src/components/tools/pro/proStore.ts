@@ -42,6 +42,25 @@ export async function saveProjects(projects: Project[]): Promise<void> {
   }
 }
 
+/** Commits a confirmed backup import's business settings, paint catalog,
+ * and full project list inside a SINGLE readwrite transaction (item 5:
+ * "confirmed imports must commit atomically") — replacing the previous
+ * three-separate-calls approach, where a failure partway through could
+ * leave settings/catalog persisted while projects were not (and the
+ * in-memory UI state already showing the partial result). */
+export async function saveImportedBackup(data: { businessSettings: BusinessSettings; paintVariants: PaintVariant[]; projects: Project[] }): Promise<void> {
+  const db = await openAppDb();
+  try {
+    await writeAll(db, [
+      { store: STORES.businessSettings, records: [data.businessSettings] },
+      { store: STORES.paintVariants, records: data.paintVariants },
+      { store: STORES.projects, records: data.projects },
+    ]);
+  } finally {
+    db.close();
+  }
+}
+
 /** Version-checked single-project save (task item 6: multi-tab conflict
  * policy via a real monotonic version integer, not a timestamp). Throws
  * `ConflictError` (re-exported by storage/db) if another save landed

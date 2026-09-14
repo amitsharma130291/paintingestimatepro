@@ -1,7 +1,7 @@
 // BACK: backup validation, restore/merge, and import-as-copies.
 import { describe, it, expect } from 'vitest';
 import { sequentialIdSource } from '../../src/domain/ids';
-import { validateBackupEnvelope, planRestoreMerge, planImportAsCopies, exportBackup } from '../../src/domain/backup';
+import { validateBackupEnvelope, planRestoreMerge, planFullRestoreMerge, planImportAsCopies, exportBackup } from '../../src/domain/backup';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision } from '../../src/domain/project';
 import type { BusinessSettings, PaintVariant, Project } from '../../src/domain/entities';
@@ -174,6 +174,49 @@ describe('BACK-D09: restore/merge — identical skip, new add, conflicting requi
   });
 });
 
+describe('BACK-D05/D06: full restore/merge preview spans projects, paint catalog, and business settings', () => {
+  it('an identical settings/catalog/projects triple produces zero conflicts and nothing to add', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const settings = makeSettings();
+    const variant = makeVariant();
+    const plan = planFullRestoreMerge(
+      { businessSettings: settings, paintVariants: [variant], projects: [project] },
+      { businessSettings: structuredClone(settings), paintVariants: [structuredClone(variant)], projects: [structuredClone(project)] }
+    );
+    expect(plan.conflicts).toHaveLength(0);
+    expect(plan.toAdd.projects).toHaveLength(0);
+    expect(plan.toAdd.paintVariants).toHaveLength(0);
+  });
+
+  it('a new paint variant ID is queued to add; a conflicting one is flagged (default keepLocal)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const settings = makeSettings();
+    const localVariant = makeVariant();
+    const newVariant = { ...makeVariant(), id: 'paint-2', name: 'New Color' };
+    const conflictingVariant = { ...makeVariant(), pricePerGal: '99' }; // same id, different price
+    const plan = planFullRestoreMerge(
+      { businessSettings: settings, paintVariants: [localVariant], projects: [project] },
+      { businessSettings: settings, paintVariants: [newVariant, conflictingVariant], projects: [project] }
+    );
+    expect(plan.toAdd.paintVariants.map((v) => v.id)).toEqual(['paint-2']);
+    expect(plan.conflicts).toContainEqual({ kind: 'paintVariant', id: 'paint-1', resolution: 'keepLocal' });
+  });
+
+  it('differing business settings produce exactly one businessSettings conflict, defaulting to keepLocal', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const localSettings = makeSettings();
+    const incomingSettings = { ...makeSettings(), loadedHourlyRate: '55' };
+    const plan = planFullRestoreMerge(
+      { businessSettings: localSettings, paintVariants: [], projects: [project] },
+      { businessSettings: incomingSettings, paintVariants: [], projects: [project] }
+    );
+    expect(plan.conflicts).toEqual([{ kind: 'businessSettings', id: localSettings.id, resolution: 'keepLocal' }]);
+  });
+});
+
 describe('BACK-D10: import-as-copies — provenance-based skip, full ID remap including actual baselines', () => {
   it('remaps project/revision IDs and the actual-review baseline reference together', () => {
     const ids = sequentialIdSource();
@@ -190,6 +233,19 @@ describe('BACK-D10: import-as-copies — provenance-based skip, full ID remap in
     // The actual review's baseline must point at the COPIED revision id, not the original.
     expect(copy.actualReviews[0].baselineIssuedRevisionId).toBe(copy.revisions[0].id);
     expect(result.provenance[0]).toMatchObject({ exportId: 'export-1', sourceProjectId: 'p1', copiedProjectId: copy.id });
+  });
+
+  it('drops (never carries over) an actual review whose baseline cannot be remapped, instead of retaining a dangling reference', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withUnresolvableActual: Project = {
+      ...project,
+      actualReviews: [{ id: 'ar-1', projectId: project.id, baselineIssuedRevisionId: 'some-revision-not-in-this-project', state: 'final', materials: { confirmed: true, amount: '1' }, labor: { confirmed: true, amount: '1' }, otherExpenses: { confirmed: true, amount: '1' }, overhead: { confirmed: true, amount: '1', mode: 'baselineAllocation' }, updatedAt: ids.now() }],
+    };
+    const result = planImportAsCopies([withUnresolvableActual], 'export-1', new Set(), ids);
+    expect(result.projects).toHaveLength(1);
+    // The copy must not carry over an actual review pointing nowhere.
+    expect(result.projects[0].actualReviews).toHaveLength(0);
   });
 
   it('repeat import of the same export skips by provenance unless another copy is explicitly requested', () => {

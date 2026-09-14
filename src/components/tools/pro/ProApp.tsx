@@ -3,18 +3,18 @@ import { PEP } from '../../../engine/decimal';
 import { evaluateActualReview, type ActualCategory } from '../../../engine/actuals';
 import { computeServiceUnitCost, evaluateServiceHealth } from '../../../engine/serviceHealth';
 import { statusBadge, money, parseCoatsInput } from '../shared';
-import type { BusinessSettings, PaintVariant, Project, Room, Surface, EstimateRevision, ServiceKind } from '../../../domain/entities';
+import type { BusinessSettings, PaintVariant, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope } from '../../../domain/entities';
 import { createSnapshot } from '../../../domain/snapshot';
 import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, upsertRevision, upsertActualReview } from '../../../domain/project';
 import type { ActualReview } from '../../../domain/entities';
 import { assembleProjectEstimate, type ProjectEstimateAssembly } from '../../../domain/estimateAssembly';
 import { previewRateRefresh, applyRateRefresh, type RateRefreshDiff, type VariantResolution } from '../../../domain/rateRefresh';
 import { buildCustomerDocument } from '../../../domain/customerDocument';
-import { exportBackup, validateBackupEnvelope, planRestoreMerge } from '../../../domain/backup';
+import { exportBackup, validateBackupEnvelope, planFullRestoreMerge, planImportAsCopies, type FullRestorePlan, type ImportConflict } from '../../../domain/backup';
 import { defaultIdSource } from '../../../domain/ids';
 import { readInteriorHandoff, clearInteriorHandoff, buildProjectFromInteriorHandoff, type InteriorHandoffPayload, type HandoffFieldNote } from '../../../domain/interiorHandoff';
 import { ConflictError } from '../../../storage/db';
-import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveProjects } from './proStore';
+import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveImportedBackup } from './proStore';
 
 const ids = defaultIdSource;
 const now = () => new Date().toISOString();
@@ -81,6 +81,7 @@ export default function ProApp() {
     overhead: { confirmed: false, amount: '' },
   });
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<{ envelope: BackupEnvelope; plan: FullRestorePlan; resolutions: Record<string, ImportConflict['resolution']> } | null>(null);
   const [pendingHandoff, setPendingHandoff] = useState<InteriorHandoffPayload | null>(null);
   const [handoffPreviewNotes, setHandoffPreviewNotes] = useState<HandoffFieldNote[] | null>(null);
 
@@ -470,7 +471,14 @@ export default function ProApp() {
 
   // ---- Backup ----
   async function handleExport() {
-    const envelope = exportBackup('install-local', settings, catalog, [], [], projects, ids);
+    // Never export hardcoded empty placeholders for a record type that
+    // might actually hold user data — read the live persisted snapshot for
+    // otherMaterials/serviceDefinitions rather than passing `[]` literals
+    // (item 5). Both are currently vestigial (no UI writes to them yet),
+    // so this is defense-in-depth: the export stays correct automatically
+    // if either becomes a live feature later.
+    const snapshot = await loadSnapshot();
+    const envelope = exportBackup('install-local', settings, catalog, snapshot.otherMaterials, snapshot.serviceDefinitions, projects, ids);
     const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -482,7 +490,10 @@ export default function ProApp() {
     URL.revokeObjectURL(url);
   }
 
-  async function handleImport(file: File) {
+  // Step 1: parse + validate + compute the merge plan. NO writes happen
+  // here — this only populates `pendingImport` for the user to review.
+  async function handleImportFileSelected(file: File) {
+    setImportMessage(null);
     const text = await file.text();
     let parsed: unknown;
     try {
@@ -496,28 +507,67 @@ export default function ProApp() {
       setImportMessage(`Not imported: ${result.issues.map((i) => i.message).join(' ')}`);
       return;
     }
-    // BACK-004/017 fix: restoring a backup must MERGE into local projects,
-    // not silently replace them. DATA_CONTRACT's restore/merge rule is
-    // "identical existing records skip; new IDs add; conflicting content
-    // at the same ID requires an explicit choice — default keep-local,
-    // never automatic timestamp-wins." A full per-conflict resolution UI
-    // isn't built yet (a real remaining gap, see TEST_EXECUTION_REPORT.md),
-    // but defaulting to keep-local at minimum means importing a backup can
-    // never silently destroy an unsaved or differently-edited local project.
-    const plan = planRestoreMerge(projects, result.envelope.projects);
-    const mergedProjects = [...projects, ...plan.toAdd.projects];
-    setSettings(result.envelope.businessSettings);
-    setCatalog(result.envelope.paintVariants);
-    setProjects(mergedProjects);
+    const plan = planFullRestoreMerge(
+      { businessSettings: settings, paintVariants: catalog, projects },
+      { businessSettings: result.envelope.businessSettings, paintVariants: result.envelope.paintVariants, projects: result.envelope.projects }
+    );
+    const resolutions: Record<string, ImportConflict['resolution']> = {};
+    for (const c of plan.conflicts) resolutions[`${c.kind}:${c.id}`] = 'keepLocal';
+    setPendingImport({ envelope: result.envelope, plan, resolutions });
+  }
+
+  function setImportResolution(conflict: ImportConflict, resolution: ImportConflict['resolution']) {
+    setPendingImport((pending) => (pending ? { ...pending, resolutions: { ...pending.resolutions, [`${conflict.kind}:${conflict.id}`]: resolution } } : pending));
+  }
+
+  function cancelImport() {
+    // Cancellation writes nothing — `pendingImport` only ever held an
+    // in-memory plan; discarding it leaves storage and app state untouched.
+    setPendingImport(null);
+    setImportMessage('Import cancelled — nothing was changed.');
+  }
+
+  // Step 2: apply the user's chosen resolution to every conflict, then
+  // commit everything (settings + catalog + projects) in ONE atomic
+  // transaction — item 5: "confirmed imports must commit atomically."
+  async function confirmImport() {
+    if (!pendingImport) return;
+    const { envelope, plan, resolutions } = pendingImport;
+
+    let finalSettings = settings;
+    if (resolutions[`businessSettings:${settings.id}`] === 'replaceImported') finalSettings = envelope.businessSettings;
+
+    const keepBothVariantIds = plan.conflicts.filter((c) => c.kind === 'paintVariant' && resolutions[`paintVariant:${c.id}`] === 'keepBoth').map((c) => c.id);
+    const replaceVariantIds = new Set(plan.conflicts.filter((c) => c.kind === 'paintVariant' && resolutions[`paintVariant:${c.id}`] === 'replaceImported').map((c) => c.id));
+    let finalCatalog = catalog.map((v) => (replaceVariantIds.has(v.id) ? envelope.paintVariants.find((iv) => iv.id === v.id)! : v));
+    finalCatalog = [...finalCatalog, ...plan.toAdd.paintVariants];
+    for (const dupId of keepBothVariantIds) {
+      const source = envelope.paintVariants.find((v) => v.id === dupId);
+      if (source) finalCatalog.push({ ...source, id: ids.nextId() });
+    }
+
+    const keepBothProjects = plan.conflicts.filter((c) => c.kind === 'project' && resolutions[`project:${c.id}`] === 'keepBoth').map((c) => envelope.projects.find((p) => p.id === c.id)!).filter(Boolean);
+    const replaceProjectIds = new Set(plan.conflicts.filter((c) => c.kind === 'project' && resolutions[`project:${c.id}`] === 'replaceImported').map((c) => c.id));
+    let finalProjects = projects.map((p) => (replaceProjectIds.has(p.id) ? envelope.projects.find((ip) => ip.id === p.id)! : p));
+    finalProjects = [...finalProjects, ...plan.toAdd.projects];
+    if (keepBothProjects.length > 0) {
+      // Reuse the tested import-as-copies remap so a "keep both" project
+      // gets fresh IDs throughout its whole graph, including its
+      // actual-review baselines — never a raw duplicate ID collision.
+      const copies = planImportAsCopies(keepBothProjects, envelope.exportId, new Set(), ids, true);
+      finalProjects = [...finalProjects, ...copies.projects];
+    }
+
     try {
-      await saveBusinessSettings(result.envelope.businessSettings);
-      await savePaintVariants(result.envelope.paintVariants);
-      await saveProjects(mergedProjects);
-      const conflictNote = plan.conflicts.length > 0 ? ` ${plan.conflicts.length} project(s) had a different local copy with the same ID and were KEPT AS-IS (not overwritten) — export and compare manually if you need the imported version.` : '';
-      const skipNote = plan.toSkip.projectIds.length > 0 ? ` ${plan.toSkip.projectIds.length} identical project(s) skipped.` : '';
-      setImportMessage(`Restored ${plan.toAdd.projects.length} new project(s) and ${result.envelope.paintVariants.length} paint variant(s).${skipNote}${conflictNote}`);
+      await saveImportedBackup({ businessSettings: finalSettings, paintVariants: finalCatalog, projects: finalProjects });
+      setSettings(finalSettings);
+      setCatalog(finalCatalog);
+      setProjects(finalProjects);
+      setPendingImport(null);
+      const addedCount = plan.toAdd.projects.length + keepBothProjects.length;
+      setImportMessage(`Import complete: ${addedCount} project(s) added, ${plan.toAdd.paintVariants.length + keepBothVariantIds.length} paint variant(s) added, ${plan.conflicts.length} conflict(s) resolved as chosen.`);
     } catch {
-      setImportMessage('Restore failed while saving — your previous data was not changed.');
+      setImportMessage('Import failed while saving — your previous data was not changed.');
     }
   }
 
@@ -876,9 +926,58 @@ export default function ProApp() {
             </div>
             <div>
               <label className="block text-sm font-medium text-ink-soft">Restore from backup</label>
-              <input type="file" accept="application/json" className="mt-1" onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])} />
+              <input
+                type="file"
+                accept="application/json"
+                className="mt-1"
+                disabled={!!pendingImport}
+                onChange={(e) => e.target.files?.[0] && handleImportFileSelected(e.target.files[0])}
+              />
               {importMessage && <p className="mt-2 text-sm text-ink-soft">{importMessage}</p>}
             </div>
+
+            {pendingImport && (
+              <div className="rounded-btn border border-line bg-canvas-soft p-4 text-sm">
+                <p className="font-semibold">Import preview — nothing has been saved yet</p>
+                <ul className="mt-2 list-disc pl-5 text-ink-soft">
+                  <li>{pendingImport.plan.toAdd.projects.length} new project(s) will be added</li>
+                  <li>{pendingImport.plan.toAdd.paintVariants.length} new paint variant(s) will be added</li>
+                  <li>{pendingImport.plan.toSkip.projectIds.length} identical project(s) will be skipped (already present)</li>
+                  <li>{pendingImport.plan.toSkip.paintVariantIds.length} identical paint variant(s) will be skipped</li>
+                </ul>
+
+                {pendingImport.plan.conflicts.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <p className="font-medium text-warn">{pendingImport.plan.conflicts.length} conflict(s) need a choice — your local copy is kept by default:</p>
+                    {pendingImport.plan.conflicts.map((c) => (
+                      <div key={`${c.kind}:${c.id}`} className="rounded-btn border border-warn-line bg-warn-soft p-3">
+                        <p className="text-ink-soft">
+                          {c.kind === 'businessSettings' ? 'Business settings' : c.kind === 'paintVariant' ? `Paint variant "${c.id}"` : `Project "${c.id}"`} differs from the imported copy.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-3">
+                          {(['keepLocal', 'replaceImported', ...(c.kind === 'businessSettings' ? [] : (['keepBoth'] as const))] as ImportConflict['resolution'][]).map((opt) => (
+                            <label key={opt} className="flex items-center gap-1.5 text-xs">
+                              <input
+                                type="radio"
+                                name={`resolution-${c.kind}-${c.id}`}
+                                checked={pendingImport.resolutions[`${c.kind}:${c.id}`] === opt}
+                                onChange={() => setImportResolution(c, opt)}
+                              />
+                              {opt === 'keepLocal' ? 'Keep local' : opt === 'replaceImported' ? 'Use imported' : 'Keep both (import as a copy)'}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  <button type="button" className="btn btn-secondary" onClick={cancelImport}>Cancel (nothing will change)</button>
+                  <button type="button" className="btn btn-primary" onClick={confirmImport}>Confirm import</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

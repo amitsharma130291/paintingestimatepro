@@ -148,29 +148,84 @@ export interface ImportPlan {
   conflicts: ImportConflict[];
 }
 
+export interface ArrayMergeResult<T> {
+  toAdd: T[];
+  toSkip: string[]; // ids
+  conflicts: { id: string; resolution: 'keepLocal' | 'replaceImported' | 'keepBoth' }[];
+}
+
+/** Generic "identical existing records skip; new IDs add; conflicting
+ * content at the same ID needs an explicit resolution (default keepLocal,
+ * never an automatic timestamp-wins rule)" merge, usable for any
+ * ID-keyed record collection (projects, paint variants, ...). */
+export function planArrayMerge<T extends { id: string }>(existing: T[], incoming: T[]): ArrayMergeResult<T> {
+  const existingById = new Map(existing.map((e) => [e.id, e]));
+  const toAdd: T[] = [];
+  const toSkip: string[] = [];
+  const conflicts: ArrayMergeResult<T>['conflicts'] = [];
+
+  for (const item of incoming) {
+    const match = existingById.get(item.id);
+    if (!match) {
+      toAdd.push(item);
+      continue;
+    }
+    if (JSON.stringify(match) === JSON.stringify(item)) {
+      toSkip.push(item.id); // identical -> skip, not a duplicate
+    } else {
+      conflicts.push({ id: item.id, resolution: 'keepLocal' }); // default; caller may override
+    }
+  }
+
+  return { toAdd, toSkip, conflicts };
+}
+
 /** Restore/merge (default): identical existing records skip; new IDs add;
  * conflicting content at the same ID needs an explicit resolution
  * (default keepLocal, never an automatic timestamp-wins rule). */
 export function planRestoreMerge(existingProjects: Project[], incomingProjects: Project[]): ImportPlan {
-  const existingById = new Map(existingProjects.map((p) => [p.id, p]));
-  const toAdd: Project[] = [];
-  const toSkip: string[] = [];
-  const conflicts: ImportConflict[] = [];
+  const generic = planArrayMerge(existingProjects, incomingProjects);
+  return {
+    mode: 'restoreMerge',
+    toAdd: { projects: generic.toAdd },
+    toSkip: { projectIds: generic.toSkip },
+    conflicts: generic.conflicts.map((c) => ({ kind: 'project' as const, id: c.id, resolution: c.resolution })),
+  };
+}
 
-  for (const incoming of incomingProjects) {
-    const existing = existingById.get(incoming.id);
-    if (!existing) {
-      toAdd.push(incoming);
-      continue;
-    }
-    if (JSON.stringify(existing) === JSON.stringify(incoming)) {
-      toSkip.push(incoming.id); // identical -> skip, not a duplicate
-    } else {
-      conflicts.push({ kind: 'project', id: incoming.id, resolution: 'keepLocal' }); // default; caller may override
-    }
+export interface FullRestorePlan {
+  toAdd: { projects: Project[]; paintVariants: PaintVariant[] };
+  toSkip: { projectIds: string[]; paintVariantIds: string[] };
+  /** Every conflict a confirmation UI must resolve before any write —
+   * spans projects, the paint catalog, and (at most one, since it's a
+   * singleton) business settings. */
+  conflicts: ImportConflict[];
+}
+
+/** The full restore/merge plan across every mergeable collection in a
+ * backup envelope — item 5: "Implement required conflict preview,
+ * available conflict choices, confirmation, and cancellation for backup
+ * import." Business settings is a singleton, not an ID-keyed collection,
+ * so it is compared directly: identical is silently fine, any difference
+ * is one conflict (default keepLocal, same as every other kind). */
+export function planFullRestoreMerge(
+  existing: { businessSettings: BusinessSettings; paintVariants: PaintVariant[]; projects: Project[] },
+  incoming: { businessSettings: BusinessSettings; paintVariants: PaintVariant[]; projects: Project[] }
+): FullRestorePlan {
+  const projectMerge = planArrayMerge(existing.projects, incoming.projects);
+  const variantMerge = planArrayMerge(existing.paintVariants, incoming.paintVariants);
+  const conflicts: ImportConflict[] = [
+    ...projectMerge.conflicts.map((c) => ({ kind: 'project' as const, id: c.id, resolution: c.resolution })),
+    ...variantMerge.conflicts.map((c) => ({ kind: 'paintVariant' as const, id: c.id, resolution: c.resolution })),
+  ];
+  if (JSON.stringify(existing.businessSettings) !== JSON.stringify(incoming.businessSettings)) {
+    conflicts.push({ kind: 'businessSettings', id: existing.businessSettings.id, resolution: 'keepLocal' });
   }
-
-  return { mode: 'restoreMerge', toAdd: { projects: toAdd }, toSkip: { projectIds: toSkip }, conflicts };
+  return {
+    toAdd: { projects: projectMerge.toAdd, paintVariants: variantMerge.toAdd },
+    toSkip: { projectIds: projectMerge.toSkip, paintVariantIds: variantMerge.toSkip },
+    conflicts,
+  };
 }
 
 /** Import as copies: new IDs throughout each imported graph, remapping
@@ -209,13 +264,23 @@ function remapProjectIds(source: Project, ids: IdSource): Project {
     id: revisionIdMap.get(rev.id)!,
     projectId: newProjectId,
   }));
-  const newActualReviews = source.actualReviews.map((ar) => ({
-    ...structuredClone(ar),
-    id: ids.nextId(),
-    projectId: newProjectId,
-    // "New copied IDs remap all children/actual baselines, not only project IDs."
-    baselineIssuedRevisionId: revisionIdMap.get(ar.baselineIssuedRevisionId) ?? ar.baselineIssuedRevisionId,
-  }));
+  // "New copied IDs remap all children/actual baselines, not only project
+  // IDs." Import validation (BACK-015) already guarantees every source
+  // actual review's baseline matches one of this project's own revisions,
+  // so every lookup below should always hit — but if one somehow doesn't
+  // (defense in depth), the review is dropped rather than carried over
+  // with its old, now-meaningless baseline ID: "never retain a dangling
+  // baseline reference as a fallback."
+  const newActualReviews = source.actualReviews.flatMap((ar) => {
+    const remappedBaselineId = revisionIdMap.get(ar.baselineIssuedRevisionId);
+    if (!remappedBaselineId) return [];
+    return [{
+      ...structuredClone(ar),
+      id: ids.nextId(),
+      projectId: newProjectId,
+      baselineIssuedRevisionId: remappedBaselineId,
+    }];
+  });
   return {
     ...structuredClone(source),
     id: newProjectId,

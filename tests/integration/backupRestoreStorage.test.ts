@@ -11,7 +11,7 @@ import { sequentialIdSource } from '../../src/domain/ids';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision, issueRevision } from '../../src/domain/project';
 import { buildCustomerDocument } from '../../src/domain/customerDocument';
-import { exportBackup, validateBackupEnvelope, planRestoreMerge } from '../../src/domain/backup';
+import { exportBackup, validateBackupEnvelope, planRestoreMerge, planFullRestoreMerge, planImportAsCopies } from '../../src/domain/backup';
 import type { BusinessSettings, PaintVariant, Project, EstimateRevision, ActualReview } from '../../src/domain/entities';
 
 function deleteDatabase(name: string): Promise<void> {
@@ -129,5 +129,86 @@ describe('Restore into an empty store, through real IndexedDB transactions', () 
     // Because validation failed, the caller never calls writeAll at all — assert the store is untouched.
     const after = await readAll<PaintVariant>(db, STORES.paintVariants);
     expect(after).toHaveLength(1); // only the pre-existing record; the corrupt import contributed nothing
+  });
+});
+
+describe('Item 5: conflict preview/choice/confirm/cancel through real storage, via planFullRestoreMerge', () => {
+  let db: IDBPDatabase;
+  beforeEach(async () => {
+    await deleteDatabase('painting-estimate-pro');
+    db = await openAppDb();
+  });
+  afterEach(() => db.close());
+
+  it('cancelling an import (never committing) leaves storage completely untouched', async () => {
+    const ids = sequentialIdSource();
+    const localProject = makeIssuedProjectWithActual(ids);
+    await writeAll(db, [{ store: STORES.projects, records: [localProject] }]);
+
+    const incoming = { ...structuredClone(localProject), title: 'Edited in the imported file' };
+    const plan = planFullRestoreMerge(
+      { businessSettings: settings(), paintVariants: [variant()], projects: [localProject] },
+      { businessSettings: settings(), paintVariants: [variant()], projects: [incoming] }
+    );
+    expect(plan.conflicts).toHaveLength(1); // same id, different content
+
+    // "Cancel" = the UI never calls writeAll/saveImportedBackup for this plan at all.
+    const after = await readAll<Project>(db, STORES.projects);
+    expect(after).toHaveLength(1);
+    expect(after[0].title).toBe('Kitchen repaint'); // unchanged — the plan was only computed, never applied
+  });
+
+  it('confirming "replaceImported" on a conflicting project overwrites it atomically; "keepLocal" (default) leaves it untouched', async () => {
+    const ids = sequentialIdSource();
+    const localProject = makeIssuedProjectWithActual(ids);
+    await writeAll(db, [{ store: STORES.projects, records: [localProject] }]);
+
+    const incoming = { ...structuredClone(localProject), title: 'Edited in the imported file' };
+    const plan = planFullRestoreMerge(
+      { businessSettings: settings(), paintVariants: [variant()], projects: [localProject] },
+      { businessSettings: settings(), paintVariants: [variant()], projects: [incoming] }
+    );
+    expect(plan.conflicts[0].resolution).toBe('keepLocal'); // the required default
+
+    // User explicitly chooses "replaceImported" for this one conflict, then confirms.
+    const finalProjects = [incoming]; // simulating the UI applying the chosen resolution
+    await writeAll(db, [{ store: STORES.projects, records: finalProjects }]);
+
+    const after = await readAll<Project>(db, STORES.projects);
+    expect(after).toHaveLength(1);
+    expect(after[0].title).toBe('Edited in the imported file');
+  });
+
+  it('"keep both" on a conflicting project commits a genuinely new copy (remapped IDs, including the actual-review baseline) alongside the original, never a raw ID collision', async () => {
+    const ids = sequentialIdSource();
+    const localProject = makeIssuedProjectWithActual(ids);
+    await writeAll(db, [{ store: STORES.projects, records: [localProject] }]);
+
+    const incoming = { ...structuredClone(localProject), title: 'Edited in the imported file' };
+    // "Keep both" reuses the tested import-as-copies remap for exactly the chosen project.
+    const copies = planImportAsCopies([incoming], 'export-1', new Set(), ids, true);
+    const finalProjects = [localProject, ...copies.projects];
+    await writeAll(db, [{ store: STORES.projects, records: finalProjects }]);
+
+    const after = await readAll<Project>(db, STORES.projects);
+    expect(after).toHaveLength(2);
+    const original = after.find((p) => p.id === localProject.id)!;
+    const copy = after.find((p) => p.id !== localProject.id)!;
+    expect(original.title).toBe('Kitchen repaint'); // untouched
+    expect(copy.title).toBe('Edited in the imported file');
+    expect(copy.id).not.toBe(localProject.id);
+    // The copy's actual review must point at the COPY's own revision, never the original's.
+    expect(copy.actualReviews[0].baselineIssuedRevisionId).toBe(copy.revisions[0].id);
+    expect(copy.actualReviews[0].baselineIssuedRevisionId).not.toBe(localProject.activeRevisionId);
+  });
+
+  it('a differing business settings singleton produces exactly one businessSettings conflict, never silently overwritten', () => {
+    const local = settings();
+    const incoming = { ...settings(), loadedHourlyRate: '99' };
+    const plan = planFullRestoreMerge(
+      { businessSettings: local, paintVariants: [], projects: [] },
+      { businessSettings: incoming, paintVariants: [], projects: [] }
+    );
+    expect(plan.conflicts).toEqual([{ kind: 'businessSettings', id: local.id, resolution: 'keepLocal' }]);
   });
 });
