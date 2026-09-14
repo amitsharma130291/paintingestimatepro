@@ -203,7 +203,7 @@ describe('MUTATION: mutate a revision in place instead of append-or-replace (ups
       [], [], ids, 'rev-1'
     );
     const original = createDraftRevision('project-1', snapshot, ids);
-    const project: Project = { id: 'project-1', title: 'Job', revisions: [original], activeRevisionId: original.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now() };
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [original], activeRevisionId: original.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now(), version: 1 };
     const brandNewRevision = createDraftRevision('project-1', snapshot, ids); // a genuinely new id, e.g. from createDraftFromIssued
 
     // Faulty implementation: the naive `.map()` this replaced.

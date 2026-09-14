@@ -200,6 +200,13 @@ export interface Project {
   actualReviews: ActualReview[];
   createdAt: string;
   updatedAt: string;
+  /** Monotonically increasing optimistic-concurrency token, checked and
+   * incremented inside the same storage transaction as every write (see
+   * storage/db.ts's writeProjectWithVersionCheck). A brand-new project
+   * starts at 1. Deliberately NOT derived from a timestamp — two saves in
+   * the same millisecond must still conflict, which an updatedAt-based
+   * check cannot guarantee. */
+  version: number;
 }
 
 export interface ActualCategoryRecord {

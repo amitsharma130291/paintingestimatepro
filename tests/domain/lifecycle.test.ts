@@ -148,7 +148,7 @@ describe('upsertRevision: saving a NEW draft revision must APPEND it, not silent
     let draft = createDraftRevision('project-1', snapshot, ids);
     draft = { ...draft, title: 'Job', proposedPrice: '100', calculationState: 'complete' };
     const issued = issueRevision(draft, (r) => buildCustomerDocument(r, { estimateNumber: 'E-1', estimateDate: '2026-01-02', projectAddress: '', revisionLabel: 'Rev 1' }), ids);
-    const project: Project = { id: 'project-1', title: 'Job', revisions: [issued], activeRevisionId: issued.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now() };
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [issued], activeRevisionId: issued.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now(), version: 1 };
 
     // Editing the issued revision produces a brand-new draft with a NEW id — not yet in project.revisions.
     const newDraft = createDraftFromIssued(issued, ids);
@@ -163,7 +163,7 @@ describe('upsertRevision: saving a NEW draft revision must APPEND it, not silent
     const ids = sequentialIdSource();
     const snapshot = createSnapshot(makeSettings('32'), [makeVariant('42')], [], ids, 'rev-1');
     const draft = createDraftRevision('project-1', snapshot, ids);
-    const project: Project = { id: 'project-1', title: 'Job', revisions: [draft], activeRevisionId: draft.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now() };
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [draft], activeRevisionId: draft.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now(), version: 1 };
 
     const edited = { ...draft, title: 'Edited' };
     const updated = upsertRevision(project, edited);
@@ -184,7 +184,7 @@ describe('upsertActualReview: ACT-013/014 regression — recorded actuals must a
   }
 
   it('a first-time save appends a new ActualReview rather than leaving it as unsaved UI state', () => {
-    const project: Project = { id: 'project-1', title: 'Job', revisions: [], activeRevisionId: '', actualReviews: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [], activeRevisionId: '', actualReviews: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', version: 1 };
     const review = makeReview('ar-1', 'rev-1', '700');
     const updated = upsertActualReview(project, review);
     expect(updated.actualReviews).toHaveLength(1);
@@ -192,7 +192,7 @@ describe('upsertActualReview: ACT-013/014 regression — recorded actuals must a
   });
 
   it('re-saving the same review id updates it in place rather than duplicating', () => {
-    const project: Project = { id: 'project-1', title: 'Job', revisions: [], activeRevisionId: '', actualReviews: [makeReview('ar-1', 'rev-1', '700')], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [], activeRevisionId: '', actualReviews: [makeReview('ar-1', 'rev-1', '700')], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', version: 1 };
     const updated = upsertActualReview(project, makeReview('ar-1', 'rev-1', '900'));
     expect(updated.actualReviews).toHaveLength(1);
     expect(updated.actualReviews[0].materials.amount).toBe('900');
@@ -220,6 +220,7 @@ describe('LIFE-D07: duplicating a project gets fresh IDs and drops issued/actual
       actualReviews: [{ id: 'ar-1', projectId: 'project-1', baselineIssuedRevisionId: issuedSource.id, state: 'final', materials: { confirmed: true, amount: '700' }, labor: { confirmed: true, amount: '1400' }, otherExpenses: { confirmed: true, amount: '100' }, overhead: { confirmed: true, amount: '285', mode: 'baselineAllocation' }, updatedAt: ids.now() }],
       createdAt: ids.now(),
       updatedAt: ids.now(),
+      version: 1,
     };
 
     const copy = duplicateProject(project, ids);

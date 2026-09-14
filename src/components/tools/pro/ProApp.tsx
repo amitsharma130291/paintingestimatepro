@@ -69,7 +69,7 @@ export default function ProApp() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [draftEdit, setDraftEdit] = useState<EstimateRevision | null>(null);
-  const [draftBaselineUpdatedAt, setDraftBaselineUpdatedAt] = useState<string | null>(null);
+  const [draftBaselineVersion, setDraftBaselineVersion] = useState<number | null>(null);
   const [customPriceRaw, setCustomPriceRaw] = useState('');
   const [conflict, setConflict] = useState<{ project: Project; attempted: Project } | null>(null);
   const [refreshPreview, setRefreshPreview] = useState<{ diff: RateRefreshDiff; resolutions: Record<string, VariantResolution> } | null>(null);
@@ -113,19 +113,20 @@ export default function ProApp() {
     const built = buildProjectFromInteriorHandoff(pendingHandoff, liveSnapshot, ids);
     const nextCatalog = [...catalog, built.variant];
     const revisionWithVariant = { ...built.revision, activeRateSnapshot: { ...built.revision.activeRateSnapshot, paintVariants: [...built.revision.activeRateSnapshot.paintVariants, built.variant] } };
-    const project: Project = { id: revisionWithVariant.projectId, title: 'Room from free calculator', revisions: [revisionWithVariant], activeRevisionId: revisionWithVariant.id, actualReviews: [], createdAt: now(), updatedAt: now() };
+    const project: Project = { id: revisionWithVariant.projectId, title: 'Room from free calculator', revisions: [revisionWithVariant], activeRevisionId: revisionWithVariant.id, actualReviews: [], createdAt: now(), updatedAt: now(), version: 1 };
     setCatalog(nextCatalog);
     setProjects((ps) => [...ps, project]);
+    let committedVersion: number | null = null;
     try {
       await savePaintVariants(nextCatalog);
-      await saveProjectSafely(project, null);
+      committedVersion = await saveProjectSafely(project, null);
       setSaveMessage('Imported the room from your free calculator result.');
     } catch {
       setSaveMessage('Imported locally, but saving failed — try Save draft again from the project.');
     }
     setActiveProjectId(project.id);
     setDraftEdit(revisionWithVariant);
-    setDraftBaselineUpdatedAt(null);
+    setDraftBaselineVersion(committedVersion);
     setCustomPriceRaw('');
     setTab('projects');
     setHandoffPreviewNotes(built.unsupportedFieldNotes);
@@ -166,11 +167,11 @@ export default function ProApp() {
   function newProject() {
     const snapshot = currentLiveSnapshot(`live-${now()}`);
     const revision = createDraftRevision(ids.nextId(), snapshot, ids);
-    const project: Project = { id: revision.projectId, title: 'New project', revisions: [revision], activeRevisionId: revision.id, actualReviews: [], createdAt: now(), updatedAt: now() };
+    const project: Project = { id: revision.projectId, title: 'New project', revisions: [revision], activeRevisionId: revision.id, actualReviews: [], createdAt: now(), updatedAt: now(), version: 1 };
     setProjects((ps) => [...ps, project]);
     setActiveProjectId(project.id);
     setDraftEdit(revision);
-    setDraftBaselineUpdatedAt(null);
+    setDraftBaselineVersion(null); // not yet created in storage — the next save is a create, not an update
     setCustomPriceRaw('');
     setRefreshPreview(null);
   }
@@ -181,7 +182,7 @@ export default function ProApp() {
     const revision = project.revisions.find((r) => r.id === project.activeRevisionId) ?? project.revisions[project.revisions.length - 1];
     setActiveProjectId(projectId);
     setDraftEdit(revision);
-    setDraftBaselineUpdatedAt(project.updatedAt);
+    setDraftBaselineVersion(project.version);
     setCustomPriceRaw(revision.priceMode === 'custom' ? revision.proposedPrice ?? '' : '');
     setRefreshPreview(null);
   }
@@ -190,7 +191,7 @@ export default function ProApp() {
     const newDraft = createDraftFromIssued(issued, ids);
     setActiveProjectId(project.id);
     setDraftEdit(newDraft);
-    setDraftBaselineUpdatedAt(project.updatedAt);
+    setDraftBaselineVersion(project.version);
     setCustomPriceRaw(newDraft.priceMode === 'custom' ? newDraft.proposedPrice ?? '' : '');
     setRefreshPreview(null);
   }
@@ -269,10 +270,10 @@ export default function ProApp() {
     };
     const nextProject: Project = { ...upsertRevision(activeProject, revisionToSave), activeRevisionId: revisionToSave.id, updatedAt: now() };
     try {
-      await saveProjectSafely(nextProject, draftBaselineUpdatedAt);
-      setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? nextProject : p)));
+      const committedVersion = await saveProjectSafely(nextProject, draftBaselineVersion);
+      setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? { ...nextProject, version: committedVersion } : p)));
       setDraftEdit(revisionToSave);
-      setDraftBaselineUpdatedAt(nextProject.updatedAt);
+      setDraftBaselineVersion(committedVersion);
       setSaveMessage('Draft saved.');
     } catch (err) {
       if (err instanceof ConflictError) {
@@ -285,8 +286,14 @@ export default function ProApp() {
 
   function resolveConflictReload() {
     if (!conflict) return;
-    setProjects((ps) => ps.map((p) => (p.id === conflict.project.id ? conflict.project : p)));
-    openProject(conflict.project.id);
+    const latest = conflict.project;
+    const revision = latest.revisions.find((r) => r.id === latest.activeRevisionId) ?? latest.revisions[latest.revisions.length - 1];
+    setProjects((ps) => ps.map((p) => (p.id === latest.id ? latest : p)));
+    setActiveProjectId(latest.id);
+    setDraftEdit(revision);
+    setDraftBaselineVersion(latest.version);
+    setCustomPriceRaw(revision.priceMode === 'custom' ? revision.proposedPrice ?? '' : '');
+    setRefreshPreview(null);
     setConflict(null);
     setSaveMessage('Reloaded the latest saved version — your conflicting edit was discarded.');
   }
@@ -295,12 +302,24 @@ export default function ProApp() {
     if (!conflict || !draftEdit) return;
     const newProjectId = ids.nextId();
     const copiedRevision: EstimateRevision = { ...draftEdit, id: ids.nextId(), projectId: newProjectId };
-    const copy: Project = { ...conflict.attempted, id: newProjectId, title: `${conflict.attempted.title} (my copy)`, revisions: [copiedRevision], activeRevisionId: copiedRevision.id, createdAt: now(), updatedAt: now() };
+    // task item 6: "save as copy" copies only the current draft, not the
+    // whole project's history — actualReviews from `conflict.attempted`
+    // reference OTHER revisions (issued ones) that are deliberately not
+    // included here. Carrying them over verbatim would leave a dangling
+    // `baselineIssuedRevisionId` pointing at a revision this copy doesn't
+    // have. Filtering to only reviews whose baseline made it into this
+    // copy is correct even though, for a draft-in-progress conflict, that
+    // is always empty in practice (a draft is never an actuals baseline).
+    const carriedOverActuals = conflict.attempted.actualReviews.filter((ar) => ar.baselineIssuedRevisionId === copiedRevision.id);
+    const copy: Project = { ...conflict.attempted, id: newProjectId, title: `${conflict.attempted.title} (my copy)`, revisions: [copiedRevision], activeRevisionId: copiedRevision.id, actualReviews: carriedOverActuals, createdAt: now(), updatedAt: now(), version: 1 };
     try {
-      await saveProjectSafely(copy, null);
+      const committedVersion = await saveProjectSafely(copy, null);
       setProjects((ps) => [...ps.map((p) => (p.id === conflict.project.id ? conflict.project : p)), copy]);
       setConflict(null);
-      openProject(copy.id);
+      setActiveProjectId(copy.id);
+      setDraftEdit(copiedRevision);
+      setDraftBaselineVersion(committedVersion);
+      setCustomPriceRaw(copiedRevision.priceMode === 'custom' ? copiedRevision.proposedPrice ?? '' : '');
       setSaveMessage('Your edit was saved as a new copy so nothing was lost.');
     } catch {
       setSaveMessage('Save-as-copy failed — your previous data was not changed.');
@@ -351,10 +370,10 @@ export default function ProApp() {
     const issued = issueRevision(ready, (r) => buildCustomerDocument(r, { estimateNumber: issueNumber, estimateDate: now().slice(0, 10), projectAddress: draftEdit.customerInfo.address, revisionLabel: `Rev ${draftEdit.revisionNumber}` }), ids);
     const nextProject: Project = { ...upsertRevision(activeProject, issued), activeRevisionId: issued.id, updatedAt: now() };
     try {
-      await saveProjectSafely(nextProject, draftBaselineUpdatedAt);
-      setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? nextProject : p)));
+      const committedVersion = await saveProjectSafely(nextProject, draftBaselineVersion);
+      setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? { ...nextProject, version: committedVersion } : p)));
       setDraftEdit(issued);
-      setDraftBaselineUpdatedAt(nextProject.updatedAt);
+      setDraftBaselineVersion(committedVersion);
       setSaveMessage('Estimate issued and saved.');
     } catch (err) {
       if (err instanceof ConflictError) setConflict({ project: err.currentRecord as Project, attempted: nextProject });
@@ -420,8 +439,12 @@ export default function ProApp() {
     };
     const nextProject = upsertActualReview(activeProject, review);
     try {
-      await saveProjectSafely(nextProject, activeProject.updatedAt);
-      setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? nextProject : p)));
+      const committedVersion = await saveProjectSafely(nextProject, activeProject.version);
+      setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? { ...nextProject, version: committedVersion } : p)));
+      // Bump the currently-open draft's own version baseline too — a
+      // later saveDraft()/issueEstimate() on this same project must not
+      // conflict against the version this actuals-save just advanced past.
+      setDraftBaselineVersion(committedVersion);
       setSaveMessage('Actuals saved.');
     } catch (err) {
       if (err instanceof ConflictError) setConflict({ project: err.currentRecord as Project, attempted: nextProject });

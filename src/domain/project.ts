@@ -220,5 +220,6 @@ export function duplicateProject(source: Project, ids: IdSource): Project {
     actualReviews: [], // duplication drops actuals
     createdAt: now,
     updatedAt: now,
+    version: 1, // a brand-new project record, independent of the source's own version history
   };
 }

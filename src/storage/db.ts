@@ -81,32 +81,45 @@ export class ConflictError extends Error {
 }
 
 /**
- * Optimistic-concurrency write for a single project (task item 5: "version
- * each persisted project, check the version inside the write transaction,
- * reject stale writes with a conflict message"). Uses the project's own
- * `updatedAt` as the version token rather than adding a new schema field —
- * every domain operation already bumps it on every mutation, so it is
- * already a correct monotonic version for this purpose.
+ * Optimistic-concurrency write for a single project (task item 6: "Replace
+ * timestamp-only conflict detection with a reliable version token... checked
+ * and updated within the same database transaction"). Uses a real
+ * monotonically-increasing integer (`Project.version`), NOT `updatedAt` —
+ * an ISO-timestamp comparison cannot distinguish two saves that land in the
+ * same millisecond, which a real multi-tab race can absolutely produce.
  *
- * `expectedUpdatedAt` is the `updatedAt` the caller last read/saved.
- * `null` means "I have no prior version" (a brand-new project) and skips
- * the check. If the stored record's `updatedAt` no longer matches, this
- * throws `ConflictError` with the current stored record attached — the
- * caller's own in-memory edit is untouched by this rejection, so it can
- * still offer "reload" (discard local edit) or "save as copy" (keep it
- * under a new ID) instead of silently overwriting another tab's save.
+ * `expectedVersion === null` asserts "this id must not already exist" (a
+ * true create) — if a record with this id is already there, that is
+ * itself a conflict, not silently skipped. Any other value asserts
+ * "the currently-stored version must equal exactly this" — if the record
+ * is missing entirely (e.g. deleted by another tab) that is ALSO a
+ * conflict, not treated as license to recreate it. On success the write
+ * always commits the record with `version` set to `(current?.version ?? 0) + 1`,
+ * ignoring whatever `project.version` the caller happened to pass in, so
+ * the version sequence can never be forged or skipped from outside this
+ * function. Returns the version actually committed.
  */
-export async function writeProjectWithVersionCheck(db: IDBPDatabase, project: Project, expectedUpdatedAt: string | null): Promise<void> {
+export async function writeProjectWithVersionCheck(db: IDBPDatabase, project: Project, expectedVersion: number | null): Promise<number> {
   const tx = db.transaction(STORES.projects, 'readwrite');
   const settled = tx.done.catch((err) => err as unknown);
   try {
     const os = tx.objectStore(STORES.projects);
     const current = (await os.get(project.id)) as Project | undefined;
-    if (current && expectedUpdatedAt !== null && current.updatedAt !== expectedUpdatedAt) {
-      throw new ConflictError(`This project was changed elsewhere (last saved ${current.updatedAt}). Reload or save as a copy instead of overwriting.`, current);
+
+    if (expectedVersion === null && current) {
+      throw new ConflictError(`A project with id "${project.id}" already exists.`, current);
     }
-    await os.put(project);
+    if (expectedVersion !== null && !current) {
+      throw new ConflictError('This project no longer exists — it may have been deleted elsewhere.', undefined);
+    }
+    if (expectedVersion !== null && current && current.version !== expectedVersion) {
+      throw new ConflictError(`This project was changed elsewhere (now at version ${current.version}). Reload or save as a copy instead of overwriting.`, current);
+    }
+
+    const nextVersion = (current?.version ?? 0) + 1;
+    await os.put({ ...project, version: nextVersion });
     await tx.done;
+    return nextVersion;
   } catch (err) {
     try {
       tx.abort();

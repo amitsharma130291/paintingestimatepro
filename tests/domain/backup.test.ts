@@ -21,7 +21,7 @@ function makeVariant(): PaintVariant {
 function makeProject(id: string, ids: ReturnType<typeof sequentialIdSource>): Project {
   const snapshot = createSnapshot(makeSettings(), [makeVariant()], [], ids, 'rev-1');
   const revision = createDraftRevision(id, snapshot, ids);
-  return { id, title: `Project ${id}`, revisions: [revision], activeRevisionId: revision.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now() };
+  return { id, title: `Project ${id}`, revisions: [revision], activeRevisionId: revision.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now(), version: 1 };
 }
 
 describe('BACK-D11: validation rejects before any write', () => {

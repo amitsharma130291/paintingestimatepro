@@ -42,14 +42,16 @@ export async function saveProjects(projects: Project[]): Promise<void> {
   }
 }
 
-/** Version-checked single-project save (task item 5: multi-tab conflict
- * policy). Throws `ConflictError` (re-exported by storage/db) if another
- * save landed first — the caller's in-memory edit is untouched by that
- * rejection, so it can offer reload-or-save-as-copy. */
-export async function saveProjectSafely(project: Project, expectedUpdatedAt: string | null): Promise<void> {
+/** Version-checked single-project save (task item 6: multi-tab conflict
+ * policy via a real monotonic version integer, not a timestamp). Throws
+ * `ConflictError` (re-exported by storage/db) if another save landed
+ * first — the caller's in-memory edit is untouched by that rejection, so
+ * it can offer reload-or-save-as-copy. Returns the version actually
+ * committed, for the caller to remember as its new baseline. */
+export async function saveProjectSafely(project: Project, expectedVersion: number | null): Promise<number> {
   const db = await openAppDb();
   try {
-    await writeProjectWithVersionCheck(db, project, expectedUpdatedAt);
+    return await writeProjectWithVersionCheck(db, project, expectedVersion);
   } finally {
     db.close();
   }

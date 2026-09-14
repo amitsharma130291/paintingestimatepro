@@ -47,7 +47,7 @@ function wallSurface(): Surface {
   };
 }
 function wrapProject(id: string, revision: EstimateRevision, ids: ReturnType<typeof sequentialIdSource>): Project {
-  return { id, title: 'Job', revisions: [revision], activeRevisionId: revision.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now() };
+  return { id, title: 'Job', revisions: [revision], activeRevisionId: revision.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now(), version: 1 };
 }
 function buildDoc(revisionLabel: string) {
   return (r: EstimateRevision) => buildCustomerDocument(r, { estimateNumber: 'E-1', estimateDate: '2026-01-05', projectAddress: '', revisionLabel });
@@ -116,7 +116,7 @@ describe.each(['suggested', 'custom'] as const)('Draft vs. issued isolation, 11-
       expect(refreshedA.proposedPrice).toBe(draftA.proposedPrice);
     }
     const projectAAfterRefresh = { ...projectA, revisions: [{ ...refreshedA, proposedPrice: priceMode === 'custom' ? refreshedA.proposedPrice : summaryARefreshed.effectivePrice!.toFixed(2) }] };
-    await writeProjectWithVersionCheck(db, projectAAfterRefresh, reloadedProjectA!.updatedAt);
+    const versionAfterRefreshSave = await writeProjectWithVersionCheck(db, projectAAfterRefresh, reloadedProjectA!.version);
 
     // 9. Issue A.
     const finalDraftA = projectAAfterRefresh.revisions[0];
@@ -125,7 +125,7 @@ describe.each(['suggested', 'custom'] as const)('Draft vs. issued isolation, 11-
     const issuedA = issueRevision(finalDraftA, buildDoc('Rev 1'), ids);
     const issuedPriceOnDocument = issuedA.customerDocumentSnapshot!.proposedPrice;
     const projectAIssued: Project = { ...projectAAfterRefresh, revisions: [issuedA], activeRevisionId: issuedA.id };
-    await writeProjectWithVersionCheck(db, projectAIssued, projectAAfterRefresh.updatedAt);
+    const versionAfterIssueSave = await writeProjectWithVersionCheck(db, projectAIssued, versionAfterRefreshSave);
 
     // 10. Edit its scope (add a surface) or rates; create a NEW draft revision from the issued one.
     const reloadedIssued = (await readOne<Project>(db, STORES.projects, 'project-A'))!.revisions[0];
@@ -138,7 +138,7 @@ describe.each(['suggested', 'custom'] as const)('Draft vs. issued isolation, 11-
     expect(summaryEdited.aggregate!.purchases[0].purchasedGal).toBeGreaterThan(summaryARefreshed.aggregate!.purchases[0].purchasedGal);
 
     const projectWithNewDraft: Project = { ...projectAIssued, revisions: [reloadedIssued, editedDraft] };
-    await writeProjectWithVersionCheck(db, projectWithNewDraft, projectAIssued.updatedAt);
+    await writeProjectWithVersionCheck(db, projectWithNewDraft, versionAfterIssueSave);
 
     // 11. Confirm the ORIGINAL issued inputs, rates, financial outputs, and customer document are all still unchanged.
     const finalRead = await readOne<Project>(db, STORES.projects, 'project-A');

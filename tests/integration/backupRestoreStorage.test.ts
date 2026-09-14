@@ -49,7 +49,7 @@ function makeIssuedProjectWithActual(ids: ReturnType<typeof sequentialIdSource>)
     otherExpenses: { confirmed: true, amount: '50' }, overhead: { confirmed: true, amount: '90', mode: 'baselineAllocation' },
     updatedAt: ids.now(),
   };
-  return { id: 'project-1', title: 'Kitchen repaint', revisions: [issued], activeRevisionId: issued.id, actualReviews: [actual], createdAt: ids.now(), updatedAt: ids.now() };
+  return { id: 'project-1', title: 'Kitchen repaint', revisions: [issued], activeRevisionId: issued.id, actualReviews: [actual], createdAt: ids.now(), updatedAt: ids.now(), version: 1 };
 }
 
 describe('Backup export completeness and secret exclusion', () => {
