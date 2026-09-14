@@ -68,6 +68,52 @@ Four real defects were found during this implementation — three via automated 
 
 ---
 
+## 5. Suggested-price mode showed a proposed price but "—" for profit and margin
+
+**Found by:** Live manual browser testing of the rewritten Pro workspace UI (`/app`, Projects tab) immediately after the per-surface UI rewrite — created a room, entered dimensions, and observed "Proposed price $767.03 / Profit — / Margin — / No price entered" simultaneously, which is self-contradictory (a real proposed price with an "unpriced" status).
+
+**Reproduction:** In `assembleProjectEstimate` with `priceMode: 'suggested'`, any complete project shows a non-null `effectivePrice` (the computed suggested price) alongside a `price.status === 'unpriced'` and `price.profit === null`.
+
+**Root cause:** `src/domain/estimateAssembly.ts` computed `finalPrice` with `opts.priceMode === 'suggested' ? priced : ...` — `priced` was the evaluation at `priceInput` (always `null` in suggested mode, since there is no user-entered price), so it always carried the "unpriced" state, while `effectivePrice` (shown to the user as the proposed price) was correctly `priced.minimumTargetPrice`. The two were never reconciled in suggested mode.
+
+**Fix:** `finalPrice` is now always re-evaluated at `effectivePrice` when one exists (`evaluatePrice({ cost: jobCost, price: effectivePrice, ... })`), regardless of pricing mode — matching how the original (pre-rewrite) prototype's inline calculation had correctly done it.
+
+**Regression test:** `tests/domain/estimateAssembly.test.ts` — "Suggested-price mode reports real profit/margin at the effective price."
+
+**Verification:** New test passes; full suite (159/159) passes; re-verified live in the browser after the fix — see the browser verification notes in TEST_EXECUTION_REPORT.md.
+
+---
+
+## 6. Surface paint-variant dropdown offered variants not in the draft's own frozen snapshot
+
+**Found by:** Live manual browser testing — added a second paint variant ("Paint 2") to the live catalog AFTER creating and saving a draft project, then selected it for the draft's ceiling surface. The estimate summary immediately broke: "One or more enabled surfaces have invalid inputs."
+
+**Root cause:** This is NOT a calculation-engine bug — `assembleProjectEstimate`'s existing invalid-variant check worked exactly as designed (a surface referencing a `paintVariantId` absent from the revision's OWN `activeRateSnapshot.paintVariants` must be invalid, never silently resolved against the live catalog — that is the entire mechanism behind historical-rate-snapshot immutability). The bug was in the UI: `ProApp.tsx`'s paint-variant `<select>` for room/standalone surfaces, and the "add room"/"add ceiling"/"add standalone surface" default-variant logic, all sourced options from the LIVE `catalog` state instead of the draft's own `activeRateSnapshot.paintVariants`. That let a user pick (or silently receive as a default) a variant the draft's snapshot didn't have yet, producing a confusing, unrecoverable-looking "invalid" state with no visible path forward except an explicit rate refresh.
+
+**Fix:** Every surface-adding action and every surface's paint-variant `<select>` now reads from `draftEdit.activeRateSnapshot.paintVariants` (a new `snapshotVariants` value derived from the open draft), not the live catalog. The live catalog is still correctly used in exactly one place — the rate-refresh panel's "replace with…" picker — since that panel is specifically about pulling in live catalog changes.
+
+**Regression test:** `tests/domain/estimateAssembly.test.ts` — "A surface referencing a variant absent from the draft's OWN snapshot is invalid, not silently substituted" (the engine-level invariant this UI bug was violating). No component-level UI test was added (same known gap as bug #2 — no React component test infra in this project); re-verified manually in the browser after the fix.
+
+**Verification:** Full suite (160/160) passes; re-verified live — see TEST_EXECUTION_REPORT.md browser verification notes.
+
+---
+
+## 7. A new draft revision created from an issued estimate was silently never saved (data loss, false "Draft saved." claim)
+
+**Found by:** Live manual browser testing of the full 11-step draft/issued isolation journey — issued an estimate, clicked "Edit (creates a new draft revision)," widened the room, clicked "Save draft" (which correctly showed "Draft saved."), then inspected the actual IndexedDB record directly via the browser's devtools-equivalent (`indexedDB.open` + read) rather than trusting the UI. The persisted project had only ONE revision (the original issued one) — the new draft revision was completely absent — and `activeRevisionId` pointed at an ID that did not exist in the `revisions` array at all.
+
+**Reproduction:** Issue an estimate, click "Edit" to create a new draft revision (`createDraftFromIssued`, which mints a brand-new revision `id`), edit it, then save. Reload/reopen the project: only the original issued revision exists; the edited draft and all its changes are gone, even though the UI displayed a success message.
+
+**Root cause:** Both `saveDraft()` and `issueEstimate()` in `ProApp.tsx` built the project's updated `revisions` array with `activeProject.revisions.map((r) => (r.id === revisionToSave.id ? revisionToSave : r))`. `.map()` over an array that does not already contain an element matching `revisionToSave.id` returns the array completely unchanged — it has no way to *add* a new element. Since `createDraftFromIssued` always mints a new revision id, every "edit issued → save" cycle hit this path and silently dropped the new revision while still reporting success. This is exactly the class of defect the task explicitly warns about ("never claim success on failure") — except here nothing failed at the storage layer at all; the bug was upstream, building a no-op write and then honestly reporting that no-op as having succeeded.
+
+**Fix:** Added `upsertRevision(project, revision)` to `src/domain/project.ts` — checks whether the revision's id already exists; if not, appends it; if so, replaces it in place. `saveDraft()` and `issueEstimate()` now both go through this instead of the bare `.map()`.
+
+**Regression test:** `tests/domain/lifecycle.test.ts` — "upsertRevision: saving a NEW draft revision must APPEND it, not silently drop it," plus a companion case proving an existing revision is still replaced in place (not duplicated).
+
+**Verification:** Both tests pass; full suite (162/162) passes; re-ran the exact live browser sequence that found the bug (issue → edit → widen room → save → inspect IndexedDB directly) and confirmed both revisions now persist correctly with a valid `activeRevisionId` — see TEST_EXECUTION_REPORT.md.
+
+---
+
 ## Not a bug (documented false alarm)
 
 While writing `PROPERTY 11` (application labor linearity), a strict `.equals()` assertion failed on the counterexample `area=1, coats=1, throughput=290`. Investigation showed `area*coats/290` is a non-terminating decimal (290 = 2×5×29); computing it once and doubling versus computing `(2×area)/290` directly are two independently-rounded results at the engine's 50-significant-digit precision floor, differing by `1e-52` — twelve digits past the spec's required 40-significant-digit floor and financially meaningless at any real display precision. The linearity formula itself is correct; the test's exactness requirement was wrong. Fixed by using a `1e-40` tolerance instead of bit-exact equality. See the comment in `tests/property/geometry.property.test.ts` for the full reasoning — recorded here so it isn't mistaken for an unresolved defect.

@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { sequentialIdSource } from '../../src/domain/ids';
 import { createSnapshot } from '../../src/domain/snapshot';
-import { createDraftRevision, issueRevision, createDraftFromIssued, supersede, duplicateProject } from '../../src/domain/project';
+import { createDraftRevision, issueRevision, createDraftFromIssued, supersede, duplicateProject, upsertRevision } from '../../src/domain/project';
 import { buildCustomerDocument, assertOnlyAllowedFields } from '../../src/domain/customerDocument';
 import type { BusinessSettings, PaintVariant, Project, EstimateRevision } from '../../src/domain/entities';
 
@@ -137,6 +137,38 @@ describe('DOC-P01: customer document allow-list', () => {
   it('a hand-assembled object with a leaked private field is caught by the allow-list guard', () => {
     const leaked = { estimateNumber: 'E-1', estimateDate: '2026-01-01', businessInfo: {}, customerInfo: {}, projectTitle: '', projectAddress: '', scopeLines: [], proposedPrice: '100', notes: '', terms: '', revisionLabel: '', taxNotice: '', status: 'draft', estimatedMargin: '0.317' };
     expect(() => assertOnlyAllowedFields(leaked)).toThrow(/estimatedMargin/);
+  });
+});
+
+describe('upsertRevision: saving a NEW draft revision must APPEND it, not silently drop it (found live in the browser)', () => {
+  it('a revision whose id is not yet in project.revisions gets appended, not lost', () => {
+    const ids = sequentialIdSource();
+    const snapshot = createSnapshot(makeSettings('32'), [makeVariant('42')], [], ids, 'rev-1');
+    let draft = createDraftRevision('project-1', snapshot, ids);
+    draft = { ...draft, title: 'Job', proposedPrice: '100', calculationState: 'complete' };
+    const issued = issueRevision(draft, (r) => buildCustomerDocument(r, { estimateNumber: 'E-1', estimateDate: '2026-01-02', projectAddress: '', revisionLabel: 'Rev 1' }), ids);
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [issued], activeRevisionId: issued.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now() };
+
+    // Editing the issued revision produces a brand-new draft with a NEW id — not yet in project.revisions.
+    const newDraft = createDraftFromIssued(issued, ids);
+    const updated = upsertRevision(project, newDraft);
+
+    expect(updated.revisions).toHaveLength(2); // the naive `.map()` this replaced would silently leave it at 1
+    expect(updated.revisions.map((r) => r.id)).toContain(newDraft.id);
+    expect(updated.revisions.find((r) => r.id === issued.id)).toEqual(issued); // original untouched
+  });
+
+  it('a revision whose id already exists in project.revisions is replaced in place, not duplicated', () => {
+    const ids = sequentialIdSource();
+    const snapshot = createSnapshot(makeSettings('32'), [makeVariant('42')], [], ids, 'rev-1');
+    const draft = createDraftRevision('project-1', snapshot, ids);
+    const project: Project = { id: 'project-1', title: 'Job', revisions: [draft], activeRevisionId: draft.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now() };
+
+    const edited = { ...draft, title: 'Edited' };
+    const updated = upsertRevision(project, edited);
+
+    expect(updated.revisions).toHaveLength(1);
+    expect(updated.revisions[0].title).toBe('Edited');
   });
 });
 

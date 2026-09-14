@@ -5,7 +5,7 @@ import { computeServiceUnitCost, evaluateServiceHealth } from '../../../engine/s
 import { statusBadge, money } from '../shared';
 import type { BusinessSettings, PaintVariant, Project, Room, Surface, EstimateRevision, ServiceKind } from '../../../domain/entities';
 import { createSnapshot } from '../../../domain/snapshot';
-import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom } from '../../../domain/project';
+import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, upsertRevision } from '../../../domain/project';
 import { assembleProjectEstimate, type ProjectEstimateAssembly } from '../../../domain/estimateAssembly';
 import { previewRateRefresh, applyRateRefresh, type RateRefreshDiff, type VariantResolution } from '../../../domain/rateRefresh';
 import { buildCustomerDocument } from '../../../domain/customerDocument';
@@ -166,17 +166,25 @@ export default function ProApp() {
     setDraftEdit((r) => (r ? fn(r) : r));
   }
 
+  // A draft's own frozen snapshot — not the live catalog — is the correct
+  // source of selectable paint variants for its surfaces. A variant added
+  // to the live catalog AFTER this draft was created does not exist in the
+  // draft's snapshot yet (that is the whole point of the snapshot), so
+  // offering it here would let a user pick an option that immediately
+  // reads back as "invalid" until they explicitly run a rate refresh.
+  const snapshotVariants = draftEdit?.activeRateSnapshot.paintVariants ?? [];
+
   function addRoom() {
-    if (!draftEdit || catalog.length === 0) return;
+    if (!draftEdit || snapshotVariants.length === 0) return;
     const room = blankRoom(`Room ${draftEdit.rooms.length + 1}`);
-    const wall = blankSurface('wall', room.id, 'roomDerived', catalog[0].id);
+    const wall = blankSurface('wall', room.id, 'roomDerived', snapshotVariants[0].id);
     room.surfaceIds = [wall.id];
     mutateDraft((r) => ({ ...r, rooms: [...r.rooms, room], surfaces: [...r.surfaces, wall], updatedAt: ids.now() }));
   }
 
   function addCeilingToRoom(room: Room) {
-    if (!draftEdit || catalog.length === 0) return;
-    const ceiling = blankSurface('ceiling', room.id, 'roomDerived', catalog[0].id);
+    if (!draftEdit || snapshotVariants.length === 0) return;
+    const ceiling = blankSurface('ceiling', room.id, 'roomDerived', snapshotVariants[0].id);
     mutateDraft((r) => ({
       ...r,
       rooms: r.rooms.map((rm) => (rm.id === room.id ? { ...rm, surfaceIds: [...rm.surfaceIds, ceiling.id] } : rm)),
@@ -207,8 +215,8 @@ export default function ProApp() {
   }
 
   function addStandaloneSurface(kind: 'trim' | 'door') {
-    if (!draftEdit || catalog.length === 0) return;
-    const s = blankSurface(kind, null, 'manual', catalog[0].id);
+    if (!draftEdit || snapshotVariants.length === 0) return;
+    const s = blankSurface(kind, null, 'manual', snapshotVariants[0].id);
     mutateDraft((r) => ({ ...r, surfaces: [...r.surfaces, s], updatedAt: ids.now() }));
   }
 
@@ -219,12 +227,7 @@ export default function ProApp() {
       calculationState: summary?.calculationState ?? 'incomplete',
       proposedPrice: draftEdit.priceMode === 'custom' ? (customPriceRaw.trim() === '' ? null : customPriceRaw) : summary?.effectivePrice?.toFixed(2) ?? null,
     };
-    const nextProject: Project = {
-      ...activeProject,
-      revisions: activeProject.revisions.map((r) => (r.id === revisionToSave.id ? revisionToSave : r)),
-      activeRevisionId: revisionToSave.id,
-      updatedAt: now(),
-    };
+    const nextProject: Project = { ...upsertRevision(activeProject, revisionToSave), activeRevisionId: revisionToSave.id, updatedAt: now() };
     try {
       await saveProjectSafely(nextProject, draftBaselineUpdatedAt);
       setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? nextProject : p)));
@@ -306,7 +309,7 @@ export default function ProApp() {
     const ready: EstimateRevision = { ...draftEdit, calculationState: 'complete', proposedPrice, title: draftEdit.title || activeProject.title };
     const issueNumber = `E-${activeProject.id.slice(-6)}-${draftEdit.revisionNumber}`;
     const issued = issueRevision(ready, (r) => buildCustomerDocument(r, { estimateNumber: issueNumber, estimateDate: now().slice(0, 10), projectAddress: '', revisionLabel: `Rev ${draftEdit.revisionNumber}` }), ids);
-    const nextProject: Project = { ...activeProject, revisions: activeProject.revisions.map((r) => (r.id === issued.id ? issued : r)), activeRevisionId: issued.id, updatedAt: now() };
+    const nextProject: Project = { ...upsertRevision(activeProject, issued), activeRevisionId: issued.id, updatedAt: now() };
     try {
       await saveProjectSafely(nextProject, draftBaselineUpdatedAt);
       setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? nextProject : p)));
@@ -505,7 +508,7 @@ export default function ProApp() {
                 <div className="card p-6">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold">Rooms</h3>
-                    <button type="button" className="btn btn-secondary" disabled={catalog.length === 0} onClick={addRoom}>+ Add room</button>
+                    <button type="button" className="btn btn-secondary" disabled={snapshotVariants.length === 0} onClick={addRoom}>+ Add room</button>
                   </div>
                   <div className="mt-4 space-y-4">
                     {draftEdit.rooms.map((room) => (
@@ -513,7 +516,7 @@ export default function ProApp() {
                         key={room.id}
                         room={room}
                         surfaces={draftEdit.surfaces.filter((s) => room.surfaceIds.includes(s.id))}
-                        catalog={catalog}
+                        catalog={snapshotVariants}
                         onPatchRoom={(patch) => patchRoom(room.id, patch)}
                         onDeleteRoom={() => deleteRoom(room.id)}
                         onAddCeiling={() => addCeilingToRoom(room)}
@@ -528,13 +531,13 @@ export default function ProApp() {
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold">Standalone surfaces (no room required)</h3>
                     <div className="flex gap-2">
-                      <button type="button" className="btn btn-secondary" disabled={catalog.length === 0} onClick={() => addStandaloneSurface('trim')}>+ Trim</button>
-                      <button type="button" className="btn btn-secondary" disabled={catalog.length === 0} onClick={() => addStandaloneSurface('door')}>+ Door</button>
+                      <button type="button" className="btn btn-secondary" disabled={snapshotVariants.length === 0} onClick={() => addStandaloneSurface('trim')}>+ Trim</button>
+                      <button type="button" className="btn btn-secondary" disabled={snapshotVariants.length === 0} onClick={() => addStandaloneSurface('door')}>+ Door</button>
                     </div>
                   </div>
                   <div className="mt-4 space-y-3">
                     {draftEdit.surfaces.filter((s) => s.roomId === null).map((s) => (
-                      <StandaloneSurfaceEditor key={s.id} surface={s} catalog={catalog} onPatch={(patch) => patchSurface(s.id, patch)} onRemove={() => removeSurface(s.id)} />
+                      <StandaloneSurfaceEditor key={s.id} surface={s} catalog={snapshotVariants} onPatch={(patch) => patchSurface(s.id, patch)} onRemove={() => removeSurface(s.id)} />
                     ))}
                     {draftEdit.surfaces.filter((s) => s.roomId === null).length === 0 && <p className="text-sm text-ink-soft">No standalone trim or door surfaces added.</p>}
                   </div>

@@ -124,6 +124,21 @@ export function setProposedPrice(revision: EstimateRevision, price: string | nul
 }
 
 /**
+ * BUG_FIX_LOG #7: saving a revision whose id is not already in
+ * `project.revisions` (e.g. a brand-new draft from `createDraftFromIssued`)
+ * must APPEND it. A naive `revisions.map((r) => r.id === x.id ? x : r)`
+ * silently does nothing when no existing revision matches — the new
+ * revision is dropped even though the caller believes it saved
+ * successfully. Use this everywhere a revision is written back into its
+ * project, whether it is a first save or a later edit.
+ */
+export function upsertRevision(project: Project, revision: EstimateRevision): Project {
+  const exists = project.revisions.some((r) => r.id === revision.id);
+  const revisions = exists ? project.revisions.map((r) => (r.id === revision.id ? revision : r)) : [...project.revisions, revision];
+  return { ...project, revisions };
+}
+
+/**
  * DATA_CONTRACT #6: fresh IDs throughout, remapped references, drops
  * issued state/documents/actuals, clears estimate number. "Copies rates by
  * default" is resolved here (IMPLEMENTATION_DECISIONS.md) as: copy the

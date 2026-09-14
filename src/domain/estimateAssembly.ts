@@ -197,7 +197,11 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
 
   const priced = evaluatePrice({ cost: jobCost, price: priceInput, targetMarginRatio: targetField.value });
   const effectivePrice = opts.priceMode === 'suggested' ? priced.minimumTargetPrice : priceInput;
-  const finalPrice = opts.priceMode === 'suggested' ? priced : effectivePrice !== null ? evaluatePrice({ cost: jobCost, price: effectivePrice, targetMarginRatio: targetField.value }) : priced;
+  // Regression (found live in the browser): suggested mode used to report
+  // `priced` — the evaluation at priceInput=null ("unpriced", profit=null)
+  // — even though a real effectivePrice (the suggested price) existed.
+  // Always re-evaluate AT the effective price when one exists, for either mode.
+  const finalPrice = effectivePrice !== null ? evaluatePrice({ cost: jobCost, price: effectivePrice, targetMarginRatio: targetField.value }) : priced;
 
   return {
     calculationState: 'complete',

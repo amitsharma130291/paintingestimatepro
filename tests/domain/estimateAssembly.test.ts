@@ -111,6 +111,41 @@ describe('Disabled surfaces never contribute (mutation check regression)', () =>
   });
 });
 
+describe('Suggested-price mode reports real profit/margin at the effective price (regression)', () => {
+  it('profit and margin are NOT null when priceMode is "suggested" — found live in the browser: proposed price showed a number but profit/margin showed "—"', () => {
+    const wall: Surface = {
+      id: 'wall-1', roomId: null, kind: 'wall', enabled: true, measurementMode: 'manual',
+      areaFt2: '400', trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null,
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+    };
+    let revision = baseRevision();
+    revision = { ...revision, rooms: [], surfaces: [wall] };
+    const out = assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' });
+    expect(out.calculationState).toBe('complete');
+    expect(out.effectivePrice).not.toBeNull();
+    expect(out.price!.profit).not.toBeNull();
+    expect(out.price!.marginRatio).not.toBeNull();
+    expect(out.price!.status).not.toBe('unpriced');
+    // The suggested price meets or exceeds the target margin (minimum-cent guarantee).
+    expect(out.price!.marginRatio!.greaterThanOrEqualTo(new PEP('0.35'))).toBe(true);
+  });
+});
+
+describe('A surface referencing a variant absent from the draft\'s OWN snapshot is invalid, not silently substituted', () => {
+  it('found live in the browser: the UI let a user pick a variant added to the LIVE catalog after this draft was created, which the draft\'s frozen snapshot does not have yet', () => {
+    const wall: Surface = {
+      id: 'wall-1', roomId: null, kind: 'wall', enabled: true, measurementMode: 'manual',
+      areaFt2: '400', trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null,
+      paintVariantId: 'paint-not-in-snapshot', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+    };
+    let revision = baseRevision();
+    revision = { ...revision, rooms: [], surfaces: [wall] };
+    const out = assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' });
+    expect(out.calculationState).toBe('invalid');
+    expect(out.aggregate).toBeNull();
+  });
+});
+
 describe('Per-surface override vs. snapshot default fallback (DECISIONS.md #3)', () => {
   it('a surface with an explicit throughput override is not silently replaced by the settings default', () => {
     const wall: Surface = {
