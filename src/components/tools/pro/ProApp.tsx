@@ -3,18 +3,21 @@ import { PEP } from '../../../engine/decimal';
 import { evaluateActualReview, type ActualCategory } from '../../../engine/actuals';
 import { computeServiceUnitCost, evaluateServiceHealth } from '../../../engine/serviceHealth';
 import { statusBadge, money, parseCoatsInput } from '../shared';
-import type { BusinessSettings, PaintVariant, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope } from '../../../domain/entities';
+import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope } from '../../../domain/entities';
 import { createSnapshot } from '../../../domain/snapshot';
 import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, upsertRevision, upsertActualReview } from '../../../domain/project';
 import type { ActualReview } from '../../../domain/entities';
 import { assembleProjectEstimate, type ProjectEstimateAssembly } from '../../../domain/estimateAssembly';
 import { previewRateRefresh, applyRateRefresh, type RateRefreshDiff, type VariantResolution } from '../../../domain/rateRefresh';
 import { buildCustomerDocument } from '../../../domain/customerDocument';
-import { exportBackup, validateBackupEnvelope, planFullRestoreMerge, planImportAsCopies, type FullRestorePlan, type ImportConflict } from '../../../domain/backup';
+import {
+  exportBackup, validateBackupEnvelope, planFullRestoreMerge, planImportAsCopies, applyFullRestoreResolutions,
+  type FullRestorePlan, type ImportConflict,
+} from '../../../domain/backup';
 import { defaultIdSource } from '../../../domain/ids';
 import { readInteriorHandoff, clearInteriorHandoff, buildProjectFromInteriorHandoff, type InteriorHandoffPayload, type HandoffFieldNote } from '../../../domain/interiorHandoff';
 import { ConflictError } from '../../../storage/db';
-import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveImportedBackup } from './proStore';
+import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveImportedBackup, saveReplaceAllBackup } from './proStore';
 
 const ids = defaultIdSource;
 const now = () => new Date().toISOString();
@@ -81,7 +84,12 @@ export default function ProApp() {
     overhead: { confirmed: false, amount: '' },
   });
   const [importMessage, setImportMessage] = useState<string | null>(null);
-  const [pendingImport, setPendingImport] = useState<{ envelope: BackupEnvelope; plan: FullRestorePlan; resolutions: Record<string, ImportConflict['resolution']> } | null>(null);
+  type PendingImport =
+    | { mode: 'merge'; envelope: BackupEnvelope; plan: FullRestorePlan; resolutions: Record<string, ImportConflict['resolution']>; existingOtherMaterials: OtherMaterial[]; existingServiceDefinitions: ServiceDefinition[]; existingProjectVersions: Record<string, number> }
+    | { mode: 'copies'; envelope: BackupEnvelope; alreadyImportedSourceIds: string[]; forcedSourceIds: string[] }
+    | { mode: 'replaceAll'; envelope: BackupEnvelope; backupDownloaded: boolean };
+  const [importMode, setImportMode] = useState<'merge' | 'copies' | 'replaceAll'>('merge');
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [pendingHandoff, setPendingHandoff] = useState<InteriorHandoffPayload | null>(null);
   const [handoffPreviewNotes, setHandoffPreviewNotes] = useState<HandoffFieldNote[] | null>(null);
 
@@ -473,12 +481,10 @@ export default function ProApp() {
   async function handleExport() {
     // Never export hardcoded empty placeholders for a record type that
     // might actually hold user data — read the live persisted snapshot for
-    // otherMaterials/serviceDefinitions rather than passing `[]` literals
-    // (item 5). Both are currently vestigial (no UI writes to them yet),
-    // so this is defense-in-depth: the export stays correct automatically
-    // if either becomes a live feature later.
+    // otherMaterials/serviceDefinitions/importProvenance rather than
+    // passing `[]` literals (item 5/6).
     const snapshot = await loadSnapshot();
-    const envelope = exportBackup('install-local', settings, catalog, snapshot.otherMaterials, snapshot.serviceDefinitions, projects, ids);
+    const envelope = exportBackup('install-local', settings, catalog, snapshot.otherMaterials, snapshot.serviceDefinitions, projects, ids, snapshot.importProvenance);
     const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -490,8 +496,9 @@ export default function ProApp() {
     URL.revokeObjectURL(url);
   }
 
-  // Step 1: parse + validate + compute the merge plan. NO writes happen
-  // here — this only populates `pendingImport` for the user to review.
+  // Step 1: parse + validate + compute the plan for the CHOSEN import mode.
+  // NO writes happen here — this only populates `pendingImport` for the
+  // user to review (item 7: restore/merge, import-as-copies, replace-all).
   async function handleImportFileSelected(file: File) {
     setImportMessage(null);
     const text = await file.text();
@@ -507,17 +514,75 @@ export default function ProApp() {
       setImportMessage(`Not imported: ${result.issues.map((i) => i.message).join(' ')}`);
       return;
     }
+    const envelope = result.envelope;
+
+    if (importMode === 'replaceAll') {
+      setPendingImport({ mode: 'replaceAll', envelope, backupDownloaded: false });
+      return;
+    }
+
+    const snapshot = await loadSnapshot();
+
+    if (importMode === 'copies') {
+      // "Already imported this export" is keyed by (exportId, sourceProjectId)
+      // — read from PERSISTED provenance so this survives across sessions,
+      // not just an in-memory Set that resets on reload (item 6).
+      const alreadyImportedSourceIds = snapshot.importProvenance.filter((rec) => rec.exportId === envelope.exportId).map((rec) => rec.sourceProjectId);
+      setPendingImport({ mode: 'copies', envelope, alreadyImportedSourceIds, forcedSourceIds: [] });
+      return;
+    }
+
+    // Default: restore/merge.
     const plan = planFullRestoreMerge(
-      { businessSettings: settings, paintVariants: catalog, projects },
-      { businessSettings: result.envelope.businessSettings, paintVariants: result.envelope.paintVariants, projects: result.envelope.projects }
+      { businessSettings: settings, paintVariants: catalog, otherMaterials: snapshot.otherMaterials, serviceDefinitions: snapshot.serviceDefinitions, projects },
+      { businessSettings: envelope.businessSettings, paintVariants: envelope.paintVariants, otherMaterials: envelope.otherMaterials, serviceDefinitions: envelope.serviceDefinitions, projects: envelope.projects }
     );
     const resolutions: Record<string, ImportConflict['resolution']> = {};
     for (const c of plan.conflicts) resolutions[`${c.kind}:${c.id}`] = 'keepLocal';
-    setPendingImport({ envelope: result.envelope, plan, resolutions });
+    // Captured HERE, at preview time — never re-read at confirm time. This
+    // is exactly what lets the storage transaction later detect a change
+    // that landed in between (item 8's two-tab scenario).
+    const existingProjectVersions = Object.fromEntries(projects.map((p) => [p.id, p.version]));
+    setPendingImport({ mode: 'merge', envelope, plan, resolutions, existingOtherMaterials: snapshot.otherMaterials, existingServiceDefinitions: snapshot.serviceDefinitions, existingProjectVersions });
   }
 
   function setImportResolution(conflict: ImportConflict, resolution: ImportConflict['resolution']) {
-    setPendingImport((pending) => (pending ? { ...pending, resolutions: { ...pending.resolutions, [`${conflict.kind}:${conflict.id}`]: resolution } } : pending));
+    setPendingImport((pending) => (pending && pending.mode === 'merge' ? { ...pending, resolutions: { ...pending.resolutions, [`${conflict.kind}:${conflict.id}`]: resolution } } : pending));
+  }
+
+  function toggleForceAnotherCopy(sourceProjectId: string) {
+    setPendingImport((pending) => {
+      if (!pending || pending.mode !== 'copies') return pending;
+      const isForced = pending.forcedSourceIds.includes(sourceProjectId);
+      const forcedSourceIds = isForced ? pending.forcedSourceIds.filter((id) => id !== sourceProjectId) : [...pending.forcedSourceIds, sourceProjectId];
+      return { ...pending, forcedSourceIds };
+    });
+  }
+
+  /** Preview counts only — never generates a real copy or consumes an ID,
+   * so it's safe to call on every render. */
+  function copiesPreviewCounts(pending: Extract<PendingImport, { mode: 'copies' }>): { toCopyCount: number; skipCount: number } {
+    const alreadySet = new Set(pending.alreadyImportedSourceIds);
+    const forcedSet = new Set(pending.forcedSourceIds);
+    let toCopyCount = 0;
+    for (const p of pending.envelope.projects) if (forcedSet.has(p.id) || !alreadySet.has(p.id)) toCopyCount += 1;
+    return { toCopyCount, skipCount: pending.envelope.projects.length - toCopyCount };
+  }
+
+  /** The one place actual remapped copies (real fresh IDs) are generated —
+   * called exactly once, at confirm time. */
+  function buildCopiesForConfirm(pending: Extract<PendingImport, { mode: 'copies' }>) {
+    const alreadySet = new Set(pending.alreadyImportedSourceIds);
+    const forcedSet = new Set(pending.forcedSourceIds);
+    const toForce = pending.envelope.projects.filter((p) => forcedSet.has(p.id));
+    const toNormal = pending.envelope.projects.filter((p) => !forcedSet.has(p.id));
+    const forced = planImportAsCopies(toForce, pending.envelope.exportId, new Set(), ids, true);
+    const normal = planImportAsCopies(toNormal, pending.envelope.exportId, alreadySet, ids, false);
+    return {
+      projects: [...forced.projects, ...normal.projects],
+      skippedSourceIds: normal.skippedSourceIds,
+      provenance: [...forced.provenance, ...normal.provenance],
+    };
   }
 
   function cancelImport() {
@@ -527,47 +592,82 @@ export default function ProApp() {
     setImportMessage('Import cancelled — nothing was changed.');
   }
 
-  // Step 2: apply the user's chosen resolution to every conflict, then
-  // commit everything (settings + catalog + projects) in ONE atomic
-  // transaction — item 5: "confirmed imports must commit atomically."
+  async function downloadPreImportBackup() {
+    await handleExport();
+    setPendingImport((pending) => (pending && pending.mode === 'replaceAll' ? { ...pending, backupDownloaded: true } : pending));
+  }
+
+  // Step 2: commit the chosen mode's plan atomically (item 7), with every
+  // project write version-checked against its current stored state
+  // (item 8) — never trusting the in-memory snapshot taken at preview time.
   async function confirmImport() {
     if (!pendingImport) return;
-    const { envelope, plan, resolutions } = pendingImport;
 
-    let finalSettings = settings;
-    if (resolutions[`businessSettings:${settings.id}`] === 'replaceImported') finalSettings = envelope.businessSettings;
-
-    const keepBothVariantIds = plan.conflicts.filter((c) => c.kind === 'paintVariant' && resolutions[`paintVariant:${c.id}`] === 'keepBoth').map((c) => c.id);
-    const replaceVariantIds = new Set(plan.conflicts.filter((c) => c.kind === 'paintVariant' && resolutions[`paintVariant:${c.id}`] === 'replaceImported').map((c) => c.id));
-    let finalCatalog = catalog.map((v) => (replaceVariantIds.has(v.id) ? envelope.paintVariants.find((iv) => iv.id === v.id)! : v));
-    finalCatalog = [...finalCatalog, ...plan.toAdd.paintVariants];
-    for (const dupId of keepBothVariantIds) {
-      const source = envelope.paintVariants.find((v) => v.id === dupId);
-      if (source) finalCatalog.push({ ...source, id: ids.nextId() });
+    if (pendingImport.mode === 'replaceAll') {
+      if (!pendingImport.backupDownloaded) return; // guarded by the disabled Confirm button too
+      const { envelope } = pendingImport;
+      try {
+        await saveReplaceAllBackup({
+          businessSettings: envelope.businessSettings,
+          paintVariants: envelope.paintVariants,
+          otherMaterials: envelope.otherMaterials,
+          serviceDefinitions: envelope.serviceDefinitions,
+          projects: envelope.projects,
+          provenance: envelope.importProvenance,
+        });
+        setSettings(envelope.businessSettings);
+        setCatalog(envelope.paintVariants);
+        setProjects(envelope.projects);
+        setPendingImport(null);
+        setImportMessage(`Everything replaced: ${envelope.projects.length} project(s) restored from the imported file.`);
+      } catch {
+        setImportMessage('Replace-all import failed while saving — your previous data was not changed.');
+      }
+      return;
     }
 
-    const keepBothProjects = plan.conflicts.filter((c) => c.kind === 'project' && resolutions[`project:${c.id}`] === 'keepBoth').map((c) => envelope.projects.find((p) => p.id === c.id)!).filter(Boolean);
-    const replaceProjectIds = new Set(plan.conflicts.filter((c) => c.kind === 'project' && resolutions[`project:${c.id}`] === 'replaceImported').map((c) => c.id));
-    let finalProjects = projects.map((p) => (replaceProjectIds.has(p.id) ? envelope.projects.find((ip) => ip.id === p.id)! : p));
-    finalProjects = [...finalProjects, ...plan.toAdd.projects];
-    if (keepBothProjects.length > 0) {
-      // Reuse the tested import-as-copies remap so a "keep both" project
-      // gets fresh IDs throughout its whole graph, including its
-      // actual-review baselines — never a raw duplicate ID collision.
-      const copies = planImportAsCopies(keepBothProjects, envelope.exportId, new Set(), ids, true);
-      finalProjects = [...finalProjects, ...copies.projects];
+    if (pendingImport.mode === 'copies') {
+      const { projects: toCopy, skippedSourceIds, provenance } = buildCopiesForConfirm(pendingImport);
+      try {
+        await saveImportedBackup({ projects: toCopy.map((project) => ({ project, expectedVersion: null })), provenance });
+        setProjects((ps) => [...ps, ...toCopy]);
+        setPendingImport(null);
+        setImportMessage(`Import as copies complete: ${toCopy.length} project(s) copied${skippedSourceIds.length ? `, ${skippedSourceIds.length} already-imported source(s) skipped` : ''}.`);
+      } catch {
+        setImportMessage('Import failed while saving — your previous data was not changed.');
+      }
+      return;
     }
 
+    // mode === 'merge'
+    const { envelope, plan, resolutions, existingOtherMaterials, existingServiceDefinitions, existingProjectVersions } = pendingImport;
+    const resolved = applyFullRestoreResolutions(
+      { businessSettings: settings, paintVariants: catalog, otherMaterials: existingOtherMaterials, serviceDefinitions: existingServiceDefinitions },
+      envelope, plan, resolutions, existingProjectVersions, ids
+    );
     try {
-      await saveImportedBackup({ businessSettings: finalSettings, paintVariants: finalCatalog, projects: finalProjects });
-      setSettings(finalSettings);
-      setCatalog(finalCatalog);
-      setProjects(finalProjects);
+      const { committedProjectVersions } = await saveImportedBackup({
+        businessSettings: resolved.finalSettings,
+        paintVariants: resolved.finalPaintVariants,
+        otherMaterials: resolved.finalOtherMaterials,
+        serviceDefinitions: resolved.finalServiceDefinitions,
+        projects: resolved.projectWrites,
+      });
+      const writtenById = new Map(resolved.projectWrites.map((w) => [w.project.id, w.project]));
+      const keptProjects = projects.filter((p) => !writtenById.has(p.id));
+      const newlyWritten = resolved.projectWrites.map((w) => ({ ...w.project, version: committedProjectVersions.get(w.project.id) ?? w.project.version }));
+      setSettings(resolved.finalSettings);
+      setCatalog(resolved.finalPaintVariants);
+      setProjects([...keptProjects, ...newlyWritten]);
       setPendingImport(null);
-      const addedCount = plan.toAdd.projects.length + keepBothProjects.length;
-      setImportMessage(`Import complete: ${addedCount} project(s) added, ${plan.toAdd.paintVariants.length + keepBothVariantIds.length} paint variant(s) added, ${plan.conflicts.length} conflict(s) resolved as chosen.`);
-    } catch {
-      setImportMessage('Import failed while saving — your previous data was not changed.');
+      setImportMessage(`Import complete: ${resolved.projectWrites.length} project write(s) committed, ${plan.conflicts.length} conflict(s) resolved as chosen.`);
+    } catch (err) {
+      if (err instanceof ConflictError) {
+        setPendingImport(null);
+        setImportMessage("This import couldn't be confirmed: at least one affected project changed elsewhere since you previewed it. Nothing was changed — please re-select the file to refresh the preview.");
+      } else {
+        setImportMessage('Import failed while saving — your previous data was not changed.');
+      }
     }
   }
 
@@ -926,22 +1026,35 @@ export default function ProApp() {
             </div>
             <div>
               <label className="block text-sm font-medium text-ink-soft">Restore from backup</label>
-              <input
-                type="file"
-                accept="application/json"
-                className="mt-1"
-                disabled={!!pendingImport}
-                onChange={(e) => e.target.files?.[0] && handleImportFileSelected(e.target.files[0])}
-              />
+              <div className="mt-1 flex flex-wrap items-center gap-3">
+                <select
+                  className="rounded-btn border border-line px-2 py-1 text-sm"
+                  value={importMode}
+                  disabled={!!pendingImport}
+                  onChange={(e) => setImportMode(e.target.value as typeof importMode)}
+                >
+                  <option value="merge">Merge with existing (default)</option>
+                  <option value="copies">Import as copies</option>
+                  <option value="replaceAll">Replace everything</option>
+                </select>
+                <input
+                  type="file"
+                  accept="application/json"
+                  disabled={!!pendingImport}
+                  onChange={(e) => e.target.files?.[0] && handleImportFileSelected(e.target.files[0])}
+                />
+              </div>
               {importMessage && <p className="mt-2 text-sm text-ink-soft">{importMessage}</p>}
             </div>
 
-            {pendingImport && (
+            {pendingImport?.mode === 'merge' && (
               <div className="rounded-btn border border-line bg-canvas-soft p-4 text-sm">
                 <p className="font-semibold">Import preview — nothing has been saved yet</p>
                 <ul className="mt-2 list-disc pl-5 text-ink-soft">
                   <li>{pendingImport.plan.toAdd.projects.length} new project(s) will be added</li>
                   <li>{pendingImport.plan.toAdd.paintVariants.length} new paint variant(s) will be added</li>
+                  <li>{pendingImport.plan.toAdd.otherMaterials.length} new other-material(s) will be added</li>
+                  <li>{pendingImport.plan.toAdd.serviceDefinitions.length} new service definition(s) will be added</li>
                   <li>{pendingImport.plan.toSkip.projectIds.length} identical project(s) will be skipped (already present)</li>
                   <li>{pendingImport.plan.toSkip.paintVariantIds.length} identical paint variant(s) will be skipped</li>
                 </ul>
@@ -952,7 +1065,7 @@ export default function ProApp() {
                     {pendingImport.plan.conflicts.map((c) => (
                       <div key={`${c.kind}:${c.id}`} className="rounded-btn border border-warn-line bg-warn-soft p-3">
                         <p className="text-ink-soft">
-                          {c.kind === 'businessSettings' ? 'Business settings' : c.kind === 'paintVariant' ? `Paint variant "${c.id}"` : `Project "${c.id}"`} differs from the imported copy.
+                          {c.kind === 'businessSettings' ? 'Business settings' : c.kind === 'paintVariant' ? `Paint variant "${c.id}"` : c.kind === 'otherMaterial' ? `Other material "${c.id}"` : c.kind === 'serviceDefinition' ? `Service definition "${c.id}"` : `Project "${c.id}"`} differs from the imported copy.
                         </p>
                         <div className="mt-2 flex flex-wrap gap-3">
                           {(['keepLocal', 'replaceImported', ...(c.kind === 'businessSettings' ? [] : (['keepBoth'] as const))] as ImportConflict['resolution'][]).map((opt) => (
@@ -975,6 +1088,49 @@ export default function ProApp() {
                 <div className="mt-3 flex gap-2">
                   <button type="button" className="btn btn-secondary" onClick={cancelImport}>Cancel (nothing will change)</button>
                   <button type="button" className="btn btn-primary" onClick={confirmImport}>Confirm import</button>
+                </div>
+              </div>
+            )}
+
+            {pendingImport?.mode === 'copies' && (
+              <div className="rounded-btn border border-line bg-canvas-soft p-4 text-sm">
+                <p className="font-semibold">Import-as-copies preview — nothing has been saved yet</p>
+                <p className="mt-2 text-ink-soft">
+                  {copiesPreviewCounts(pendingImport).toCopyCount} project(s) will be copied with fresh IDs; {copiesPreviewCounts(pendingImport).skipCount} already imported from this export and will be skipped.
+                </p>
+                {pendingImport.envelope.projects.filter((p) => pendingImport.alreadyImportedSourceIds.includes(p.id)).length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {pendingImport.envelope.projects.filter((p) => pendingImport.alreadyImportedSourceIds.includes(p.id)).map((p) => (
+                      <label key={p.id} className="flex items-center gap-1.5 text-xs text-ink-soft">
+                        <input type="checkbox" checked={pendingImport.forcedSourceIds.includes(p.id)} onChange={() => toggleForceAnotherCopy(p.id)} />
+                        "{p.title}" was already imported from this file — copy it again anyway
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-3 flex gap-2">
+                  <button type="button" className="btn btn-secondary" onClick={cancelImport}>Cancel (nothing will change)</button>
+                  <button type="button" className="btn btn-primary" onClick={confirmImport}>Confirm import</button>
+                </div>
+              </div>
+            )}
+
+            {pendingImport?.mode === 'replaceAll' && (
+              <div className="rounded-btn border border-warn-line bg-warn-soft p-4 text-sm">
+                <p className="font-semibold text-warn">Replace everything — nothing has been saved yet</p>
+                <p className="mt-2 text-ink-soft">
+                  This will DELETE every current project, the paint catalog, other materials, service definitions, and business settings, replacing them entirely with the {pendingImport.envelope.projects.length} project(s) in this file. Download a backup of your CURRENT data first, in case you need to undo this.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="btn btn-secondary" onClick={downloadPreImportBackup}>
+                    {pendingImport.backupDownloaded ? 'Backup downloaded ✓ (download again)' : 'Download a backup of current data first'}
+                  </button>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" className="btn btn-secondary" onClick={cancelImport}>Cancel (nothing will change)</button>
+                  <button type="button" className="btn btn-primary" disabled={!pendingImport.backupDownloaded} onClick={confirmImport}>
+                    Confirm — replace everything
+                  </button>
                 </div>
               </div>
             )}

@@ -4,7 +4,7 @@
 // (fake-indexeddb) — real IndexedDB transactions, not a hand-rolled mock.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { IDBPDatabase } from 'idb';
-import { openAppDb, writeImportedBackup, writeProjectWithVersionCheck, readAll, readOne, STORES, ConflictError } from '../../src/storage/db';
+import { openAppDb, writeImportedBackup, writeReplaceAllBackup, writeProjectWithVersionCheck, readAll, readOne, STORES, ConflictError } from '../../src/storage/db';
 import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, ImportProvenanceRecord } from '../../src/domain/entities';
 
 function deleteDatabase(name: string): Promise<void> {
@@ -133,4 +133,46 @@ describe('writeImportedBackup: atomic multi-store commit, version-checked per pr
     expect(await readOne<BusinessSettings>(db, STORES.businessSettings, 's1')).toBeUndefined();
     expect(await readAll<PaintVariant>(db, STORES.paintVariants)).toHaveLength(0);
   });
+});
+
+describe('writeReplaceAllBackup: full atomic wipe-and-restore', () => {
+  let db: IDBPDatabase;
+  beforeEach(async () => {
+    await deleteDatabase('painting-estimate-pro');
+    db = await openAppDb();
+  });
+  afterEach(() => db.close());
+
+  it('replaces every store completely — a local-only project not in the imported set is gone afterward', async () => {
+    await writeProjectWithVersionCheck(db, project('local-only'), null);
+    await writeImportedBackup(db, { paintVariants: [variant({ id: 'local-variant' })], projects: [] });
+
+    await writeReplaceAllBackup(db, {
+      businessSettings: settings(),
+      paintVariants: [variant({ id: 'imported-variant' })],
+      otherMaterials: [otherMaterial()],
+      serviceDefinitions: [serviceDef()],
+      projects: [project('imported-project')],
+      provenance: [],
+    });
+
+    const projects = await readAll<Project>(db, STORES.projects);
+    expect(projects.map((p) => p.id)).toEqual(['imported-project']); // local-only is GONE
+    const variants = await readAll<PaintVariant>(db, STORES.paintVariants);
+    expect(variants.map((v) => v.id)).toEqual(['imported-variant']); // local-variant is GONE
+  });
+
+  it('uses the IMPORTED file\'s own provenance, not the local installation\'s prior history', async () => {
+    const importedProvenance = [{ exportId: 'exp-imported', sourceProjectId: 'src-x', copiedProjectId: 'p-x', importedAt: NOW }];
+    await writeReplaceAllBackup(db, {
+      businessSettings: settings(),
+      paintVariants: [],
+      otherMaterials: [],
+      serviceDefinitions: [],
+      projects: [],
+      provenance: importedProvenance,
+    });
+    expect(await readAll(db, STORES.importProvenance)).toEqual(importedProvenance);
+  });
+
 });

@@ -662,38 +662,131 @@ export function planRestoreMerge(existingProjects: Project[], incomingProjects: 
 }
 
 export interface FullRestorePlan {
-  toAdd: { projects: Project[]; paintVariants: PaintVariant[] };
-  toSkip: { projectIds: string[]; paintVariantIds: string[] };
+  toAdd: { projects: Project[]; paintVariants: PaintVariant[]; otherMaterials: OtherMaterial[]; serviceDefinitions: ServiceDefinition[] };
+  toSkip: { projectIds: string[]; paintVariantIds: string[]; otherMaterialIds: string[]; serviceDefinitionIds: string[] };
   /** Every conflict a confirmation UI must resolve before any write —
-   * spans projects, the paint catalog, and (at most one, since it's a
-   * singleton) business settings. */
+   * spans projects, the paint catalog, other materials, service
+   * definitions, and (at most one, since it's a singleton) business
+   * settings. */
   conflicts: ImportConflict[];
 }
 
 /** The full restore/merge plan across every mergeable collection in a
  * backup envelope — item 5: "Implement required conflict preview,
  * available conflict choices, confirmation, and cancellation for backup
- * import." Business settings is a singleton, not an ID-keyed collection,
- * so it is compared directly: identical is silently fine, any difference
- * is one conflict (default keepLocal, same as every other kind). */
+ * import," extended by item 7 to cover otherMaterials/serviceDefinitions
+ * too (previously exported but never restored on import at all). Business
+ * settings is a singleton, not an ID-keyed collection, so it is compared
+ * directly: identical is silently fine, any difference is one conflict
+ * (default keepLocal, same as every other kind). */
 export function planFullRestoreMerge(
-  existing: { businessSettings: BusinessSettings; paintVariants: PaintVariant[]; projects: Project[] },
-  incoming: { businessSettings: BusinessSettings; paintVariants: PaintVariant[]; projects: Project[] }
+  existing: { businessSettings: BusinessSettings; paintVariants: PaintVariant[]; otherMaterials: OtherMaterial[]; serviceDefinitions: ServiceDefinition[]; projects: Project[] },
+  incoming: { businessSettings: BusinessSettings; paintVariants: PaintVariant[]; otherMaterials: OtherMaterial[]; serviceDefinitions: ServiceDefinition[]; projects: Project[] }
 ): FullRestorePlan {
   const projectMerge = planArrayMerge(existing.projects, incoming.projects);
   const variantMerge = planArrayMerge(existing.paintVariants, incoming.paintVariants);
+  const materialMerge = planArrayMerge(existing.otherMaterials, incoming.otherMaterials);
+  const serviceMerge = planArrayMerge(existing.serviceDefinitions, incoming.serviceDefinitions);
   const conflicts: ImportConflict[] = [
     ...projectMerge.conflicts.map((c) => ({ kind: 'project' as const, id: c.id, resolution: c.resolution })),
     ...variantMerge.conflicts.map((c) => ({ kind: 'paintVariant' as const, id: c.id, resolution: c.resolution })),
+    ...materialMerge.conflicts.map((c) => ({ kind: 'otherMaterial' as const, id: c.id, resolution: c.resolution })),
+    ...serviceMerge.conflicts.map((c) => ({ kind: 'serviceDefinition' as const, id: c.id, resolution: c.resolution })),
   ];
   if (JSON.stringify(existing.businessSettings) !== JSON.stringify(incoming.businessSettings)) {
     conflicts.push({ kind: 'businessSettings', id: existing.businessSettings.id, resolution: 'keepLocal' });
   }
   return {
-    toAdd: { projects: projectMerge.toAdd, paintVariants: variantMerge.toAdd },
-    toSkip: { projectIds: projectMerge.toSkip, paintVariantIds: variantMerge.toSkip },
+    toAdd: { projects: projectMerge.toAdd, paintVariants: variantMerge.toAdd, otherMaterials: materialMerge.toAdd, serviceDefinitions: serviceMerge.toAdd },
+    toSkip: { projectIds: projectMerge.toSkip, paintVariantIds: variantMerge.toSkip, otherMaterialIds: materialMerge.toSkip, serviceDefinitionIds: serviceMerge.toSkip },
     conflicts,
   };
+}
+
+export interface RestoreResolutionResult {
+  finalSettings: BusinessSettings;
+  finalPaintVariants: PaintVariant[];
+  finalOtherMaterials: OtherMaterial[];
+  finalServiceDefinitions: ServiceDefinition[];
+  /** Every project write the caller must commit, each carrying the
+   * `expectedVersion` a version-checked transaction (storage/db.ts's
+   * `writeImportedBackup`) must validate against the CURRENT stored
+   * state — `null` for a brand-new project or a "keep both" copy (fresh
+   * ID, must not already exist), or the specific version captured when
+   * this plan was PREVIEWED for a "replace imported" conflict (so a
+   * change landed by another tab after the preview is caught, not
+   * silently overwritten — item 8). */
+  projectWrites: { project: Project; expectedVersion: number | null }[];
+}
+
+/**
+ * Turns a computed `FullRestorePlan` plus the user's chosen per-conflict
+ * resolutions into the exact set of writes to commit — a PURE function
+ * (no I/O), so this can be tested directly against real inputs rather
+ * than only indirectly through UI interaction (item 9/11: "tests must
+ * exercise the production function... responsible for the behavior").
+ * `existingProjectVersions` must be captured at the SAME moment the plan
+ * itself was computed (preview time), not re-read at confirm time — that
+ * snapshot is exactly what lets the caller's version-checked transaction
+ * detect a conflicting edit that happened in between.
+ */
+export function applyFullRestoreResolutions(
+  existing: { businessSettings: BusinessSettings; paintVariants: PaintVariant[]; otherMaterials: OtherMaterial[]; serviceDefinitions: ServiceDefinition[] },
+  envelope: BackupEnvelope,
+  plan: FullRestorePlan,
+  resolutions: Record<string, ImportConflict['resolution']>,
+  /** Each existing project's version AT THE MOMENT `plan` was computed —
+   * captured by the caller at preview time (id -> version), never re-read
+   * here. This is what lets a "replace imported" write be checked against
+   * a possibly-stale expectation later, inside the actual storage
+   * transaction. */
+  existingProjectVersions: Record<string, number>,
+  ids: IdSource
+): RestoreResolutionResult {
+  const resolutionFor = (kind: ImportConflict['kind'], id: string): ImportConflict['resolution'] => resolutions[`${kind}:${id}`] ?? 'keepLocal';
+
+  let finalSettings = existing.businessSettings;
+  if (resolutionFor('businessSettings', existing.businessSettings.id) === 'replaceImported') finalSettings = envelope.businessSettings;
+
+  function mergeArray<T extends { id: string }>(kind: ImportConflict['kind'], local: T[], incoming: T[], toAdd: T[]): T[] {
+    const conflictIds = new Set(plan.conflicts.filter((c) => c.kind === kind).map((c) => c.id));
+    let result = local.map((item) => {
+      if (!conflictIds.has(item.id)) return item;
+      return resolutionFor(kind, item.id) === 'replaceImported' ? (incoming.find((i) => i.id === item.id) ?? item) : item;
+    });
+    result = [...result, ...toAdd];
+    for (const id of conflictIds) {
+      if (resolutionFor(kind, id) === 'keepBoth') {
+        const source = incoming.find((i) => i.id === id);
+        if (source) result.push({ ...source, id: ids.nextId() });
+      }
+    }
+    return result;
+  }
+
+  const finalPaintVariants = mergeArray('paintVariant', existing.paintVariants, envelope.paintVariants, plan.toAdd.paintVariants);
+  const finalOtherMaterials = mergeArray('otherMaterial', existing.otherMaterials, envelope.otherMaterials, plan.toAdd.otherMaterials);
+  const finalServiceDefinitions = mergeArray('serviceDefinition', existing.serviceDefinitions, envelope.serviceDefinitions, plan.toAdd.serviceDefinitions);
+
+  const projectWrites: RestoreResolutionResult['projectWrites'] = plan.toAdd.projects.map((project) => ({ project, expectedVersion: null }));
+  const projectConflicts = plan.conflicts.filter((c) => c.kind === 'project');
+  const keepBothSourceProjects: Project[] = [];
+  for (const c of projectConflicts) {
+    const resolution = resolutionFor('project', c.id);
+    if (resolution === 'replaceImported') {
+      const incomingProject = envelope.projects.find((p) => p.id === c.id);
+      if (incomingProject) projectWrites.push({ project: incomingProject, expectedVersion: existingProjectVersions[c.id] ?? null });
+    } else if (resolution === 'keepBoth') {
+      const incomingProject = envelope.projects.find((p) => p.id === c.id);
+      if (incomingProject) keepBothSourceProjects.push(incomingProject);
+    }
+  }
+  if (keepBothSourceProjects.length > 0) {
+    const copies = planImportAsCopies(keepBothSourceProjects, envelope.exportId, new Set(), ids, true);
+    for (const copy of copies.projects) projectWrites.push({ project: copy, expectedVersion: null });
+  }
+
+  return { finalSettings, finalPaintVariants, finalOtherMaterials, finalServiceDefinitions, projectWrites };
 }
 
 /** Import as copies: new IDs throughout each imported graph, remapping

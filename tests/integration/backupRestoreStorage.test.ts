@@ -6,12 +6,12 @@
 // indexeddb — emulator-backed, not a hand-rolled mock).
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { IDBPDatabase } from 'idb';
-import { openAppDb, writeAll, readAll, STORES } from '../../src/storage/db';
+import { openAppDb, writeAll, writeImportedBackup, readAll, readOne, STORES, ConflictError, writeProjectWithVersionCheck } from '../../src/storage/db';
 import { sequentialIdSource } from '../../src/domain/ids';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision, issueRevision } from '../../src/domain/project';
 import { buildCustomerDocument } from '../../src/domain/customerDocument';
-import { exportBackup, validateBackupEnvelope, planRestoreMerge, planFullRestoreMerge, planImportAsCopies } from '../../src/domain/backup';
+import { exportBackup, validateBackupEnvelope, planRestoreMerge, planFullRestoreMerge, planImportAsCopies, applyFullRestoreResolutions } from '../../src/domain/backup';
 import type { BusinessSettings, PaintVariant, Project, EstimateRevision, ActualReview } from '../../src/domain/entities';
 
 function deleteDatabase(name: string): Promise<void> {
@@ -147,8 +147,8 @@ describe('Item 5: conflict preview/choice/confirm/cancel through real storage, v
 
     const incoming = { ...structuredClone(localProject), title: 'Edited in the imported file' };
     const plan = planFullRestoreMerge(
-      { businessSettings: settings(), paintVariants: [variant()], projects: [localProject] },
-      { businessSettings: settings(), paintVariants: [variant()], projects: [incoming] }
+      { businessSettings: settings(), paintVariants: [variant()], otherMaterials: [], serviceDefinitions: [], projects: [localProject] },
+      { businessSettings: settings(), paintVariants: [variant()], otherMaterials: [], serviceDefinitions: [], projects: [incoming] }
     );
     expect(plan.conflicts).toHaveLength(1); // same id, different content
 
@@ -165,8 +165,8 @@ describe('Item 5: conflict preview/choice/confirm/cancel through real storage, v
 
     const incoming = { ...structuredClone(localProject), title: 'Edited in the imported file' };
     const plan = planFullRestoreMerge(
-      { businessSettings: settings(), paintVariants: [variant()], projects: [localProject] },
-      { businessSettings: settings(), paintVariants: [variant()], projects: [incoming] }
+      { businessSettings: settings(), paintVariants: [variant()], otherMaterials: [], serviceDefinitions: [], projects: [localProject] },
+      { businessSettings: settings(), paintVariants: [variant()], otherMaterials: [], serviceDefinitions: [], projects: [incoming] }
     );
     expect(plan.conflicts[0].resolution).toBe('keepLocal'); // the required default
 
@@ -206,9 +206,55 @@ describe('Item 5: conflict preview/choice/confirm/cancel through real storage, v
     const local = settings();
     const incoming = { ...settings(), loadedHourlyRate: '99' };
     const plan = planFullRestoreMerge(
-      { businessSettings: local, paintVariants: [], projects: [] },
-      { businessSettings: incoming, paintVariants: [], projects: [] }
+      { businessSettings: local, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [] },
+      { businessSettings: incoming, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [] }
     );
     expect(plan.conflicts).toEqual([{ kind: 'businessSettings', id: local.id, resolution: 'keepLocal' }]);
+  });
+});
+
+describe('Item 8, end-to-end through the REAL chain (plan -> applyFullRestoreResolutions -> writeImportedBackup): the two-tab scenario', () => {
+  let db: IDBPDatabase;
+  beforeEach(async () => {
+    await deleteDatabase('painting-estimate-pro');
+    db = await openAppDb();
+  });
+  afterEach(() => db.close());
+
+  it('Tab A previews a "replace imported" resolution; Tab B saves a real edit in between; Tab A\'s confirm conflicts and never overwrites Tab B\'s work', async () => {
+    const ids = sequentialIdSource();
+    const localProject = makeIssuedProjectWithActual(ids);
+    const v1 = await writeProjectWithVersionCheck(db, localProject, null);
+
+    // Tab A: user selects a backup file and previews restore/merge.
+    const incoming = { ...structuredClone(localProject), title: 'Imported title change' };
+    const envelope = exportBackup('install-1', settings(), [variant()], [], [], [incoming], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: settings(), paintVariants: [variant()], otherMaterials: [], serviceDefinitions: [], projects: [localProject] },
+      { businessSettings: envelope.businessSettings, paintVariants: envelope.paintVariants, otherMaterials: [], serviceDefinitions: [], projects: envelope.projects }
+    );
+    expect(plan.conflicts).toHaveLength(1);
+    const resolutions = { [`project:${localProject.id}`]: 'replaceImported' as const };
+    // Captured HERE, at preview time (v1) -- this is the exact value ProApp.tsx freezes into pendingImport.
+    const existingProjectVersions = { [localProject.id]: v1 };
+
+    // Tab B: a real, independent edit lands in between, advancing the version.
+    const editedByTabB = { ...structuredClone(localProject), title: 'Edited concurrently in tab B' };
+    const v2 = await writeProjectWithVersionCheck(db, editedByTabB, v1);
+    expect(v2).toBe(2);
+
+    // Tab A: confirms its now-stale import using the resolution function + the real atomic writer.
+    const resolved = applyFullRestoreResolutions(
+      { businessSettings: settings(), paintVariants: [variant()], otherMaterials: [], serviceDefinitions: [] },
+      envelope, plan, resolutions, existingProjectVersions, ids
+    );
+    expect(resolved.projectWrites).toEqual([{ project: incoming, expectedVersion: v1 }]);
+
+    await expect(writeImportedBackup(db, { projects: resolved.projectWrites })).rejects.toThrow(ConflictError);
+
+    // Tab B's work is completely intact.
+    const after = await readOne<Project>(db, STORES.projects, localProject.id);
+    expect(after!.title).toBe('Edited concurrently in tab B');
+    expect(after!.version).toBe(2);
   });
 });

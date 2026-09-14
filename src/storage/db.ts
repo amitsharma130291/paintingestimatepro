@@ -222,6 +222,56 @@ export async function writeImportedBackup(
   }
 }
 
+/**
+ * "Replace all" import mode (DATA_CONTRACT.md: "explicit confirmation,
+ * downloadable pre-import backup, atomic replacement after full
+ * validation"). Every store is cleared and replaced with the imported
+ * file's own content — including `provenance`, which should be the
+ * IMPORTED file's own `importProvenance` (this installation's history is
+ * being fully superseded, not merged) — in one transaction, so a failure
+ * partway through never leaves a half-wiped, half-imported store. Deliberately
+ * has no per-project version check: replacing everything is the whole
+ * point of this mode, guarded instead by the caller's required explicit
+ * confirmation and pre-import backup, not by a per-record conflict check.
+ */
+export async function writeReplaceAllBackup(
+  db: IDBPDatabase,
+  data: {
+    businessSettings: BusinessSettings;
+    paintVariants: PaintVariant[];
+    otherMaterials: OtherMaterial[];
+    serviceDefinitions: ServiceDefinition[];
+    projects: Project[];
+    provenance: ImportProvenanceRecord[];
+  }
+): Promise<void> {
+  const storeNames = [STORES.businessSettings, STORES.paintVariants, STORES.otherMaterials, STORES.serviceDefinitions, STORES.projects, STORES.importProvenance];
+  const tx = db.transaction(storeNames, 'readwrite');
+  const settled = tx.done.catch((err) => err as unknown);
+  try {
+    await tx.objectStore(STORES.paintVariants).clear();
+    await tx.objectStore(STORES.otherMaterials).clear();
+    await tx.objectStore(STORES.serviceDefinitions).clear();
+    await tx.objectStore(STORES.projects).clear();
+    await tx.objectStore(STORES.importProvenance).clear();
+    await tx.objectStore(STORES.businessSettings).put(data.businessSettings);
+    for (const v of data.paintVariants) await tx.objectStore(STORES.paintVariants).put(v);
+    for (const m of data.otherMaterials) await tx.objectStore(STORES.otherMaterials).put(m);
+    for (const s of data.serviceDefinitions) await tx.objectStore(STORES.serviceDefinitions).put(s);
+    for (const p of data.projects) await tx.objectStore(STORES.projects).put(p);
+    for (const rec of data.provenance) await tx.objectStore(STORES.importProvenance).put(rec);
+    await tx.done;
+  } catch (err) {
+    try {
+      tx.abort();
+    } catch {
+      /* already aborted/finished */
+    }
+    await settled;
+    throw new SaveFailedError('Replace-all import failed — your previous data was not changed.', err);
+  }
+}
+
 export async function readAll<T>(db: IDBPDatabase, store: string): Promise<T[]> {
   return db.getAll(store);
 }

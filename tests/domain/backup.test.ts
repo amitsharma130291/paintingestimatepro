@@ -1,7 +1,7 @@
 // BACK: backup validation, restore/merge, and import-as-copies.
 import { describe, it, expect } from 'vitest';
 import { sequentialIdSource } from '../../src/domain/ids';
-import { validateBackupEnvelope, planRestoreMerge, planFullRestoreMerge, planImportAsCopies, exportBackup } from '../../src/domain/backup';
+import { validateBackupEnvelope, planRestoreMerge, planFullRestoreMerge, planImportAsCopies, applyFullRestoreResolutions, exportBackup } from '../../src/domain/backup';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision } from '../../src/domain/project';
 import type { BusinessSettings, PaintVariant, Project } from '../../src/domain/entities';
@@ -43,19 +43,19 @@ describe('BACK-D07: exportBackup preserves accumulated importProvenance, never r
 
 describe('BACK-D11: validation rejects before any write', () => {
   it('rejects a wrong/missing schemaVersion', () => {
-    const result = validateBackupEnvelope({ schemaVersion: 1, businessSettings: {}, paintVariants: [], projects: [] }, 100);
+    const result = validateBackupEnvelope({ schemaVersion: 1, businessSettings: {}, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [] }, 100);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.issues.some((i) => i.path === 'schemaVersion')).toBe(true);
   });
 
   it('rejects an oversized file before parsing further', () => {
-    const result = validateBackupEnvelope({ schemaVersion: 2, businessSettings: {}, paintVariants: [], projects: [] }, 30 * 1024 * 1024);
+    const result = validateBackupEnvelope({ schemaVersion: 2, businessSettings: {}, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [] }, 30 * 1024 * 1024);
     expect(result.ok).toBe(false);
   });
 
   it('rejects duplicate paint variant IDs', () => {
     const dup = makeVariant();
-    const result = validateBackupEnvelope({ schemaVersion: 2, businessSettings: makeSettings(), paintVariants: [dup, dup], projects: [] }, 100);
+    const result = validateBackupEnvelope({ schemaVersion: 2, businessSettings: makeSettings(), paintVariants: [dup, dup], otherMaterials: [], serviceDefinitions: [], projects: [] }, 100);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.issues.some((i) => i.message.includes('Duplicate'))).toBe(true);
   });
@@ -65,7 +65,7 @@ describe('BACK-D11: validation rejects before any write', () => {
     const project = makeProject('p1', ids);
     // @ts-expect-error deliberately corrupt for the test
     project.revisions[0].activeRateSnapshot = undefined;
-    const result = validateBackupEnvelope({ schemaVersion: 2, businessSettings: makeSettings(), paintVariants: [], projects: [project] }, 1000);
+    const result = validateBackupEnvelope({ schemaVersion: 2, businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [project] }, 1000);
     expect(result.ok).toBe(false);
   });
 
@@ -360,8 +360,8 @@ describe('BACK-D05/D06: full restore/merge preview spans projects, paint catalog
     const settings = makeSettings();
     const variant = makeVariant();
     const plan = planFullRestoreMerge(
-      { businessSettings: settings, paintVariants: [variant], projects: [project] },
-      { businessSettings: structuredClone(settings), paintVariants: [structuredClone(variant)], projects: [structuredClone(project)] }
+      { businessSettings: settings, paintVariants: [variant], otherMaterials: [], serviceDefinitions: [], projects: [project] },
+      { businessSettings: structuredClone(settings), paintVariants: [structuredClone(variant)], otherMaterials: [], serviceDefinitions: [], projects: [structuredClone(project)] }
     );
     expect(plan.conflicts).toHaveLength(0);
     expect(plan.toAdd.projects).toHaveLength(0);
@@ -376,8 +376,8 @@ describe('BACK-D05/D06: full restore/merge preview spans projects, paint catalog
     const newVariant = { ...makeVariant(), id: 'paint-2', name: 'New Color' };
     const conflictingVariant = { ...makeVariant(), pricePerGal: '99' }; // same id, different price
     const plan = planFullRestoreMerge(
-      { businessSettings: settings, paintVariants: [localVariant], projects: [project] },
-      { businessSettings: settings, paintVariants: [newVariant, conflictingVariant], projects: [project] }
+      { businessSettings: settings, paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [], projects: [project] },
+      { businessSettings: settings, paintVariants: [newVariant, conflictingVariant], otherMaterials: [], serviceDefinitions: [], projects: [project] }
     );
     expect(plan.toAdd.paintVariants.map((v) => v.id)).toEqual(['paint-2']);
     expect(plan.conflicts).toContainEqual({ kind: 'paintVariant', id: 'paint-1', resolution: 'keepLocal' });
@@ -389,10 +389,115 @@ describe('BACK-D05/D06: full restore/merge preview spans projects, paint catalog
     const localSettings = makeSettings();
     const incomingSettings = { ...makeSettings(), loadedHourlyRate: '55' };
     const plan = planFullRestoreMerge(
-      { businessSettings: localSettings, paintVariants: [], projects: [project] },
-      { businessSettings: incomingSettings, paintVariants: [], projects: [project] }
+      { businessSettings: localSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [project] },
+      { businessSettings: incomingSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [project] }
     );
     expect(plan.conflicts).toEqual([{ kind: 'businessSettings', id: localSettings.id, resolution: 'keepLocal' }]);
+  });
+});
+
+describe('applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly)', () => {
+  it('keepLocal (default) leaves a conflicting project untouched — no write queued for it at all', () => {
+    const ids = sequentialIdSource();
+    const localProject = makeProject('p1', ids);
+    const incomingProject = { ...structuredClone(localProject), title: 'Imported title' };
+    const envelope = exportBackup('install-1', makeSettings(), [], [], [], [incomingProject], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [localProject] },
+      { businessSettings: envelope.businessSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [incomingProject] }
+    );
+    const result = applyFullRestoreResolutions(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [] },
+      envelope, plan, {}, { p1: localProject.version }, ids
+    );
+    expect(result.projectWrites).toHaveLength(0); // keepLocal writes nothing
+  });
+
+  it('replaceImported queues the incoming project with the CAPTURED expectedVersion, not a re-read one', () => {
+    const ids = sequentialIdSource();
+    const localProject = makeProject('p1', ids);
+    const incomingProject = { ...structuredClone(localProject), title: 'Imported title' };
+    const envelope = exportBackup('install-1', makeSettings(), [], [], [], [incomingProject], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [localProject] },
+      { businessSettings: envelope.businessSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [incomingProject] }
+    );
+    const result = applyFullRestoreResolutions(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [] },
+      envelope, plan, { 'project:p1': 'replaceImported' }, { p1: 7 }, ids
+    );
+    expect(result.projectWrites).toEqual([{ project: incomingProject, expectedVersion: 7 }]);
+  });
+
+  it('keepBoth produces a genuinely new copy (fresh ID, expectedVersion=null) alongside leaving the original untouched', () => {
+    const ids = sequentialIdSource();
+    const localProject = makeProject('p1', ids);
+    const incomingProject = { ...structuredClone(localProject), title: 'Imported title' };
+    const envelope = exportBackup('install-1', makeSettings(), [], [], [], [incomingProject], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [localProject] },
+      { businessSettings: envelope.businessSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [incomingProject] }
+    );
+    const result = applyFullRestoreResolutions(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [] },
+      envelope, plan, { 'project:p1': 'keepBoth' }, { p1: localProject.version }, ids
+    );
+    expect(result.projectWrites).toHaveLength(1);
+    expect(result.projectWrites[0].project.id).not.toBe('p1');
+    expect(result.projectWrites[0].expectedVersion).toBeNull();
+    expect(result.projectWrites[0].project.title).toBe('Imported title');
+  });
+
+  it('a brand-new project (no conflict at all) is always queued with expectedVersion=null', () => {
+    const ids = sequentialIdSource();
+    const newProject = makeProject('p2', ids);
+    const envelope = exportBackup('install-1', makeSettings(), [], [], [], [newProject], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [] },
+      { businessSettings: envelope.businessSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [newProject] }
+    );
+    const result = applyFullRestoreResolutions(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [] },
+      envelope, plan, {}, {}, ids
+    );
+    expect(result.projectWrites).toEqual([{ project: newProject, expectedVersion: null }]);
+  });
+
+  it('businessSettings replaceImported swaps in the incoming settings; keepLocal (default) preserves the local ones', () => {
+    const ids = sequentialIdSource();
+    const localSettings = makeSettings();
+    const incomingSettings = { ...makeSettings(), loadedHourlyRate: '99' };
+    const envelope = exportBackup('install-1', incomingSettings, [], [], [], [], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: localSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [] },
+      { businessSettings: incomingSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [] }
+    );
+    const kept = applyFullRestoreResolutions({ businessSettings: localSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [] }, envelope, plan, {}, {}, ids);
+    expect(kept.finalSettings).toEqual(localSettings);
+    const replaced = applyFullRestoreResolutions({ businessSettings: localSettings, paintVariants: [], otherMaterials: [], serviceDefinitions: [] }, envelope, plan, { [`businessSettings:${localSettings.id}`]: 'replaceImported' }, {}, ids);
+    expect(replaced.finalSettings).toEqual(incomingSettings);
+  });
+
+  it('a new paint variant is added; a conflicting one keeps local by default, replaces on choice, or keeps-both as a new copy', () => {
+    const ids = sequentialIdSource();
+    const localVariant = makeVariant();
+    const newVariant = { ...makeVariant(), id: 'paint-2', name: 'New' };
+    const conflictingIncoming = { ...makeVariant(), pricePerGal: '99' };
+    const envelope = exportBackup('install-1', makeSettings(), [newVariant, conflictingIncoming], [], [], [], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [], projects: [] },
+      { businessSettings: makeSettings(), paintVariants: [newVariant, conflictingIncoming], otherMaterials: [], serviceDefinitions: [], projects: [] }
+    );
+    const keepLocalResult = applyFullRestoreResolutions({ businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [] }, envelope, plan, {}, {}, ids);
+    expect(keepLocalResult.finalPaintVariants.find((v) => v.id === 'paint-1')).toEqual(localVariant); // kept local
+    expect(keepLocalResult.finalPaintVariants.map((v) => v.id)).toContain('paint-2'); // new one added
+
+    const replaceResult = applyFullRestoreResolutions({ businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [] }, envelope, plan, { 'paintVariant:paint-1': 'replaceImported' }, {}, ids);
+    expect(replaceResult.finalPaintVariants.find((v) => v.id === 'paint-1')?.pricePerGal).toBe('99');
+
+    const keepBothResult = applyFullRestoreResolutions({ businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [] }, envelope, plan, { 'paintVariant:paint-1': 'keepBoth' }, {}, ids);
+    expect(keepBothResult.finalPaintVariants).toHaveLength(3); // local paint-1 + new paint-2 + the keepBoth copy
+    expect(keepBothResult.finalPaintVariants.filter((v) => v.pricePerGal === '99')).toHaveLength(1);
   });
 });
 

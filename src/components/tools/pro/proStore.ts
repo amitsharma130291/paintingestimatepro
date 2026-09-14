@@ -1,7 +1,7 @@
 // Thin persistence facade for the Pro app island — wraps storage/db.ts so
 // the UI component doesn't touch IndexedDB directly.
-import { openAppDb, writeAll, writeProjectWithVersionCheck, readAppSnapshot, STORES, type AppSnapshot } from '../../../storage/db';
-import type { BusinessSettings, PaintVariant, Project } from '../../../domain/entities';
+import { openAppDb, writeAll, writeProjectWithVersionCheck, writeImportedBackup, writeReplaceAllBackup, readAppSnapshot, STORES, type AppSnapshot } from '../../../storage/db';
+import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, ImportProvenanceRecord } from '../../../domain/entities';
 import { defaultIdSource } from '../../../domain/ids';
 
 export const ids = defaultIdSource;
@@ -42,20 +42,42 @@ export async function saveProjects(projects: Project[]): Promise<void> {
   }
 }
 
-/** Commits a confirmed backup import's business settings, paint catalog,
- * and full project list inside a SINGLE readwrite transaction (item 5:
- * "confirmed imports must commit atomically") — replacing the previous
- * three-separate-calls approach, where a failure partway through could
- * leave settings/catalog persisted while projects were not (and the
- * in-memory UI state already showing the partial result). */
-export async function saveImportedBackup(data: { businessSettings: BusinessSettings; paintVariants: PaintVariant[]; projects: Project[] }): Promise<void> {
+/** Commits a confirmed restore-merge or import-as-copies backup import —
+ * every touched record type atomically in one transaction, with each
+ * project's write version-checked against its current stored state
+ * (items 7/8). Throws `ConflictError` if a project changed elsewhere
+ * since the import was previewed. */
+export async function saveImportedBackup(data: {
+  businessSettings?: BusinessSettings;
+  paintVariants?: PaintVariant[];
+  otherMaterials?: OtherMaterial[];
+  serviceDefinitions?: ServiceDefinition[];
+  projects: { project: Project; expectedVersion: number | null }[];
+  provenance?: ImportProvenanceRecord[];
+}): Promise<{ committedProjectVersions: Map<string, number> }> {
   const db = await openAppDb();
   try {
-    await writeAll(db, [
-      { store: STORES.businessSettings, records: [data.businessSettings] },
-      { store: STORES.paintVariants, records: data.paintVariants },
-      { store: STORES.projects, records: data.projects },
-    ]);
+    return await writeImportedBackup(db, data);
+  } finally {
+    db.close();
+  }
+}
+
+/** Commits a confirmed "replace all" import — every store wiped and
+ * replaced with the imported file's own content atomically (item 7). No
+ * per-project version check: the explicit confirmation + required
+ * pre-import backup are this mode's safety net, per DATA_CONTRACT.md. */
+export async function saveReplaceAllBackup(data: {
+  businessSettings: BusinessSettings;
+  paintVariants: PaintVariant[];
+  otherMaterials: OtherMaterial[];
+  serviceDefinitions: ServiceDefinition[];
+  projects: Project[];
+  provenance: ImportProvenanceRecord[];
+}): Promise<void> {
+  const db = await openAppDb();
+  try {
+    await writeReplaceAllBackup(db, data);
   } finally {
     db.close();
   }
