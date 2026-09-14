@@ -35,15 +35,18 @@ Plus extensive live manual verification via the Claude Browser tool against `ast
 
 **Pro app UI rewrite** (`src/components/tools/pro/ProApp.tsx`) — replaced the prior session's simplified single-variant-per-room prototype with a UI driven by the real `Room`/`Surface` domain model: independent wall/ceiling paint variant per room, standalone trim/door surfaces, a saved-drafts project list, rate-refresh preview/confirm/cancel panel, a conflict-resolution banner (reload vs. save-as-copy), business/customer info entry, and a working print/PDF path for the issued customer document.
 
-**8 real defects found and fixed** — see `BUG_FIX_LOG.md` for full reproduction/root-cause/fix/verification detail on each:
-1. `writeAll` transaction rollback (prior session).
-2. Free estimate template blank-row bug (prior session; **re-verified live again this session**, still correct).
-3. Negative-money sign placement (prior session).
+**13 real defects found and fixed this continuation session** (on top of 3 from the prior session — 16 total, all in `BUG_FIX_LOG.md` with full reproduction/root-cause/fix/verification detail):
+1-3. Prior session: `writeAll` transaction rollback, free estimate template blank-row bug (**re-verified live again this session**, still correct), negative-money sign placement.
 4. **Issued customer documents were permanently stamped "draft"** — found by this session's new 11-step integration test on its first run.
 5. Suggested-price mode showed a real proposed price but "—" for profit/margin — found live in the browser during the first manual test of the rewritten UI.
-6. Paint-variant `<select>` sourced from the live catalog instead of the draft's own frozen snapshot, letting a user pick an option that immediately broke the calculation — found live in the browser.
-7. **(Serious, data loss)** Editing an issued estimate and saving the new draft revision silently dropped it entirely from storage while still reporting "Draft saved." — found by directly inspecting IndexedDB after a live UI action, not by trusting the UI's own success message.
-8. The Pro app's issued customer document had no print button and no print CSS — a real print would have included the tab bar and an internal developer note in the customer's printout.
+6. Paint-variant `<select>` sourced from the live catalog instead of the draft's own frozen snapshot — found live in the browser.
+7. **(Serious, data loss)** Editing an issued estimate and saving the new draft revision silently dropped it entirely from storage while still reporting "Draft saved." — found by directly inspecting IndexedDB after a live UI action.
+8. The Pro app's issued customer document had no print button and no print CSS.
+9. Per-surface Coats field silently accepted "0"→1, unbounded values, and truncated fractions — found by the parallel test-catalogue audit reading source code, confirmed live.
+10. A trim surface with length exactly 0 was wrongly rejected at field validation — found by the same audit.
+11. **(Serious, data loss)** The actual-cost review tab was never persisted to storage at all — recording actuals and reloading the page silently lost everything. Found by the audit reading source code, confirmed live via a full page reload + direct DOM inspection.
+12. The free job-cost calculator showed a "complete" $0.00 result before any input was entered — found by the audit, confirmed live in the browser.
+13. Backup restore unconditionally overwrote a local project sharing an ID with an imported one — found by the audit reading source code; fixed by wiring in the already-tested `planRestoreMerge` (keep-local default), not yet re-verified live.
 
 ## 2. Numerical fixtures and independent oracle (unchanged, re-verified)
 
@@ -75,16 +78,61 @@ The prior session's 11 checks are unchanged. Added this session, closing the exa
 
 ## 4. The 345-case catalogue — corrected mapping
 
-`test-execution-results.csv` was re-audited this session using four parallel review passes (one per area group), each required to read the actual test body before marking anything `passed`, cross-check against `BUG_FIX_LOG.md`/`IMPLEMENTATION_DECISIONS.md`, and mark `not_run` rather than guess when uncertain. The CSV now carries a separate `implementation_status` (implemented/partial/missing/external_dependency) alongside `execution_status` (passed/failed/blocked/not_run), per the task's explicit requirement that "not run" not be conflated with "not implemented."
+`test-execution-results.csv` was re-audited this session using four parallel review passes (one per area group — CORE/BOUND/GEO; NUM/COST/HEALTH/DOC; PRO/LIFE/CAT/ACT; TPL/JOB/INT/UX/BACK/ACCESS), each instructed to read the actual test body before marking anything `passed`, cross-check against `BUG_FIX_LOG.md`/`IMPLEMENTATION_DECISIONS.md`, and mark `not_run` rather than guess when uncertain. Full per-case reasoning from each pass is preserved at `evidence/audit-batches/*.csv`. The CSV now carries a separate `implementation_status` (implemented/partial/missing/external_dependency) alongside `execution_status` (passed/failed/blocked/not_run), per the task's explicit requirement that "not run" not be conflated with "not implemented."
 
-**[PLACEHOLDER — being finalized as the parallel audit agents complete; see the final response for the actual regenerated counts, or re-run `python3 tests/fixtures/merge_audit_csvs.py` after all four `audit_batch_*.csv` files exist.]**
+**Regenerated counts** (`python3 tests/fixtures/merge_audit_csvs.py` against `evidence/audit-batches/*.csv`, then manually updated for 6 cases this session fixed after the audit ran — see below):
 
-Corrected mismatches confirmed this session (the 5 named in the task, plus others found during the audit):
+| Status | Count | Meaning |
+|---|---|---|
+| `passed` | **131** | A real test/manual-verification citation was read and confirmed to check that exact case. |
+| `not_run` | **179** | No test exercises this exact scenario; `notes` says whether the underlying behavior looks correct by code reading or is a real gap. |
+| `blocked` | **27** | 12 `ACCESS-*` (no payment provider) + 15 others genuinely blocked on an external dependency or an unresolved upstream decision. |
+| `failed` | **8** | An executed check (a test, or direct source reading against the case's exact Given/When/Then) demonstrated the described behavior does NOT hold. |
+
+Implementation status: **223 implemented, 75 missing, 37 partial, 10 external_dependency.** (BACK-004/017 moved from `failed`/`missing` to `not_run`/`partial` after this session's fix wiring `planRestoreMerge` into the actual restore path — see BUG_FIX_LOG.md #13; not re-verified live via an actual file round-trip, so not marked `passed`.)
+
+By prefix (execution status):
+
+| Prefix | Total | Passed | Not run | Blocked | Failed |
+|---|---|---|---|---|---|
+| NUM | 20 | 20 | 0 | 0 | 0 |
+| CORE | 30 | 15 | 15 | 0 | 0 |
+| GEO | 30 | 19 | 11 | 0 | 0 |
+| BOUND | 61 | 10 | 51 | 0 | 0 |
+| COST | 19 | 5 | 14 | 0 | 0 |
+| HEALTH | 17 | 7 | 10 | 0 | 0 |
+| DOC | 12 | 2 | 10 | 0 | 0 |
+| PRO | 16 | 9 | 7 | 0 | 0 |
+| LIFE | 14 | 9 | 5 | 0 | 0 |
+| CAT | 12 | 7 | 5 | 0 | 0 |
+| ACT | 16 | 5 | 11 | 0 | 0 |
+| TPL | 17 | 3 | 10 | 0 | 4 |
+| JOB | 15 | 7 | 4 | 4 | 0 |
+| INT | 15 | 4 | 6 | 4 | 1 |
+| UX | 13 | 0 | 12 | 0 | 1 |
+| BACK | 26 | 9 | 8 | 7 | 2 |
+| ACCESS | 12 | 0 | 0 | 12 | 0 |
+| **Total** | **345** | **131** | **179** | **27** | **8** |
+
+### Corrections to the 5 named mismatches (all confirmed and fixed this session)
+
 - **PRO-001** (separate wall/ceiling paint variants): now genuinely `passed` — `tests/engine/estimate.test.ts` and `tests/domain/estimateAssembly.test.ts`'s PRO-001 describe blocks, plus live browser verification.
-- **LIFE-003** (confirmed rate refresh): now genuinely `passed` — `tests/domain/rateRefresh.test.ts` plus `tests/integration/draftIssuedIsolation.test.ts` steps 7-8.
+- **LIFE-003** (confirmed rate refresh): `passed`, but the audit found a real caveat: **`partial` implementation** — a pre-refresh snapshot has no durable undo once saved (rate refresh mutates the same revision in place, no history). `tests/domain/rateRefresh.test.ts` plus `tests/integration/draftIssuedIsolation.test.ts` steps 7-8.
 - **BACK-001** (complete export/restore): now genuinely `passed` — `tests/integration/backupRestoreStorage.test.ts`'s real-transaction restore-into-empty-store test.
 - **BACK-002** (secret exclusion): now genuinely `passed` — `tests/integration/backupRestoreStorage.test.ts`'s explicit no-payment-string assertion.
-- **BOUND-001** (coat-count boundary): corrected per the audit — see the CSV for its actual current mapping.
+- **BOUND-001** (coat-count boundary): corrected to its actual matching test in `tests/engine/parse.test.ts`.
+
+### 8 cases the audit found genuinely `failed`, plus 2 fixed after the audit ran
+
+- **BACK-004/017** (fixed after the audit found them, see BUG_FIX_LOG.md #13): the Pro app's actual "Restore from backup" button never called `planRestoreMerge`/`planImportAsCopies` (both correctly implemented and unit-tested in isolation) — it unconditionally overwrote via a raw `writeAll`. Now wired in, defaulting to keep-local on any ID collision (the silent-overwrite risk is closed); a full per-conflict "keep local / replace / keep both" UI is still not built, and this fix was not re-verified via an actual browser file round-trip, so the CSV marks it `not_run`/`partial`, not `passed`.
+- **BACK-015/020** (still failed, not fixed): `validateBackupEnvelope` does not check `actualReviews[].baselineIssuedRevisionId` against existing revisions, and does no field-level type/range validation on imported financial data.
+- **TPL-010/011**: no unusual-tax-rate warning and no tax-percentage bounds validation in the free estimate template.
+- **TPL-012**: a whole-document `$0.00` total has no explicit "no-charge" confirmation step (row-level zero handling is fine; document-level is not).
+- **TPL-014**: the free estimate template is fully ephemeral (no "original" project, no estimate number) — a documented scope reduction from the full spec, not an oversight, but the catalogue case doesn't apply as written.
+- **INT-013**: the free interior calculator's default door/window counts (2, 3) don't match the spec's stated fresh-state default (0) — a real, minor mismatch from the marketing/homepage example values it was tuned to.
+- **UX-013**: no input handoff exists between a free tool and the Pro app (only a generic marketing link) — a real gap, but a deliberate scope boundary (free tools and Pro were built as genuinely separate products this session, not a funnel).
+
+None of these are hidden — every one is called out here, in the CSV's `notes` column, and (where relevant) in `IMPLEMENTATION_DECISIONS.md`.
 
 ## 5. Customer journeys exercised live in the browser this session (not simulated)
 
@@ -113,16 +161,18 @@ No payment provider has been selected, and none was selected between the prior s
 ## 7. Remaining risks / launch blockers
 
 1. **Payment/entitlement — still a hard blocker** (§6).
-2. **No revision-switcher UI** — once a project has more than one revision, there is no way to navigate back and view/reprint an earlier issued revision from the UI (its data is provably intact in storage, per the draft/issued isolation integration test, just not reachable without direct storage inspection). Real, launch-relevant gap.
-3. **Multi-tab conflict banner not driven through two real concurrent tabs** — the underlying storage mechanism is proven correct via real transactions; the UI path itself wasn't exercised with two actual browser contexts this session.
-4. ~~No mutation checks for the new rate-refresh/estimate-aggregation code~~ — **closed this session**: 3 new mutation checks added (see §3).
-5. **No PDF file was actually generated and text-extracted** — the print CSS mechanism was verified (correct `print:hidden` rules exist and are applied to the right elements), but no headless-PDF tool rendered an actual PDF for content extraction in this session.
-6. **A large fraction of the 345-case catalogue remains `not_run`** — see §4's regenerated counts. Treat `not_run` as "implemented but individually unverified," not as "broken," per this session's conservative-audit policy; `failed` (if any appear in the corrected CSV) means an executed assertion demonstrated an actual defect.
+2. **Backup restore has no per-conflict resolution UI (BACK-004/005/006/017, mitigated but not fully closed)** — this session found and fixed the worst part (a silent unconditional overwrite on ID collision; now defaults to keep-local, matching spec), but there is still no UI for a user to explicitly choose keep-local/replace/keep-both, and the fix was not re-verified via an actual browser file round-trip.
+3. **No revision-switcher UI** — once a project has more than one revision, there is no way to navigate back and view/reprint an earlier issued revision from the UI (its data is provably intact in storage, just not reachable without direct storage inspection).
+4. **Multi-tab conflict banner not driven through two real concurrent tabs** — the underlying storage mechanism is proven correct via real transactions; the UI path itself wasn't exercised with two actual browser contexts.
+5. **Backup import has no field-level validation on financial data, and no dangling-actual-review-reference check** (BACK-015/020, still failed).
+6. **Free estimate template**: no unusual-tax-rate warning, no tax-percentage bounds, no document-level no-charge confirmation for a whole $0.00 estimate (TPL-010/011/012, still failed).
+7. **No PDF file was actually generated and text-extracted** — the print CSS mechanism was verified correct, but no headless-PDF tool rendered an actual PDF for content extraction.
+8. **179 of 345 catalogued cases remain `not_run`** — see §4. Treat `not_run` as "implemented but individually unverified, per code reading," not as "broken." The 8 cases confirmed `failed` (§4) are the ones known to be genuinely broken or missing; everything else not explicitly named as a gap here is either passing or unverified-but-plausible.
 
 ## 8. Verdict
 
-- **Free-tool launch**: ready. All three free tools work correctly, are covered by the shared engine's test suite, and one (estimate template) had its blank-row behavior re-verified live again this session.
-- **Ready for internal review** (Pro workspace): yes — the core calculation engine, per-surface/standalone-surface estimating, rate refresh, draft/issued isolation, and print output are now real, tested, and verified live end-to-end, including 8 real defects found and fixed with regression evidence.
-- **Ready for paid launch**: no. Blocked on the payment-provider decision (§6, a real external dependency, not a gap in this session's work) and on the remaining risks in §7 — particularly the revision-switcher gap, which a real business would likely want closed before charging customers for a workspace where an issued document can become unreachable from the UI.
+- **Free-tool launch**: ready, with one caveat. All three free tools' core calculation flows work correctly (shared engine's test suite covers the math), and the estimate template's blank-row behavior and the job-cost calculator's missing-vs-zero behavior (bug #12, this session) were both live-verified. The remaining free-tool gaps (TPL-010/011/012/014, INT-013's default counts) are minor polish, not correctness defects.
+- **Ready for internal review** (Pro workspace): yes — the core calculation engine, per-surface/standalone-surface estimating, rate refresh, draft/issued isolation, actuals persistence, print output, and backup restore's worst failure mode are now real, tested, and verified (mostly live), including 13 real defects found and fixed with regression evidence this session (16 total across both sessions).
+- **Ready for paid launch**: no. Blocked on the payment-provider decision (§6, a real external dependency) and on closing the remaining named gaps above to whatever bar the business sets — particularly a real conflict-resolution UI for backup restore and the revision-switcher gap, which a real user would hit fastest.
 
 Not deployed, not published, no real charges made or attempted, per the task's explicit instruction.

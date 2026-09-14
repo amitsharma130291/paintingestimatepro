@@ -188,6 +188,22 @@ Four real defects were found during this implementation — three via automated 
 
 ---
 
+## 13. Backup restore unconditionally overwrote local projects on an ID collision (BACK-004/017)
+
+**Found by:** The parallel test-catalogue audit, reading `ProApp.tsx`'s `handleImport` directly.
+
+**Reproduction:** `handleImport` called `setProjects(result.envelope.projects)` and `saveProjects(result.envelope.projects)` — replacing local React state with the imported project list outright, and `put`-ing every imported project over any existing one sharing the same ID, with no comparison at all. The already-implemented, already-unit-tested `planRestoreMerge`/`planImportAsCopies` (which correctly implement `DATA_CONTRACT.md`'s "identical skip; new add; conflicting content requires an explicit choice — default keep-local, never automatic timestamp-wins") were never actually called from the shipped restore path — dead code from the product's perspective.
+
+**Root cause:** The restore handler was written as a quick wholesale "load whatever's in the file" implementation and never wired up to the conflict-aware planning function that already existed and was already correct.
+
+**Fix:** `handleImport` now calls `planRestoreMerge(projects, result.envelope.projects)` and only ever ADDS `plan.toAdd.projects` to the existing local list — an identical existing project is skipped (not duplicated), and a project sharing an ID with different content is left exactly as it was locally (the safe default), with an on-screen note telling the user how many projects were skipped or kept-as-is due to a conflict. This closes the silent-data-loss risk; it does **not** yet build a full per-conflict "keep local / replace / keep both" resolution UI — that remains a real, named gap (see `TEST_EXECUTION_REPORT.md` §7), but the dangerous default (silent overwrite) is gone.
+
+**Regression test:** No new automated test for the UI wiring itself (no component-test infra in this project); the underlying `planRestoreMerge` behavior this fix now actually uses is already covered by `tests/domain/backup.test.ts::BACK-D09` (4 cases: identical-skip, new-add, conflict-defaults-keep-local, repeated-restore-no-duplicate). Not re-verified live in the browser this session (file download/re-upload through the sandboxed preview browser was not attempted) — flagged here rather than silently claimed.
+
+**Verification:** Full suite (179/179) passes; `astro check` clean; the fix is a direct composition of an already-tested pure function, not new untested logic.
+
+---
+
 ## Not a bug (documented false alarm)
 
 While writing `PROPERTY 11` (application labor linearity), a strict `.equals()` assertion failed on the counterexample `area=1, coats=1, throughput=290`. Investigation showed `area*coats/290` is a non-terminating decimal (290 = 2×5×29); computing it once and doubling versus computing `(2×area)/290` directly are two independently-rounded results at the engine's 50-significant-digit precision floor, differing by `1e-52` — twelve digits past the spec's required 40-significant-digit floor and financially meaningless at any real display precision. The linearity formula itself is correct; the test's exactness requirement was wrong. Fixed by using a `1e-40` tolerance instead of bit-exact equality. See the comment in `tests/property/geometry.property.test.ts` for the full reasoning — recorded here so it isn't mistaken for an unresolved defect.

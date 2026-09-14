@@ -10,7 +10,7 @@ import type { ActualReview } from '../../../domain/entities';
 import { assembleProjectEstimate, type ProjectEstimateAssembly } from '../../../domain/estimateAssembly';
 import { previewRateRefresh, applyRateRefresh, type RateRefreshDiff, type VariantResolution } from '../../../domain/rateRefresh';
 import { buildCustomerDocument } from '../../../domain/customerDocument';
-import { exportBackup, validateBackupEnvelope } from '../../../domain/backup';
+import { exportBackup, validateBackupEnvelope, planRestoreMerge } from '../../../domain/backup';
 import { defaultIdSource } from '../../../domain/ids';
 import { ConflictError } from '../../../storage/db';
 import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveProjects } from './proStore';
@@ -434,14 +434,26 @@ export default function ProApp() {
       setImportMessage(`Not imported: ${result.issues.map((i) => i.message).join(' ')}`);
       return;
     }
+    // BACK-004/017 fix: restoring a backup must MERGE into local projects,
+    // not silently replace them. DATA_CONTRACT's restore/merge rule is
+    // "identical existing records skip; new IDs add; conflicting content
+    // at the same ID requires an explicit choice — default keep-local,
+    // never automatic timestamp-wins." A full per-conflict resolution UI
+    // isn't built yet (a real remaining gap, see TEST_EXECUTION_REPORT.md),
+    // but defaulting to keep-local at minimum means importing a backup can
+    // never silently destroy an unsaved or differently-edited local project.
+    const plan = planRestoreMerge(projects, result.envelope.projects);
+    const mergedProjects = [...projects, ...plan.toAdd.projects];
     setSettings(result.envelope.businessSettings);
     setCatalog(result.envelope.paintVariants);
-    setProjects(result.envelope.projects);
+    setProjects(mergedProjects);
     try {
       await saveBusinessSettings(result.envelope.businessSettings);
       await savePaintVariants(result.envelope.paintVariants);
-      await saveProjects(result.envelope.projects);
-      setImportMessage(`Restored ${result.envelope.projects.length} project(s) and ${result.envelope.paintVariants.length} paint variant(s).`);
+      await saveProjects(mergedProjects);
+      const conflictNote = plan.conflicts.length > 0 ? ` ${plan.conflicts.length} project(s) had a different local copy with the same ID and were KEPT AS-IS (not overwritten) — export and compare manually if you need the imported version.` : '';
+      const skipNote = plan.toSkip.projectIds.length > 0 ? ` ${plan.toSkip.projectIds.length} identical project(s) skipped.` : '';
+      setImportMessage(`Restored ${plan.toAdd.projects.length} new project(s) and ${result.envelope.paintVariants.length} paint variant(s).${skipNote}${conflictNote}`);
     } catch {
       setImportMessage('Restore failed while saving — your previous data was not changed.');
     }
