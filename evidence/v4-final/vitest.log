@@ -1,0 +1,12 @@
+
+ RUN  v5.0.0 C:/Users/amits/SEOSites/paintingestimatepro
+
+
+ Test Files  36 passed (36)
+      Tests  339 passed (339)
+   Start at  04:49:29
+   Duration  4.63s (tests 28%, transform 24%, setup 20%, environment 15%, import 10%, worker 2%)
+
+    Isolate  36 workers spawned · ~384ms startup each (spawn + environment, per file)
+             at least ~872ms faster with isolate: false — reuses workers across files instead of one per file
+

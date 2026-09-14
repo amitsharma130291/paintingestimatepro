@@ -1,12 +1,64 @@
 # Test execution report
 
-**This is a v3 continuation session**, working from `painting-estimate-pro-specs-v2.1-final.zip` (authoritative spec), `painting-estimate-pro-comprehensive-tdd-v2.1.zip` (test catalogue), and `painting-estimate-pro-test-reports.zip` (the prior session's own reports, reproduced below under §§1-8 as history). This top section (§0) documents this v3 session's own baseline reconciliation, changes, and final counts; everything below it is the prior session's report, left intact as a record rather than silently overwritten.
-
-**Package under test:** same spec/TDD documents — confirmed byte-identical to what was already checked into `docs/` via `diff -q`, so no spec-vs-code reconciliation was needed this session.
+**This is a v4 continuation session**, working from the same `painting-estimate-pro-specs-v2.1-final.zip` / `painting-estimate-pro-comprehensive-tdd-v2.1.zip` pair (byte-identical to what's already in `docs/`, reconfirmed via `diff -q`) plus the v3 source/reports as its own starting point. This top section (§V4) documents this session's own findings, fixes, and corrected counts; §0 below it is the v3 session's own report (kept as history, with an added note where superseded); §§1-8 below that are the original session's report, kept as history under v3's own disclosure.
 
 ---
 
-## 0. v3 continuation session (this session)
+## V4. v4 continuation session (this session)
+
+### V4.1 Baseline verification (task item 1)
+
+The v4 task's own claim — "252 passing automated tests; 153 passed, 186 not_run, 6 blocked acceptance cases; 20 numerical reference fixtures / 106 fields" — was independently verified before any change, per the task's explicit instruction: `npx vitest run` → 252/252, 29 files; `npx astro check` → 0 errors; `ACCEPTANCE_MATRIX.csv` → 153 passed / 186 not_run / 6 blocked / 0 failed (345 total); `python3 docs/verify_reference.py` → 20 fixtures, 106 fields, all pass. **All three claims were accurate.** Raw command output captured under `evidence/v4-baseline/`.
+
+The task's own framing also stated, correctly this time, that the prior session's "only payment credentials remain" conclusion was wrong — this session confirmed that by finding and fixing two serious security defects and several real correctness/completeness gaps that had nothing to do with missing credentials (below).
+
+### V4.2 Defects found and fixed this session, in the order worked
+
+Every fix below followed the same regression-first discipline used throughout this project: a test was written and run RED against the actual production code first (not a reimplementation of it), the defect was fixed, and the same test was re-run GREEN — full detail, root cause, and verification evidence for each is in `BUG_FIX_LOG.md`.
+
+1. **(Serious, security) ACCESS-013 — checkout verification, license redemption, and the payment webhook granted access for ANY successful Dodo payment, never confirming it purchased the configured product.** A real payment for an unrelated product (or a different price/SKU) on the same Dodo merchant account would have unlocked Pro for free. Fixed with a single shared `evaluatePaymentEntitlement()` decision used identically by all three call sites. `BUG_FIX_LOG.md #22`.
+2. **(Serious, security) ACCESS-014 — a network failure (real or simulated) let a completely fabricated local payment record unlock Pro permanently.** The task's own exact reproduction (invented payment ID + a rejecting `fetch`) was confirmed against the original code and closed: `checkAccess()` now reports a distinct `unavailable` status on a network failure — never granted access, but also never clearing the record — rather than returning the untrusted stored record as if it had been verified. `BUG_FIX_LOG.md #23`.
+3. **Backup validation covered only a small fraction of the approved schema.** A `null` entry anywhere in the nested arrays threw an uncaught exception; most entity types (`BusinessSettings`, `Room`, `Surface`, `RateSnapshot` internals, every line-item array) were never field-validated at all; duplicate-ID checks covered only paint variants; a paint variant with zero coverage (a real divide-by-zero risk) was accepted as merely "non-negative"; an actual review could target a draft revision instead of an issued one. Rewrote `validateBackupEnvelope` around crash-proof per-entity validators covering the complete `DATA_CONTRACT.md` schema. `BUG_FIX_LOG.md #24`.
+4. **Import-as-copies left room/surface IDs and their cross-references untouched, and `exportBackup` silently discarded accumulated import provenance on every export.** `BUG_FIX_LOG.md #25`.
+5. **Completed the backup import subsystem**: a real conflict-preview/choice/confirm/cancel UI now exists for all three `DATA_CONTRACT.md`-named import modes (restore/merge — already partially built in v3, import-as-copies, and replace-all, both previously entirely unwired), `otherMaterials`/`serviceDefinitions` are now actually restored on import (previously exported but silently dropped), persisted import provenance now survives across sessions, and every project write in an import commit is checked against its current stored version inside the same atomic transaction — closing the exact two-tab scenario the task described (a stale import preview can no longer silently overwrite a newer concurrent edit). `BUG_FIX_LOG.md #26`.
+6. **The free estimate template claimed "saved locally in your browser" even when the save silently failed** (a full quota or private-browsing storage block). Now reports the truth, offers a working Retry action, and preserves a corrupted stored value's raw bytes under a backup key instead of silently discarding them. Live-verified in the browser with a monkey-patched throwing `localStorage.setItem`. `BUG_FIX_LOG.md #27`.
+7. **Built a real component-level browser test harness for `ProApp`** (new dev-only test tooling: `jsdom` + `@testing-library/react`), closing the task's explicit demand to test the real Confirm/Cancel/Keep-local/Use-imported/Keep-both actions and the two-tab save conflict's real Reload-latest/Save-as-copy actions through actual rendered DOM and real storage transactions, not just constructed record arrays. `BUG_FIX_LOG.md #28`.
+
+### V4.3 Commands run this session (after all fixes)
+
+```
+npx vitest run       # 339/339 passed, 37 files (87 new tests this session)
+npx astro check      # 0 errors, 0 warnings, 3 pre-existing FormEvent-deprecation hints (unrelated)
+npx astro build      # 5 pages prerendered, server bundle built, succeeds
+python3 docs/verify_reference.py  # 20 fixtures / 106 fields, unchanged (no calculation-contract code touched)
+```
+
+### V4.4 Acceptance matrix — corrected counts
+
+| Status | Start of this session (v3 end state) | End of this session |
+|---|---|---|
+| `passed` | 153 | **159** |
+| `not_run` | 186 | **181** |
+| `blocked` | 6 | **5** |
+| `failed` | 0 | **0** |
+
+Implementation status: **254 implemented** (was 250), **59 missing** (was 61), **32 partial** (was 34). `ACCESS-005` and `ACCESS-009` moved from `blocked`/`not_run` to `passed` (the wrong-product and offline-network defects were unfinished implementation, not external dependencies — now fixed and tested). `BACK-006/007` moved to fully `passed` (the room/surface remap gap closed). `BACK-010/011` (the `replaceAll` import mode) moved from `missing`/`not_run` to `implemented`/`passed` — a real, previously entirely-unbuilt feature, now implemented. `BACK-022` moved to `passed` (the atomic multi-store import commit closes the "quota exhausted mid-import" partial-restore risk). `ACCESS-002`'s evidence was refreshed to reflect that its underlying function was superseded by the ACCESS-014 fix, without needing to reopen it as newly-broken — the guarantee it names is preserved and re-verified by the rewritten test file. **No case was reopened as newly-failed** — every case touched this session moved in the correct direction (fixed and re-verified), and none of the fixes invalidated a previously-genuine pass.
+
+**Newly discovered regression cases this session, distinguishable from the original 345** (per the task's explicit instruction): the two security defects (ACCESS-013 product-binding, ACCESS-014 offline-bypass) map cleanly onto existing catalogue cases (`ACCESS-005`, `ACCESS-009`) and did not need new case IDs. The free-template "claims saved when it wasn't" defect (item 9) does **not** have a matching original case ID in the 345-case catalogue (the closest, `LIFE-009`, is about the Pro workspace's IndexedDB persistence, a different storage layer already correctly handled) — this is recorded as a genuinely new finding, fixed and tested (`BUG_FIX_LOG.md #27`), but intentionally not force-mapped onto an unrelated case ID.
+
+### V4.5 What remains unfinished this session (not blocked) — honest backlog
+
+Per item 10's explicit list and this session's own review of the remaining catalogue, none of the following are external-dependency blockers — they are unimplemented features, named honestly rather than declared non-blocking without approval:
+
+- **Interior calculator**: no ceiling-only mode (walls cannot be disabled — `INT-008/009`), no quick/detailed opening-entry switch (`INT-010`), no additional prep-labor line (`INT-014`). Scoped but not built this session.
+- **Logo/asset handling in backups and print output** (`BACK-019/025`): `BusinessInfo.logo` is an unused optional field; no upload UI, size-limiting, or embedding exists.
+- **`ACCESS-001/003/004/008`**: still genuinely blocked on a real Dodo Payments test-mode account — the one legitimate external dependency, unchanged from v3.
+- **`BACK-026`**: still blocked on an unresolved product/policy decision named in its own case text, not an implementation gap.
+- Every other `not_run` case (181 total) carries forward from v3's own disclosure — predominantly pure calculation-contract cases already covered by extensive existing engine test suites but not individually cross-referenced case-by-case, plus the free-tool/logo gaps just named.
+
+---
+
+## 0. v3 continuation session (historical — see §V4 above for this session's current findings)
 
 ### 0.1 Baseline reconciliation (task item 1)
 
