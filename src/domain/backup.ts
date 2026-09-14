@@ -1,4 +1,4 @@
-import type { BackupEnvelope, Project, BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition } from './entities';
+import type { BackupEnvelope, Project, BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, ImportProvenanceRecord } from './entities';
 import { SCHEMA_VERSION, ENGINE_VERSION } from './entities';
 import type { IdSource } from './ids';
 import { parseDecimalField, isPositiveDivisor } from '../engine/parse';
@@ -394,7 +394,14 @@ export function exportBackup(
   otherMaterials: OtherMaterial[],
   serviceDefinitions: ServiceDefinition[],
   projects: Project[],
-  ids: IdSource
+  ids: IdSource,
+  // ITEM 6 REGRESSION: this used to be hardcoded to `[]`, silently
+  // discarding every previously-accumulated provenance record on each new
+  // export. Defaults to `[]` only for an installation with no import
+  // history yet — a real caller with existing provenance must pass it
+  // through so "already imported this export" detection survives an
+  // export/reimport round trip.
+  importProvenance: ImportProvenanceRecord[] = []
 ): BackupEnvelope {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -407,7 +414,7 @@ export function exportBackup(
     otherMaterials: structuredClone(otherMaterials),
     serviceDefinitions: structuredClone(serviceDefinitions),
     projects: structuredClone(projects),
-    importProvenance: [],
+    importProvenance: structuredClone(importProvenance),
   };
 }
 
@@ -717,11 +724,47 @@ export function planImportAsCopies(
   return { projects, skippedSourceIds, provenance };
 }
 
+/** Remaps every child entity ID WITHIN one revision's own graph (rooms,
+ * surfaces, opening entries, and the three line-item arrays) and rewires
+ * the room<->surface cross-references to the new IDs — item 6: "Copied
+ * rooms, surfaces, and snapshots retain IDs that should be remapped."
+ * `paintVariantId`/`sourceMaterialId` are deliberately left untouched:
+ * they're legitimate references into the LIVE, shared paint/material
+ * catalog, not part of this project's own copied graph (the same
+ * principle already applied to a surface's paintVariantId when its
+ * catalog entry is deleted — resolved through the embedded snapshot, not
+ * remapped or invalidated). */
+function remapRevisionChildIds(rev: Project['revisions'][number], ids: IdSource): Project['revisions'][number] {
+  const surfaceIdMap = new Map(rev.surfaces.map((s) => [s.id, ids.nextId()]));
+  const roomIdMap = new Map(rev.rooms.map((r) => [r.id, ids.nextId()]));
+
+  const newSurfaces = rev.surfaces.map((s) => ({
+    ...structuredClone(s),
+    id: surfaceIdMap.get(s.id)!,
+    roomId: s.roomId ? (roomIdMap.get(s.roomId) ?? null) : null,
+  }));
+  const newRooms = rev.rooms.map((r) => ({
+    ...structuredClone(r),
+    id: roomIdMap.get(r.id)!,
+    openings: r.openings.map((o) => ({ ...structuredClone(o), id: ids.nextId() })),
+    surfaceIds: r.surfaceIds.map((sid) => surfaceIdMap.get(sid)).filter((sid): sid is string => sid !== undefined),
+  }));
+
+  return {
+    ...structuredClone(rev),
+    rooms: newRooms,
+    surfaces: newSurfaces,
+    additionalLabor: rev.additionalLabor.map((l) => ({ ...structuredClone(l), id: ids.nextId() })),
+    otherMaterialLines: rev.otherMaterialLines.map((l) => ({ ...structuredClone(l), id: ids.nextId() })),
+    otherExpenses: rev.otherExpenses.map((l) => ({ ...structuredClone(l), id: ids.nextId() })),
+  };
+}
+
 function remapProjectIds(source: Project, ids: IdSource): Project {
   const newProjectId = ids.nextId();
   const revisionIdMap = new Map(source.revisions.map((r) => [r.id, ids.nextId()]));
   const newRevisions = source.revisions.map((rev) => ({
-    ...structuredClone(rev),
+    ...remapRevisionChildIds(rev, ids),
     id: revisionIdMap.get(rev.id)!,
     projectId: newProjectId,
   }));

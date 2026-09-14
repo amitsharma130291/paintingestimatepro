@@ -24,6 +24,23 @@ function makeProject(id: string, ids: ReturnType<typeof sequentialIdSource>): Pr
   return { id, title: `Project ${id}`, revisions: [revision], activeRevisionId: revision.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now(), version: 1 };
 }
 
+describe('BACK-D07: exportBackup preserves accumulated importProvenance, never resets it (item 6)', () => {
+  it('REGRESSION: a real, non-empty existing provenance list is included in the export, not silently wiped to []', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const existingProvenance = [{ exportId: 'export-old', sourceProjectId: 'src-1', copiedProjectId: 'p1', importedAt: '2026-01-01T00:00:00.000Z' }];
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [project], ids, existingProvenance);
+    expect(envelope.importProvenance).toEqual(existingProvenance);
+  });
+
+  it('defaults to an empty list when the installation has no accumulated provenance yet', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [project], ids);
+    expect(envelope.importProvenance).toEqual([]);
+  });
+});
+
 describe('BACK-D11: validation rejects before any write', () => {
   it('rejects a wrong/missing schemaVersion', () => {
     const result = validateBackupEnvelope({ schemaVersion: 1, businessSettings: {}, paintVariants: [], projects: [] }, 100);
@@ -395,6 +412,35 @@ describe('BACK-D10: import-as-copies — provenance-based skip, full ID remap in
     // The actual review's baseline must point at the COPIED revision id, not the original.
     expect(copy.actualReviews[0].baselineIssuedRevisionId).toBe(copy.revisions[0].id);
     expect(result.provenance[0]).toMatchObject({ exportId: 'export-1', sourceProjectId: 'p1', copiedProjectId: copy.id });
+  });
+
+  it('REGRESSION (item 6): remaps room and surface IDs too, and rewrites their cross-references, not just project/revision IDs', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const room = { id: 'room-1', name: 'Bedroom', lengthFt: '10', widthFt: '10', heightFt: '8', deductionEnabled: false, openingMode: 'quick' as const, quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: ['surf-1'] };
+    const surface = { id: 'surf-1', roomId: 'room-1', kind: 'wall' as const, enabled: true, measurementMode: 'roomDerived' as const, areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: null, loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
+    const withRoomAndSurface: Project = { ...project, revisions: [{ ...project.revisions[0], rooms: [room], surfaces: [surface] }] };
+
+    const result = planImportAsCopies([withRoomAndSurface], 'export-1', new Set(), ids);
+    const copy = result.projects[0];
+    const copiedRoom = copy.revisions[0].rooms[0];
+    const copiedSurface = copy.revisions[0].surfaces[0];
+
+    // Fresh IDs throughout — never the original room-1/surf-1.
+    expect(copiedRoom.id).not.toBe('room-1');
+    expect(copiedSurface.id).not.toBe('surf-1');
+    // Cross-references rewritten to point at each other's NEW ids.
+    expect(copiedRoom.surfaceIds).toEqual([copiedSurface.id]);
+    expect(copiedSurface.roomId).toBe(copiedRoom.id);
+  });
+
+  it('a paint-catalog reference (surface.paintVariantId) is preserved as a legitimate shared reference, never remapped', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const surface = { id: 'surf-1', roomId: null, kind: 'wall' as const, enabled: true, measurementMode: 'manual' as const, areaFt2: '100', trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: '0.1', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
+    const withSurface: Project = { ...project, revisions: [{ ...project.revisions[0], surfaces: [surface] }] };
+    const result = planImportAsCopies([withSurface], 'export-1', new Set(), ids);
+    expect(result.projects[0].revisions[0].surfaces[0].paintVariantId).toBe('paint-1'); // unchanged
   });
 
   it('drops (never carries over) an actual review whose baseline cannot be remapped, instead of retaining a dangling reference', () => {
