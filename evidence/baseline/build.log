@@ -1,0 +1,24 @@
+[2m22:21:45[22m [34m[types][39m Generated [2m96ms[22m
+[2m22:21:45[22m [34m[build][39m output: [34m"static"[39m
+[2m22:21:45[22m [34m[build][39m mode: [34m"static"[39m
+[2m22:21:45[22m [34m[build][39m directory: [34mC:\Users\amits\SEOSites\paintingestimatepro\dist\[39m
+[2m22:21:45[22m [34m[build][39m Collecting build info...
+[2m22:21:45[22m [34m[build][39m [32m✓ Completed in 151ms.[39m
+[2m22:21:45[22m [34m[build][39m Building static entrypoints...
+[2m22:21:46[22m [34m[vite][39m [32m✓ built in 441ms[39m
+[2m22:21:46[22m [34m[vite][39m [32m✓ built in 138ms[39m
+[2m22:21:46[22m [34m[build][39m Rearranging server assets...
+
+[42m[30m generating static routes [39m[49m
+[2m22:21:46[22m   [34m├─[39m [2m/app/index.html[22m [2m(+14ms)[22m 
+[2m22:21:46[22m   [34m├─[39m [2m/free/estimate-template/index.html[22m [2m(+18ms)[22m 
+[2m22:21:46[22m   [34m├─[39m [2m/free/interior-calculator/index.html[22m [2m(+9ms)[22m 
+[2m22:21:46[22m   [34m├─[39m [2m/free/job-cost-calculator/index.html[22m [2m(+7ms)[22m 
+[2m22:21:46[22m   [34m├─[39m [2m/index.html[22m [2m(+7ms)[22m 
+[2m22:21:46[22m [32m✓ Completed in 75ms.
+[39m
+[2m22:21:46[22m [34m[build][39m [32m✓ Completed in 719ms.[39m
+[2m22:21:46[22m [34m[@astrojs/sitemap][39m `sitemap-index.xml` created at `dist`
+[2m22:21:46[22m [34m[build][39m 5 page(s) built in [1m889ms[22m
+[2m22:21:46[22m [34m[build][39m [1mComplete![22m
+BUILD_EXIT=0
