@@ -158,7 +158,21 @@ Four real defects were found during this implementation — three via automated 
 
 ---
 
-## 11. Free job-cost calculator showed a "complete" $0.00 result before any input (JOB-001/002)
+## 11. Actual-cost review was never persisted (ACT-013/014) — verified live
+
+**Found by:** The parallel test-catalogue audit (code reading: the actuals tab's state lived entirely in `useState` with no write path to `project.actualReviews` or IndexedDB).
+
+**Reproduction (confirmed live this session):** Recorded a $400 confirmed "materials" actual against an issued estimate, reloaded the entire page (`navigate` to `/app` fresh), reopened the same project's Actual review tab — before the fix, this would show `0/4` confirmed and an empty amount, exactly as if nothing had ever been entered.
+
+**Fix:** `src/domain/project.ts`'s `upsertActualReview` (append-or-replace, same shape as `upsertRevision`) plus a `saveActuals()` handler and a `useEffect` that loads any existing `ActualReview` for the current issued revision when a project is opened.
+
+**Regression test:** `tests/domain/lifecycle.test.ts` — "upsertActualReview: ACT-013/014 regression" (2 cases: first save, update-in-place).
+
+**Verification — live, after a full page reload:** confirmed "materials" with amount $400, clicked "Save actuals," reloaded the page from scratch (`navigate`, not just re-render), reopened the same project's Actual review tab, and confirmed via direct DOM inspection that the amount field read back `"400"` and the confirmed-count read `1/4` — proving the round-trip through real IndexedDB, not just in-memory state.
+
+---
+
+## 12. Free job-cost calculator showed a "complete" $0.00 result before any input (JOB-001/002)
 
 **Found by:** The parallel test-catalogue audit, reading `JobCostCalculator.tsx`'s source and noticing it contradicted its OWN header comment ("a blank field is genuinely 'missing' (not silently 0) until the user types something"). Confirmed live in the browser this session: loading `/free/job-cost-calculator` fresh showed a full costed result ($0.00 everywhere) immediately, before typing anything.
 
