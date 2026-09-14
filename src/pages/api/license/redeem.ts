@@ -34,6 +34,11 @@ export const POST: APIRoute = async ({ request }) => {
     if (status !== 'succeeded') {
       return jsonResponse({ ok: false, status: status || 'unknown' });
     }
+    // See verify.ts: payment.status stays "succeeded" even after a full
+    // refund — refund_status is a separate field and must be checked too.
+    if (payment.refund_status === 'full') {
+      return jsonResponse({ ok: false, status: 'refunded' });
+    }
     return jsonResponse({ ok: true, paymentId: payment.payment_id, licenseKey: buildLicenseKey(payment.payment_id) });
   } catch (err) {
     console.error('License redeem failed:', err);

@@ -125,7 +125,11 @@ export async function redeemLicenseKey(licenseKey: string): Promise<StoredPaymen
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Couldn't verify that license key.");
   if (!data.ok) {
-    const messages: Record<string, string> = { failed: "That payment hasn't gone through yet." };
+    const messages: Record<string, string> = {
+      failed: "That payment hasn't gone through yet.",
+      cancelled: 'That checkout was cancelled — no charge was made.',
+      refunded: 'This purchase was refunded, so the license is no longer active. Contact support if that seems wrong.',
+    };
     throw new Error(messages[data.status] || "That license key isn't valid yet.");
   }
   const payment: StoredPayment = { sessionId: null, paymentId: data.paymentId, licenseKey: data.licenseKey };

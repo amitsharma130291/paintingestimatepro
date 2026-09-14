@@ -27,7 +27,17 @@ export default function ProGate() {
           return;
         }
         const access = await verifyAccess();
-        if (!cancelled) setState(access ? { status: 'unlocked' } : { status: 'locked', note: resolved && 'failed' in resolved ? "That checkout hasn't completed yet — if you just paid, give it a moment and refresh." : undefined });
+        if (access) {
+          if (!cancelled) setState({ status: 'unlocked' });
+          return;
+        }
+        const statusNotes: Record<string, string> = {
+          cancelled: 'That checkout was cancelled — no charge was made.',
+          refunded: 'This purchase was refunded, so Pro access is no longer active. Contact support if that seems wrong.',
+        };
+        const status = resolved && 'failed' in resolved ? resolved.status : undefined;
+        const note = status ? statusNotes[status] ?? "That checkout hasn't completed yet — if you just paid, give it a moment and refresh." : undefined;
+        if (!cancelled) setState({ status: 'locked', note });
       } catch {
         if (!cancelled) setState({ status: 'locked' });
       }

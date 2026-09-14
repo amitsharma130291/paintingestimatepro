@@ -41,6 +41,13 @@ export const GET: APIRoute = async ({ url }) => {
     if (status !== 'succeeded') {
       return jsonResponse({ ok: false, status: status || 'unknown' });
     }
+    // Dodo tracks a refund as a SEPARATE field, not a payment.status value
+    // — payment.status stays "succeeded" even after a full refund. A
+    // partial refund doesn't revoke access (a merchant policy call, not an
+    // API fact); a full refund does.
+    if (payment.refund_status === 'full') {
+      return jsonResponse({ ok: false, status: 'refunded' });
+    }
 
     const licenseKey = buildLicenseKey(payment.payment_id);
 
