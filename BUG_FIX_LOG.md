@@ -236,6 +236,24 @@ Separately: "Duplicate" only re-assigned line IDs on the SAME in-memory form (`s
 
 ---
 
+## 16. (Serious, security) A forged localStorage entry unlocked Pro forever, because `verifyAccess()` couldn't tell a network outage apart from the server rejecting the payment (ACCESS-002)
+
+**Found by:** Live browser testing while implementing UX-013's free-to-Pro handoff — planted a completely fabricated `pep_payment_v1` value in `localStorage` (`{paymentId: 'forged_fake_payment_id', ...}`) via devtools/`javascript_tool`, purely to check the handoff prompt's rendering, and observed the Pro workspace unlock instead of the paywall.
+
+**Reproduction:** With no real Dodo credentials configured (this repo's actual current state), write any `pep_payment_v1` value to `localStorage` and load `/app`. Before this fix: Pro unlocked immediately, regardless of the fabricated payment id, because `/api/checkout/verify` genuinely can't reach Dodo (no API key) and returns a 500 — and `verifyAccess()`'s catch block treated that exactly like a dropped network connection.
+
+**Root cause:** `src/lib/license.ts`'s `verify()` threw a single generic `Error` for BOTH a real network failure (the request never reaching the server) AND a definitive server response (500 "not configured," a 404, a "refunded" status, anything). `verifyAccess()`'s catch block then applied its "fail open for a paying customer during a network hiccup" policy to both cases identically — so ANY server-side error, including permanent misconfiguration, silently became "assume they're still entitled," which is exactly the ACCESS-002 failure mode ("paid flag manually written in localStorage — not accepted as verified entitlement") the catalogue explicitly names.
+
+**Fix:** Introduced `NetworkFailure`, thrown only when `fetch()` itself rejects (the request never got a response at all). Any response the server actually sent — 4xx, 5xx, a parsed `{ok:false}` body — now clears the stored payment and denies access, unconditionally. Only a genuine `NetworkFailure` still fails open on a previously-confirmed payment.
+
+**Regression test:** `tests/lib/clientLicense.test.ts` (5 tests, with an in-memory `localStorage`/`sessionStorage` polyfill and a stubbed `fetch`) — explicitly reproduces the forged-entry-against-a-server-error scenario and asserts it's now rejected and cleared, alongside a genuine `fetch()`-throws case still failing open, and a real refused/succeeded response each behaving correctly.
+
+**Verification — live, both before and after the fix:** planted the identical forged `pep_payment_v1` record in the real browser both times. Before the fix: `/app` showed the full unlocked Pro workspace. After the fix (same forged record, never cleared in between): `/app` correctly showed the paywall again, and `localStorage.getItem('pep_payment_v1')` read back `null` — confirming the forged record was actively cleared, not just ignored.
+
+**Verification (automated):** 219/219 tests pass (5 new); `astro check` 0 errors; `astro build` succeeds. This also corrects the earlier (incorrect) `ACCEPTANCE_MATRIX`/CSV claim that ACCESS-002 was already safely implemented — it was not, until this fix.
+
+---
+
 ## Not a bug (documented false alarm)
 
 While writing `PROPERTY 11` (application labor linearity), a strict `.equals()` assertion failed on the counterexample `area=1, coats=1, throughput=290`. Investigation showed `area*coats/290` is a non-terminating decimal (290 = 2×5×29); computing it once and doubling versus computing `(2×area)/290` directly are two independently-rounded results at the engine's 50-significant-digit precision floor, differing by `1e-52` — twelve digits past the spec's required 40-significant-digit floor and financially meaningless at any real display precision. The linearity formula itself is correct; the test's exactness requirement was wrong. Fixed by using a `1e-40` tolerance instead of bit-exact equality. See the comment in `tests/property/geometry.property.test.ts` for the full reasoning — recorded here so it isn't mistaken for an unresolved defect.

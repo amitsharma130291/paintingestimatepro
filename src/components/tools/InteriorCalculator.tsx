@@ -4,26 +4,54 @@ import { parseDecimalField, parseCountField } from '../../engine/parse';
 import { grossWallArea, ceilingArea, quickOpeningArea, netWallArea, clampForPreview } from '../../engine/geometry';
 import { rawDemandGal, purchasedGallons } from '../../engine/paint';
 import { wallOrCeilingHours } from '../../engine/labor';
+import { writeInteriorHandoff } from '../../domain/interiorHandoff';
 
 /** Free single-room interior calculator (tool-specs/03). Walls + optional
  * ceiling, one shared paint variant, quick openings only — the documented
  * v1 launch reduction. */
+// tool-specs/03: "heightFt default 8"; "Quick doorCount/windowCount default
+// 0"; length/width have no stated default (required, blank until entered).
+// coverage 350 / price 45 are the tool's own labeled SAMPLE assumptions
+// (distinct from the 20x16x9/2-door/3-window/$42 worked fixture in the
+// spec, which "Load sample data" below reproduces exactly for a user who
+// wants to see the tool work before entering their own room).
+const DEFAULTS = {
+  length: '', width: '', height: '8', includeCeiling: false, deductOpenings: true,
+  doorCount: '0', windowCount: '0', coats: '2', coverage: '350', wastePercent: '10', pricePerGal: '45',
+  calculateLabor: false, hourlyRate: '32', wallThroughput: '150', ceilingThroughput: '120',
+};
+const FIXTURE_SAMPLE = { length: '20', width: '16', height: '9', doorCount: '2', windowCount: '3', coats: '2', coverage: '350', wastePercent: '10', pricePerGal: '42' };
+
 export default function InteriorCalculator() {
-  const [length, setLength] = useState('20');
-  const [width, setWidth] = useState('16');
-  const [height, setHeight] = useState('9');
-  const [includeCeiling, setIncludeCeiling] = useState(false);
-  const [deductOpenings, setDeductOpenings] = useState(true);
-  const [doorCount, setDoorCount] = useState('2');
-  const [windowCount, setWindowCount] = useState('3');
-  const [coats, setCoats] = useState('2');
-  const [coverage, setCoverage] = useState('350');
-  const [wastePercent, setWastePercent] = useState('10');
-  const [pricePerGal, setPricePerGal] = useState('45');
-  const [calculateLabor, setCalculateLabor] = useState(false);
-  const [hourlyRate, setHourlyRate] = useState('32');
-  const [wallThroughput, setWallThroughput] = useState('150');
-  const [ceilingThroughput, setCeilingThroughput] = useState('120');
+  const [length, setLength] = useState(DEFAULTS.length);
+  const [width, setWidth] = useState(DEFAULTS.width);
+  const [height, setHeight] = useState(DEFAULTS.height);
+  const [includeCeiling, setIncludeCeiling] = useState(DEFAULTS.includeCeiling);
+  const [deductOpenings, setDeductOpenings] = useState(DEFAULTS.deductOpenings);
+  const [doorCount, setDoorCount] = useState(DEFAULTS.doorCount);
+  const [windowCount, setWindowCount] = useState(DEFAULTS.windowCount);
+  const [coats, setCoats] = useState(DEFAULTS.coats);
+  const [coverage, setCoverage] = useState(DEFAULTS.coverage);
+  const [wastePercent, setWastePercent] = useState(DEFAULTS.wastePercent);
+  const [pricePerGal, setPricePerGal] = useState(DEFAULTS.pricePerGal);
+  const [calculateLabor, setCalculateLabor] = useState(DEFAULTS.calculateLabor);
+  const [hourlyRate, setHourlyRate] = useState(DEFAULTS.hourlyRate);
+  const [wallThroughput, setWallThroughput] = useState(DEFAULTS.wallThroughput);
+  const [ceilingThroughput, setCeilingThroughput] = useState(DEFAULTS.ceilingThroughput);
+
+  function loadSampleData() {
+    setLength(FIXTURE_SAMPLE.length);
+    setWidth(FIXTURE_SAMPLE.width);
+    setHeight(FIXTURE_SAMPLE.height);
+    setIncludeCeiling(false);
+    setDeductOpenings(true);
+    setDoorCount(FIXTURE_SAMPLE.doorCount);
+    setWindowCount(FIXTURE_SAMPLE.windowCount);
+    setCoats(FIXTURE_SAMPLE.coats);
+    setCoverage(FIXTURE_SAMPLE.coverage);
+    setWastePercent(FIXTURE_SAMPLE.wastePercent);
+    setPricePerGal(FIXTURE_SAMPLE.pricePerGal);
+  }
 
   const result = useMemo(() => {
     const pLength = parseDecimalField(length);
@@ -36,9 +64,15 @@ export default function InteriorCalculator() {
     const pWaste = parseDecimalField(wastePercent);
     const pPrice = parseDecimalField(pricePerGal);
 
+    // Missing (blank) required fields are guidance, not an error — they're
+    // expected on first render now that length/width have no default value
+    // (tool-specs/03: required, no stated default). Only malformed/
+    // non-positive counts as an actual validation error.
+    const missing = pLength.kind === 'missing' || pWidth.kind === 'missing';
+
     const errors: string[] = [];
-    if (pLength.kind !== 'valid' || pLength.value.lessThanOrEqualTo(0)) errors.push('Room length must be a positive number.');
-    if (pWidth.kind !== 'valid' || pWidth.value.lessThanOrEqualTo(0)) errors.push('Room width must be a positive number.');
+    if (pLength.kind === 'invalid' || (pLength.kind === 'valid' && pLength.value.lessThanOrEqualTo(0))) errors.push('Room length must be a positive number.');
+    if (pWidth.kind === 'invalid' || (pWidth.kind === 'valid' && pWidth.value.lessThanOrEqualTo(0))) errors.push('Room width must be a positive number.');
     if (pHeight.kind !== 'valid' || pHeight.value.lessThanOrEqualTo(0)) errors.push('Wall height must be a positive number.');
     if (pDoors.kind === 'invalid') errors.push(`Doors: ${pDoors.message}`);
     if (pWindows.kind === 'invalid') errors.push(`Windows: ${pWindows.message}`);
@@ -76,7 +110,7 @@ export default function InteriorCalculator() {
       pDoors.kind !== 'valid' ||
       pWindows.kind !== 'valid'
     ) {
-      return { errors } as const;
+      return { errors, missing } as const;
     }
 
     const gross = grossWallArea(pLength.value, pWidth.value, pHeight.value);
@@ -121,7 +155,12 @@ export default function InteriorCalculator() {
     <div className="card p-6 sm:p-7">
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div className="space-y-3">
-          <h3 className="text-base font-semibold text-ink">Room</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-ink">Room</h3>
+            <button type="button" className="text-link text-xs" onClick={loadSampleData}>
+              Load sample data (20×16×9 room)
+            </button>
+          </div>
           <div className="grid grid-cols-3 gap-2">
             <Field label="Length (ft)" value={length} onChange={setLength} />
             <Field label="Width (ft)" value={width} onChange={setWidth} />
@@ -141,12 +180,13 @@ export default function InteriorCalculator() {
           )}
 
           <h3 className="pt-2 text-base font-semibold text-ink">Paint</h3>
+          <p className="text-xs text-ink-soft">Coverage and price below start as labeled sample values — edit them for your actual product.</p>
           <div className="grid grid-cols-3 gap-2">
             <Field label="Coats" value={coats} onChange={setCoats} />
-            <Field label="Coverage (sqft/gal)" value={coverage} onChange={setCoverage} />
+            <Field label="Coverage (sqft/gal, sample)" value={coverage} onChange={setCoverage} />
             <Field label="Waste %" value={wastePercent} onChange={setWastePercent} />
           </div>
-          <Field label="Price per gallon ($)" value={pricePerGal} onChange={setPricePerGal} />
+          <Field label="Price per gallon ($, sample)" value={pricePerGal} onChange={setPricePerGal} />
 
           <label className="flex items-center gap-2 pt-2 text-sm text-ink">
             <input type="checkbox" checked={calculateLabor} onChange={(e) => setCalculateLabor(e.target.checked)} /> Estimate labor
@@ -162,7 +202,9 @@ export default function InteriorCalculator() {
 
         <div>
           <h3 className="text-base font-semibold text-ink">Result</h3>
-          {result.errors.length > 0 ? (
+          {result.errors.length === 0 && 'missing' in result && result.missing ? (
+            <p className="mt-3 text-sm text-ink-soft">Enter the room's length and width to see your estimate — or load the sample room below.</p>
+          ) : result.errors.length > 0 ? (
             <div className="mt-3 rounded-[calc(var(--radius-card)-8px)] border border-bad-line bg-bad-soft p-3 text-sm text-bad">
               {result.errors.map((e, i) => (
                 <p key={i}>{e}</p>
@@ -185,6 +227,17 @@ export default function InteriorCalculator() {
               )}
               <Row label="Total" value={`$${result.total!.toFixed(2)}`} strong />
               <p className="pt-2 text-xs text-ink-soft">{result.laborCost ? 'Paint + entered labor estimate; excludes other supplies, overhead, and tax.' : 'Paint materials only.'}</p>
+              <button
+                type="button"
+                className="btn btn-secondary mt-2"
+                onClick={() => {
+                  writeInteriorHandoff({ lengthFt: length, widthFt: width, heightFt: height, includeCeiling, deductOpenings, doorCount, windowCount, coats, coverageFt2PerGal: coverage, pricePerGal: pricePerGal, wasteRatioPercent: wastePercent });
+                  window.open('/app?handoff=interior', '_blank');
+                }}
+              >
+                Continue this room in Pro →
+              </button>
+              <p className="text-xs text-ink-soft">Opens Pro in a new tab with these room dimensions and paint pre-filled — this result stays right here. Pro access is still required there; nothing here unlocks it.</p>
             </dl>
           )}
         </div>

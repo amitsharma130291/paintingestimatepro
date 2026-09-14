@@ -12,6 +12,7 @@ import { previewRateRefresh, applyRateRefresh, type RateRefreshDiff, type Varian
 import { buildCustomerDocument } from '../../../domain/customerDocument';
 import { exportBackup, validateBackupEnvelope, planRestoreMerge } from '../../../domain/backup';
 import { defaultIdSource } from '../../../domain/ids';
+import { readInteriorHandoff, clearInteriorHandoff, buildProjectFromInteriorHandoff, type InteriorHandoffPayload, type HandoffFieldNote } from '../../../domain/interiorHandoff';
 import { ConflictError } from '../../../storage/db';
 import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveProjects } from './proStore';
 
@@ -80,6 +81,8 @@ export default function ProApp() {
     overhead: { confirmed: false, amount: '' },
   });
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [pendingHandoff, setPendingHandoff] = useState<InteriorHandoffPayload | null>(null);
+  const [handoffPreviewNotes, setHandoffPreviewNotes] = useState<HandoffFieldNote[] | null>(null);
 
   useEffect(() => {
     loadSnapshot()
@@ -92,7 +95,43 @@ export default function ProApp() {
         /* fresh install — defaults stand */
       })
       .finally(() => setLoading(false));
+    // UX-013: this component only ever renders after ProGate's own real
+    // entitlement check has passed — reading a pending free-tool handoff
+    // here never grants access on its own, it only offers to import data
+    // once the visitor is already unlocked through the normal paywall.
+    setPendingHandoff(readInteriorHandoff());
   }, []);
+
+  function declineHandoff() {
+    clearInteriorHandoff();
+    setPendingHandoff(null);
+  }
+
+  async function acceptHandoff() {
+    if (!pendingHandoff) return;
+    const liveSnapshot = currentLiveSnapshot(`live-${now()}`);
+    const built = buildProjectFromInteriorHandoff(pendingHandoff, liveSnapshot, ids);
+    const nextCatalog = [...catalog, built.variant];
+    const revisionWithVariant = { ...built.revision, activeRateSnapshot: { ...built.revision.activeRateSnapshot, paintVariants: [...built.revision.activeRateSnapshot.paintVariants, built.variant] } };
+    const project: Project = { id: revisionWithVariant.projectId, title: 'Room from free calculator', revisions: [revisionWithVariant], activeRevisionId: revisionWithVariant.id, actualReviews: [], createdAt: now(), updatedAt: now() };
+    setCatalog(nextCatalog);
+    setProjects((ps) => [...ps, project]);
+    try {
+      await savePaintVariants(nextCatalog);
+      await saveProjectSafely(project, null);
+      setSaveMessage('Imported the room from your free calculator result.');
+    } catch {
+      setSaveMessage('Imported locally, but saving failed — try Save draft again from the project.');
+    }
+    setActiveProjectId(project.id);
+    setDraftEdit(revisionWithVariant);
+    setDraftBaselineUpdatedAt(null);
+    setCustomPriceRaw('');
+    setTab('projects');
+    setHandoffPreviewNotes(built.unsupportedFieldNotes);
+    clearInteriorHandoff();
+    setPendingHandoff(null);
+  }
 
   async function persistSettings(next: BusinessSettings) {
     setSettings(next);
@@ -471,6 +510,34 @@ export default function ProApp() {
         ))}
       </div>
       {saveMessage && <p className="mt-3 text-xs text-ink-soft print:hidden">{saveMessage}</p>}
+      {pendingHandoff && (
+        <div className="mt-3 rounded-btn border border-line bg-line-soft p-4 text-sm print:hidden">
+          <p className="font-semibold">Bring in the room from your free calculator result?</p>
+          <p className="mt-1 text-ink-soft">
+            {pendingHandoff.lengthFt}×{pendingHandoff.widthFt}×{pendingHandoff.heightFt} ft, {pendingHandoff.doorCount} door(s), {pendingHandoff.windowCount} window(s), {pendingHandoff.coats} coats, ${pendingHandoff.pricePerGal}/gal at {pendingHandoff.coverageFt2PerGal} sqft/gal.
+            {pendingHandoff.includeCeiling && ' Ceiling included.'} This creates a new project — your free-tool result is untouched either way.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" className="btn btn-secondary" onClick={declineHandoff}>Not now</button>
+            <button type="button" className="btn btn-primary" onClick={acceptHandoff}>Import into a new project</button>
+          </div>
+        </div>
+      )}
+      {handoffPreviewNotes && handoffPreviewNotes.length > 0 && (
+        <div className="mt-3 rounded-btn border border-warn-line bg-warn-soft p-3 text-xs text-warn print:hidden">
+          <p className="font-semibold">Imported — a couple of things to know:</p>
+          <ul className="mt-1 list-disc pl-4">
+            {handoffPreviewNotes.map((n, i) => (
+              <li key={i}>
+                <strong>{n.field}:</strong> {n.note}
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="text-link mt-1 text-xs" onClick={() => setHandoffPreviewNotes(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
       {conflict && (
         <div className="mt-3 rounded-btn border border-warn-line bg-warn-soft p-4 text-sm text-warn print:hidden">
           <p className="font-semibold">This project was changed elsewhere before your save landed.</p>

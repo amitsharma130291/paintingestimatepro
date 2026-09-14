@@ -59,6 +59,18 @@ export function clearStoredPayment(): void {
   localStorage.removeItem(PAYMENT_KEY);
 }
 
+/**
+ * ACCESS-002 regression: a genuine network outage (the request never
+ * reaches the server at all) must fail OPEN for a previously-confirmed
+ * payment, but a response the server actually sent — "not configured,"
+ * "not found," a 4xx/5xx of any kind — is a definitive answer and must
+ * fail CLOSED. Collapsing both into one generic Error let a forged
+ * localStorage entry unlock access for good on ANY server-side error,
+ * including this environment's completely unconfigured state. Thrown only
+ * for a real network failure (fetch() itself rejects); see verify().
+ */
+export class NetworkFailure extends Error {}
+
 async function verify({ sessionId, paymentId, sendEmail = false }: { sessionId?: string | null; paymentId?: string | null; sendEmail?: boolean }): Promise<{ ok: boolean; status?: string; paymentId?: string; licenseKey?: string }> {
   const params = new URLSearchParams();
   if (sessionId) params.set('sessionId', sessionId);
@@ -66,7 +78,12 @@ async function verify({ sessionId, paymentId, sendEmail = false }: { sessionId?:
   // Only the "we just came back from checkout" call sets this — a routine
   // access re-check must never re-trigger a purchase-confirmation email.
   if (sendEmail) params.set('sendEmail', '1');
-  const res = await fetch(`/api/checkout/verify?${params}`);
+  let res: Response;
+  try {
+    res = await fetch(`/api/checkout/verify?${params}`);
+  } catch (networkErr) {
+    throw new NetworkFailure(networkErr instanceof Error ? networkErr.message : 'Network request failed.');
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Couldn't verify payment.");
   return data;
@@ -165,11 +182,17 @@ export async function verifyAccess(): Promise<StoredPayment | null> {
       return null;
     }
     return stored;
-  } catch {
-    // A network hiccup shouldn't lock out someone who already paid — fail
-    // open on the last-known-good record. Real fraud (never actually paid)
-    // is still caught, because resolvePendingCheckout() never stores a
-    // payment unless Dodo confirmed it at least once.
-    return stored;
+  } catch (err) {
+    // BUG_FIX_LOG #16 (ACCESS-002): only a genuine network failure (the
+    // request never reached the server) fails open — a real response the
+    // server sent, for ANY reason (misconfigured, payment not found,
+    // refunded, a 500), must fail CLOSED. Before this fix, every non-2xx
+    // response was treated identically to "the network is down," so a
+    // forged localStorage entry unlocked access for good the moment the
+    // server couldn't complete a real check — including this repo's own
+    // completely-unconfigured state.
+    if (err instanceof NetworkFailure) return stored;
+    clearStoredPayment();
+    return null;
   }
 }
