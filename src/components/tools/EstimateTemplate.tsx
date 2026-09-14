@@ -12,29 +12,9 @@ import {
   type EstimateDraft,
   type Line,
 } from './estimateTemplateLogic';
+import { loadStoredDrafts, persistDrafts, type PersistResult } from './estimateTemplateStorage';
 
 const ids = defaultIdSource;
-const STORAGE_KEY = 'pep_free_estimate_drafts_v1';
-
-function loadStoredDrafts(): { drafts: EstimateDraft[]; activeDraftId: string } | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.drafts) || parsed.drafts.length === 0) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function persistDrafts(drafts: EstimateDraft[], activeDraftId: string) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ drafts, activeDraftId }));
-  } catch {
-    /* storage unavailable (private mode, quota) — draft still works for this session */
-  }
-}
 
 /**
  * Free manual estimate template (tool-specs/01). Supports multiple
@@ -48,19 +28,34 @@ export default function EstimateTemplate() {
   const [drafts, setDrafts] = useState<EstimateDraft[]>(() => [newDraft(ids)]);
   const [activeDraftId, setActiveDraftId] = useState<string>(() => drafts[0].id);
   const [loaded, setLoaded] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<PersistResult>({ status: 'saved' });
+  const [loadNotice, setLoadNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = loadStoredDrafts();
-    if (stored) {
-      setDrafts(stored.drafts);
-      setActiveDraftId(stored.drafts.some((d) => d.id === stored.activeDraftId) ? stored.activeDraftId : stored.drafts[0].id);
+    const result = loadStoredDrafts();
+    if (result.status === 'loaded') {
+      setDrafts(result.drafts);
+      setActiveDraftId(result.drafts.some((d) => d.id === result.activeDraftId) ? result.activeDraftId : result.drafts[0].id);
+    } else if (result.status === 'corrupted') {
+      // Do not silently replace malformed data while claiming a normal
+      // fresh start — say so, and name where the original bytes were kept.
+      setLoadNotice(
+        result.backupKey
+          ? "We couldn't read your previous save (it looks corrupted) — starting a fresh estimate. The original data was kept for reference in your browser's local storage; contact support if you need help recovering it."
+          : "We couldn't read your previous save (it looks corrupted) — starting a fresh estimate."
+      );
     }
     setLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function trySave(nextDrafts: EstimateDraft[], nextActiveDraftId: string) {
+    setSaveStatus(persistDrafts(nextDrafts, nextActiveDraftId));
+  }
+
   useEffect(() => {
-    if (loaded) persistDrafts(drafts, activeDraftId);
+    if (loaded) trySave(drafts, activeDraftId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drafts, activeDraftId, loaded]);
 
   const draft = drafts.find((d) => d.id === activeDraftId) ?? drafts[0];
@@ -134,8 +129,17 @@ export default function EstimateTemplate() {
             + New estimate
           </button>
         </div>
+        {loadNotice && <p className="mt-2 rounded-btn border border-warn-line bg-warn-soft p-2 text-xs text-warn">{loadNotice}</p>}
+        {saveStatus.status === 'failed' && (
+          <p className="mt-2 rounded-btn border border-warn-line bg-warn-soft p-2 text-xs text-warn">
+            Not saved — your browser blocked local storage (private browsing, or storage is full). Your current changes are still here in this tab; print or export before closing, since they will be lost on reload.{' '}
+            <button type="button" className="text-link" onClick={() => trySave(drafts, activeDraftId)}>
+              Retry saving
+            </button>
+          </p>
+        )}
         <p className="mt-2 text-xs text-ink-soft">
-          Estimate {draft.estimateNumber || '(unsaved)'} · saved locally in your browser.
+          Estimate {draft.estimateNumber || '(unsaved)'} · {saveStatus.status === 'saved' ? 'saved locally in your browser.' : 'not saved yet.'}
           {drafts.length > 1 && (
             <button type="button" className="text-link ml-2 text-xs" onClick={() => deleteEstimate(draft.id)}>
               Delete this estimate
