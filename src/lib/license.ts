@@ -168,31 +168,59 @@ export async function requestLicenseRecovery(email: string): Promise<string> {
 }
 
 /**
+ * The result of an access check — deliberately three-way, not a boolean or
+ * a nullable payment, per ACCESS_SPEC.md's ban on "a mock localStorage
+ * paid=true flag as completed access control":
+ *
+ * - `granted`: a live server response just confirmed this payment.
+ * - `noAccess`: no stored payment, OR the server gave a definitive answer
+ *   that it's invalid/revoked/refunded/wrong-product — safe to say so and
+ *   safe to have cleared the stored record.
+ * - `unavailable`: verification could not be completed right now (a
+ *   genuine network failure). This is NOT access — the caller must not
+ *   unlock the workspace — but it is also not a confirmed rejection, so
+ *   the stored payment and all local project data are left untouched for
+ *   a retry once connectivity returns.
+ */
+export type AccessCheck = { status: 'granted'; payment: StoredPayment } | { status: 'noAccess' } | { status: 'unavailable' };
+
+/**
  * Call before granting access to the Pro workspace. Re-checks the stored
  * payment live against Dodo rather than trusting localStorage indefinitely
  * — there's no database, so this call *is* the license check, every time.
+ *
+ * ACCESS-014 (serious, security): this used to return the raw stored
+ * record whenever the live check hit a `NetworkFailure`, on the theory
+ * that a real network outage shouldn't lock out a paying customer. But
+ * `stored` is just whatever the browser's own localStorage currently
+ * holds — fully attacker-editable, with nothing proving it was ever the
+ * product of a real verification. Simulating a network failure (or just
+ * being offline) was enough to turn a completely fabricated record into
+ * permanent access. ACCESS_SPEC.md requires either an authentic
+ * server-signed, public-key-verified offline entitlement (not implemented
+ * — this product has no signing service) or, absent that, successful
+ * ONLINE verification every time. This function now never grants access
+ * on a network failure — it reports `unavailable` instead, preserving the
+ * stored payment (and all local project data, which lives independently
+ * in IndexedDB regardless of gate state) so a real customer can simply
+ * retry once back online, without re-purchasing or losing anything.
  */
-export async function verifyAccess(): Promise<StoredPayment | null> {
+export async function checkAccess(): Promise<AccessCheck> {
   const stored = getStoredPayment();
-  if (!stored) return null;
+  if (!stored) return { status: 'noAccess' };
   try {
     const result = await verify({ sessionId: stored.sessionId, paymentId: stored.paymentId });
     if (!result.ok) {
       clearStoredPayment();
-      return null;
+      return { status: 'noAccess' };
     }
-    return stored;
+    return { status: 'granted', payment: stored };
   } catch (err) {
-    // BUG_FIX_LOG #16 (ACCESS-002): only a genuine network failure (the
-    // request never reached the server) fails open — a real response the
-    // server sent, for ANY reason (misconfigured, payment not found,
-    // refunded, a 500), must fail CLOSED. Before this fix, every non-2xx
-    // response was treated identically to "the network is down," so a
-    // forged localStorage entry unlocked access for good the moment the
-    // server couldn't complete a real check — including this repo's own
-    // completely-unconfigured state.
-    if (err instanceof NetworkFailure) return stored;
+    if (err instanceof NetworkFailure) return { status: 'unavailable' };
+    // A real response the server sent, for ANY reason (misconfigured,
+    // payment not found, a 500), fails CLOSED — see BUG_FIX_LOG #16
+    // (ACCESS-002). Only the network-failure branch above is not this.
     clearStoredPayment();
-    return null;
+    return { status: 'noAccess' };
   }
 }
