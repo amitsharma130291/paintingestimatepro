@@ -8,7 +8,7 @@ import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, 
 import { ENGINE_VERSION } from '../../../domain/entities';
 import { freezeCalculatedOutputs, readFrozenCalculatedOutputs } from '../../../domain/calculationSnapshot';
 import { createSnapshot } from '../../../domain/snapshot';
-import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, upsertRevision, upsertActualReview, supersede } from '../../../domain/project';
+import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, moveRoom, moveSurfaceWithinGroup, upsertRevision, upsertActualReview, supersede } from '../../../domain/project';
 import type { ActualReview } from '../../../domain/entities';
 import { assembleProjectEstimate, type ProjectEstimateAssembly } from '../../../domain/estimateAssembly';
 import { previewRateRefresh, applyRateRefresh, undoRateRefresh as undoRateRefreshDomain, type RateRefreshDiff, type VariantResolution } from '../../../domain/rateRefresh';
@@ -299,6 +299,16 @@ export default function ProApp() {
 
   function deleteRoom(roomId: string) {
     mutateDraft((r) => removeRoom(r, roomId, ids));
+  }
+
+  // PRO-014: display order only -- room/surface ids, surfaceIds cross-
+  // references, and every calculated value are completely unaffected.
+  function moveRoomUpDown(roomId: string, direction: 'up' | 'down') {
+    mutateDraft((r) => moveRoom(r, roomId, direction, ids));
+  }
+
+  function moveSurfaceUpDown(surfaceId: string, direction: 'up' | 'down') {
+    mutateDraft((r) => moveSurfaceWithinGroup(r, surfaceId, direction, ids));
   }
 
   function patchSurface(surfaceId: string, patch: Partial<Surface>) {
@@ -1206,7 +1216,7 @@ export default function ProApp() {
                     <button type="button" className="btn btn-secondary" disabled={snapshotVariants.length === 0} onClick={addRoom}>+ Add room</button>
                   </div>
                   <div className="mt-4 space-y-4">
-                    {draftEdit.rooms.map((room) => (
+                    {draftEdit.rooms.map((room, i) => (
                       <RoomEditor
                         key={room.id}
                         room={room}
@@ -1217,6 +1227,8 @@ export default function ProApp() {
                         onAddCeiling={() => addCeilingToRoom(room)}
                         onPatchSurface={patchSurface}
                         onRemoveSurface={removeSurface}
+                        onMoveUp={i > 0 ? () => moveRoomUpDown(room.id, 'up') : undefined}
+                        onMoveDown={i < draftEdit.rooms.length - 1 ? () => moveRoomUpDown(room.id, 'down') : undefined}
                       />
                     ))}
                   </div>
@@ -1231,8 +1243,16 @@ export default function ProApp() {
                     </div>
                   </div>
                   <div className="mt-4 space-y-3">
-                    {draftEdit.surfaces.filter((s) => s.roomId === null).map((s) => (
-                      <StandaloneSurfaceEditor key={s.id} surface={s} catalog={snapshotVariants} onPatch={(patch) => patchSurface(s.id, patch)} onRemove={() => removeSurface(s.id)} />
+                    {draftEdit.surfaces.filter((s) => s.roomId === null).map((s, i, standalone) => (
+                      <StandaloneSurfaceEditor
+                        key={s.id}
+                        surface={s}
+                        catalog={snapshotVariants}
+                        onPatch={(patch) => patchSurface(s.id, patch)}
+                        onRemove={() => removeSurface(s.id)}
+                        onMoveUp={i > 0 ? () => moveSurfaceUpDown(s.id, 'up') : undefined}
+                        onMoveDown={i < standalone.length - 1 ? () => moveSurfaceUpDown(s.id, 'down') : undefined}
+                      />
                     ))}
                     {draftEdit.surfaces.filter((s) => s.roomId === null).length === 0 && <p className="text-sm text-ink-soft">No standalone trim or door surfaces added.</p>}
                   </div>
@@ -1808,15 +1828,24 @@ export default function ProApp() {
   );
 }
 
-function RoomEditor({ room, surfaces, catalog, onPatchRoom, onDeleteRoom, onAddCeiling, onPatchSurface, onRemoveSurface }: {
+function RoomEditor({ room, surfaces, catalog, onPatchRoom, onDeleteRoom, onAddCeiling, onPatchSurface, onRemoveSurface, onMoveUp, onMoveDown }: {
   room: Room; surfaces: Surface[]; catalog: PaintVariant[];
   onPatchRoom: (patch: Partial<Room>) => void; onDeleteRoom: () => void; onAddCeiling: () => void;
   onPatchSurface: (surfaceId: string, patch: Partial<Surface>) => void; onRemoveSurface: (surfaceId: string) => void;
+  /** PRO-014: undefined at the first/last boundary -- rendered as a
+   * disabled button rather than omitted, so the control's position never
+   * shifts and a keyboard user tabbing through the list always lands on
+   * the same control regardless of a room's position. */
+  onMoveUp?: () => void; onMoveDown?: () => void;
 }) {
   const wall = surfaces.find((s) => s.kind === 'wall');
   const ceiling = surfaces.find((s) => s.kind === 'ceiling');
   return (
     <div className="rounded-btn border border-line p-4">
+      <div className="mb-2 flex items-center justify-end gap-1">
+        <button type="button" className="btn btn-secondary px-2 py-1 text-xs" aria-label={`Move ${room.name || 'room'} up`} disabled={!onMoveUp} onClick={onMoveUp}>↑ Move up</button>
+        <button type="button" className="btn btn-secondary px-2 py-1 text-xs" aria-label={`Move ${room.name || 'room'} down`} disabled={!onMoveDown} onClick={onMoveDown}>↓ Move down</button>
+      </div>
       <TextField label="Room name" value={room.name} onChange={(v) => onPatchRoom({ name: v })} />
       <div className="mt-2 grid grid-cols-3 gap-2">
         <NumField label="Length (ft)" value={room.lengthFt ?? ''} onChange={(v) => onPatchRoom({ lengthFt: v })} />
@@ -1909,14 +1938,21 @@ function SurfaceRow({ label, surface, catalog, onPatch, onRemove }: { label: str
   );
 }
 
-function StandaloneSurfaceEditor({ surface, catalog, onPatch, onRemove }: { surface: Surface; catalog: PaintVariant[]; onPatch: (patch: Partial<Surface>) => void; onRemove: () => void }) {
+function StandaloneSurfaceEditor({ surface, catalog, onPatch, onRemove, onMoveUp, onMoveDown }: {
+  surface: Surface; catalog: PaintVariant[]; onPatch: (patch: Partial<Surface>) => void; onRemove: () => void;
+  onMoveUp?: () => void; onMoveDown?: () => void;
+}) {
   return (
     <div className="rounded-btn border border-line p-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium capitalize">{surface.kind}</span>
-        <label className="flex items-center gap-1 text-xs">
-          <input type="checkbox" checked={surface.enabled} onChange={(e) => onPatch({ enabled: e.target.checked })} /> Enabled
-        </label>
+        <div className="flex items-center gap-2">
+          <button type="button" className="btn btn-secondary px-2 py-1 text-xs" aria-label={`Move this ${surface.kind} up`} disabled={!onMoveUp} onClick={onMoveUp}>↑</button>
+          <button type="button" className="btn btn-secondary px-2 py-1 text-xs" aria-label={`Move this ${surface.kind} down`} disabled={!onMoveDown} onClick={onMoveDown}>↓</button>
+          <label className="flex items-center gap-1 text-xs">
+            <input type="checkbox" checked={surface.enabled} onChange={(e) => onPatch({ enabled: e.target.checked })} /> Enabled
+          </label>
+        </div>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <label className="block text-sm">

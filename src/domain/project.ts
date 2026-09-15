@@ -148,6 +148,53 @@ export function setProposedPrice(revision: EstimateRevision, price: string | nul
 }
 
 /**
+ * PRO-014: reorders `revision.rooms` by swapping a room with its adjacent
+ * sibling — display order only. IDs are never touched (never index-based
+ * identity — a room's `id` is unrelated to its array position before or
+ * after the move), so every reference to it (surfaceIds pointing INTO
+ * it, actualReviews, etc.) stays valid, and buildCustomerDocument's own
+ * room-order-follows-array-order behavior means the customer document
+ * reorders along with it for free. A no-op at the first/last boundary
+ * (no wraparound) rather than throwing.
+ */
+export function moveRoom(revision: EstimateRevision, roomId: string, direction: 'up' | 'down', ids: IdSource): EstimateRevision {
+  const index = revision.rooms.findIndex((r) => r.id === roomId);
+  if (index === -1) return revision;
+  const targetIndex = direction === 'up' ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= revision.rooms.length) return revision;
+  const rooms = [...revision.rooms];
+  [rooms[index], rooms[targetIndex]] = [rooms[targetIndex], rooms[index]];
+  return { ...structuredClone(revision), rooms, updatedAt: ids.now() };
+}
+
+/**
+ * PRO-014: reorders `revision.surfaces` by swapping a surface with its
+ * nearest sibling that shares the SAME group (same `roomId`, including
+ * the standalone group where `roomId === null`) — never a globally
+ * adjacent surface belonging to a different room, which would silently
+ * fail to change anything the user can actually see in that room's own
+ * list (RoomEditor renders `surfaces.filter(s => room.surfaceIds.includes(s.id))`,
+ * preserving `revision.surfaces`' own order). A no-op at the first/last
+ * boundary within the group.
+ */
+export function moveSurfaceWithinGroup(revision: EstimateRevision, surfaceId: string, direction: 'up' | 'down', ids: IdSource): EstimateRevision {
+  const fullIndex = revision.surfaces.findIndex((s) => s.id === surfaceId);
+  if (fullIndex === -1) return revision;
+  const groupRoomId = revision.surfaces[fullIndex].roomId;
+  const groupIndices: number[] = [];
+  revision.surfaces.forEach((s, i) => {
+    if (s.roomId === groupRoomId) groupIndices.push(i);
+  });
+  const posInGroup = groupIndices.indexOf(fullIndex);
+  const targetPosInGroup = direction === 'up' ? posInGroup - 1 : posInGroup + 1;
+  if (targetPosInGroup < 0 || targetPosInGroup >= groupIndices.length) return revision;
+  const targetFullIndex = groupIndices[targetPosInGroup];
+  const surfaces = [...revision.surfaces];
+  [surfaces[fullIndex], surfaces[targetFullIndex]] = [surfaces[targetFullIndex], surfaces[fullIndex]];
+  return { ...structuredClone(revision), surfaces, updatedAt: ids.now() };
+}
+
+/**
  * BUG_FIX_LOG #7: saving a revision whose id is not already in
  * `project.revisions` (e.g. a brand-new draft from `createDraftFromIssued`)
  * must APPEND it. A naive `revisions.map((r) => r.id === x.id ? x : r)`
