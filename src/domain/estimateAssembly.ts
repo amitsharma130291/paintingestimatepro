@@ -33,6 +33,11 @@ import type { EstimateRevision, Room, Surface } from './entities';
 export interface ProjectEstimateAssembly {
   calculationState: 'complete' | 'incomplete' | 'invalid';
   reasons: string[];
+  /** CALCULATION_SPEC.md §1: "Waste >0.5 and overhead >0.5 produce
+   * nonblocking review warnings." Only ever populated alongside a
+   * 'complete' result -- an incomplete/invalid result has no computed
+   * values yet for a warning to be meaningfully about. */
+  warnings: string[];
   aggregate: ProjectAggregateResult | null;
   materials: Dec | null;
   laborCost: Dec | null;
@@ -45,11 +50,11 @@ export interface ProjectEstimateAssembly {
 }
 
 function incompleteResult(reasons: string[]): ProjectEstimateAssembly {
-  return { calculationState: 'incomplete', reasons, aggregate: null, materials: null, laborCost: null, directCost: null, overhead: null, jobCost: null, price: null, suggestedPrice: null, effectivePrice: null };
+  return { calculationState: 'incomplete', reasons, warnings: [], aggregate: null, materials: null, laborCost: null, directCost: null, overhead: null, jobCost: null, price: null, suggestedPrice: null, effectivePrice: null };
 }
 
 function invalidResult(reasons: string[]): ProjectEstimateAssembly {
-  return { calculationState: 'invalid', reasons, aggregate: null, materials: null, laborCost: null, directCost: null, overhead: null, jobCost: null, price: null, suggestedPrice: null, effectivePrice: null };
+  return { calculationState: 'invalid', reasons, warnings: [], aggregate: null, materials: null, laborCost: null, directCost: null, overhead: null, jobCost: null, price: null, suggestedPrice: null, effectivePrice: null };
 }
 
 /** Room-derived geometry for a wall or ceiling surface whose measurementMode
@@ -227,6 +232,17 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
     resolvedEnabled.push(outcome.surface!);
   }
 
+  // CALCULATION_SPEC.md §1: "Waste >0.5 ... produce nonblocking review
+  // warnings" -- checked per resolved surface (each may have its own
+  // override or fall back to the settings default), strictly greater than
+  // 0.5 so the boundary value itself never warns.
+  const warnings: string[] = [];
+  for (const s of resolvedEnabled) {
+    if (s.wasteRatio.greaterThan('0.5')) {
+      warnings.push(`Surface "${s.id}" has an unusually high waste ratio (${s.wasteRatio.times(100).toString()}%). Double-check this is intentional.`);
+    }
+  }
+
   const variantPricing = new Map<string, VariantPricing>(snapshot.paintVariants.map((v) => [v.id, { coveragePerGal: new PEP(v.coverageFt2PerGal), pricePerGal: new PEP(v.pricePerGal) }]));
   const { valid, result } = aggregateProjectSurfaces(resolvedEnabled, variantPricing);
   if (!valid || !result) return invalidResult(['Surface aggregation failed unexpectedly.']);
@@ -298,6 +314,12 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   const dc = directCost(materials, laborCost, otherExpenses);
   const overheadRatioField = parseDecimalField(settings.overheadRatio, { max: MAX_RATIO }); // BOUND-012..013
   if (overheadRatioField.kind !== 'valid') return invalidResult(['Overhead ratio is invalid.']);
+  // CALCULATION_SPEC.md §1: "overhead >0.5 produce[s] nonblocking review
+  // warnings" -- a high ratio is still a VALID, complete calculation
+  // (never rejected), only flagged for the user to double-check.
+  if (overheadRatioField.value.greaterThan('0.5')) {
+    warnings.push(`Overhead is set unusually high (${overheadRatioField.value.times(100).toString()}% of direct cost). Double-check this is intentional.`);
+  }
   const oh = overheadAmount(dc, overheadRatioField.value);
   const jobCost = estimatedJobCost(dc, oh);
 
@@ -334,6 +356,7 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   return {
     calculationState: 'complete',
     reasons: [],
+    warnings,
     aggregate: result,
     materials,
     laborCost,

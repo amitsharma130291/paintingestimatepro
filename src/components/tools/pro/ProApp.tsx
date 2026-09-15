@@ -1464,6 +1464,17 @@ export default function ProApp() {
                         <Row label="Estimated job cost" value={money(summary.jobCost)} strong />
                       </dl>
 
+                      {/* CALCULATION_SPEC §1: "Waste >0.5 and overhead >0.5
+                          produce nonblocking review warnings" -- informational
+                          only, never blocks pricing or issuing. */}
+                      {summary.warnings.length > 0 && (
+                        <div className="mt-3 rounded-[calc(var(--radius-card)-8px)] border border-warn-line bg-warn-soft p-3 text-sm text-warn">
+                          {summary.warnings.map((w, i) => (
+                            <p key={i}>{w}</p>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="mt-4 flex gap-2">
                         <button type="button" className={`btn ${draftEdit.priceMode === 'suggested' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => mutateDraft((r) => ({ ...r, priceMode: 'suggested', updatedAt: ids.now() }))}>Suggested price</button>
                         <button type="button" className={`btn ${draftEdit.priceMode === 'custom' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => mutateDraft((r) => ({ ...r, priceMode: 'custom', updatedAt: ids.now() }))}>Custom price</button>
