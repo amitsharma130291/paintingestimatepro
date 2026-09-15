@@ -1,0 +1,587 @@
+
+ RUN  v5.0.0 C:/Users/amits/SEOSites/paintingestimatepro
+
+ ✓ tests/ui/interiorCalculator.test.tsx > InteriorCalculator: baseline documented fixture (regression, tool-specs/03) > 20x16x9 room, 2 doors + 3 windows, 2 coats, 350 coverage, .10 waste, $42/gal -> net 563 ft², buy 4 gal, $168 349ms
+ ✓ tests/ui/interiorCalculator.test.tsx > INT-008/009: includeWalls toggle (ceiling-only mode) — previously did not exist, walls were always force-enabled > defaults to walls included, checkbox present and checked 812ms
+ ✓ tests/audit/independent-ui.test.tsx > Independent v4 user-workflow regressions > R08: Price Book Health displays saved service definitions and their selling prices 1275ms
+ ✓ tests/browser/addServiceNoInventedGeometry.test.tsx > V5-10 (extended): no service kind invents required geometry > a new door service starts with width, height, and painted sides all unset — no invented 3x6.67 two-sided door 1517ms
+ ✓ tests/ui/interiorCalculator.test.tsx > INT-008/009: includeWalls toggle (ceiling-only mode) — previously did not exist, walls were always force-enabled > unchecking walls (ceiling still enabled) computes a real ceiling-only result, no wall area/deduction shown 472ms
+ ✓ tests/browser/actualsNegativeValidation.test.tsx > ACT-015: a negative actual expense is invalid, never silently zeroed/clamped, and blocks finalization > rejects a negative materials amount and disables Save actuals 1894ms
+ ✓ tests/ui/interiorCalculator.test.tsx > INT-008/009: includeWalls toggle (ceiling-only mode) — previously did not exist, walls were always force-enabled > unchecking BOTH walls and ceiling is rejected — "at least one enabled" per tool-specs/03 312ms
+ ✓ tests/audit/independent-ui.test.tsx > Independent v4 user-workflow regressions > R09: entering nonnumeric actual cost does not crash the application 677ms
+ ✓ tests/ui/interiorCalculator.test.tsx > INT-008/009: includeWalls toggle (ceiling-only mode) — previously did not exist, walls were always force-enabled > opening deductions (wall-only concept) are hidden once walls are disabled 492ms
+stdout | tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > sends the license email for a payment.succeeded event that purchased the configured Pro product
+Dodo webhook received: payment.succeeded
+
+ ✓ tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > sends the license email for a payment.succeeded event that purchased the configured Pro product 440ms
+stdout | tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > REGRESSION: a payment.succeeded event for an UNRELATED product must NOT send a Pro license email
+Dodo webhook received: payment.succeeded
+
+stderr | tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > REGRESSION: a payment.succeeded event for an UNRELATED product must NOT send a Pro license email
+evaluatePaymentEntitlement: payment pay_1 succeeded but did not purchase the configured Pro product (prod_pro_configured); cart: ["prod_some_other_thing"].
+Dodo webhook: payment.succeeded event for pay_1 did not pass entitlement checks (wrong_product) -- not emailing a license key. {
+  payment_id: 'pay_1',
+  status: 'succeeded',
+  refund_status: null,
+  product_cart: [ { product_id: 'prod_some_other_thing', quantity: 1 } ],
+  customer: { email: 'buyer@example.com', name: 'Buyer' }
+}
+
+stdout | tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > does not send an email for a refunded payment (should not normally occur on this event type, but must not fire regardless)
+Dodo webhook received: payment.succeeded
+
+stderr | tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > does not send an email for a refunded payment (should not normally occur on this event type, but must not fire regardless)
+Dodo webhook: payment.succeeded event for pay_1 did not pass entitlement checks (refunded) -- not emailing a license key. {
+  payment_id: 'pay_1',
+  status: 'succeeded',
+  refund_status: 'full',
+  product_cart: [ { product_id: 'prod_pro_configured', quantity: 1 } ],
+  customer: { email: 'buyer@example.com', name: 'Buyer' }
+}
+
+stdout | tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > ignores an unrelated event type entirely
+Dodo webhook received: payment.failed
+
+stderr | tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > rejects a request with an invalid signature (401), never evaluating entitlement or emailing
+Dodo webhook signature verification failed: Error: bad signature
+    at C:/Users/amits/SEOSites/paintingestimatepro/tests/api/webhookDodo.test.ts:93:34
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:1628:35
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:2783:26
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3319:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3314:10)
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3299:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3257:10)
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3876:64
+
+stderr | tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > returns 500 when the webhook secret is not configured
+DODO_PAYMENTS_WEBHOOK_KEY not configured.
+
+ ✓ tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > REGRESSION: a payment.succeeded event for an UNRELATED product must NOT send a Pro license email 3ms
+ ✓ tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > does not send an email for a refunded payment (should not normally occur on this event type, but must not fire regardless) 2ms
+ ✓ tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > ignores an unrelated event type entirely 1ms
+ ✓ tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > rejects a request with an invalid signature (401), never evaluating entitlement or emailing 4ms
+ ✓ tests/api/webhookDodo.test.ts > POST /api/webhooks/dodo — real handler, mocked signature verification > returns 500 when the webhook secret is not configured 1ms
+ ✓ tests/browser/detailedOpenings.test.tsx > Pro room editor: quick/detailed opening entry mode > defaults to quick mode with the 20/15 ft² constants applied (0 doors/0 windows -> no deduction) 2326ms
+ ✓ tests/ui/interiorCalculator.test.tsx > INT-014: additional prep/cleanup hours — previously did not exist as a field at all > is shown only once "Estimate labor" is enabled, defaulting to 0 204ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > grants access for a payment that actually purchased the configured Pro product 161ms
+stderr | tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > REGRESSION: a real, successful payment for an UNRELATED product must NOT unlock Pro
+evaluatePaymentEntitlement: payment pay_1 succeeded but did not purchase the configured Pro product (prod_pro_configured); cart: ["prod_some_other_thing"].
+
+stderr | tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > resolves a session to its payment_id and applies the same product/status checks
+evaluatePaymentEntitlement: payment pay_1 succeeded but did not purchase the configured Pro product (prod_pro_configured); cart: ["prod_some_other_thing"].
+
+stderr | tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > returns a clear 500 when the Pro product id is not configured, rather than silently accepting any payment
+Dodo Payments not configured (missing API key or product id).
+
+stderr | tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > returns 500 with no API key configured
+Dodo Payments not configured (missing API key or product id).
+
+ ✓ tests/browser/actualsLaborBreakdown.test.tsx > ACT-011: actual labor can be entered as hours × rate, not only a flat amount > defaults to "Enter amount directly" 2820ms
+ ✓ tests/audit/independent-ui.test.tsx > Independent v4 user-workflow regressions > R10: confirming four blank cost categories must not persist a final review 758ms
+stderr | tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > returns 502 on a provider/network failure rather than crashing or granting access
+Dodo checkout/payment lookup failed: Error: ECONNRESET
+    at C:/Users/amits/SEOSites/paintingestimatepro/tests/api/checkoutVerify.test.ts:125:43
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:1628:35
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:2783:26
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3319:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3314:10)
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3299:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3257:10)
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3876:64
+
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > REGRESSION: a real, successful payment for an UNRELATED product must NOT unlock Pro 3ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > rejects a checkout session that has not resolved to a payment yet (still pending) 2ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > resolves a session to its payment_id and applies the same product/status checks 2ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > rejects a failed payment 1ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > rejects a fully refunded payment 1ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > returns a clear 500 when the Pro product id is not configured, rather than silently accepting any payment 2ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > returns 500 with no API key configured 1ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > returns 502 on a provider/network failure rather than crashing or granting access 5ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > returns 400 when neither sessionId nor paymentId is supplied 2ms
+ ✓ tests/api/checkoutVerify.test.ts > GET /api/checkout/verify — real handler, mocked Dodo SDK > handles a malformed provider response (missing status field) without throwing, and does not grant access 1ms
+ ✓ tests/browser/actualsNegativeValidation.test.tsx > ACT-015: a negative actual expense is invalid, never silently zeroed/clamped, and blocks finalization > never persists a negative amount even if Save were somehow reachable — confirms the value is dropped, not clamped 1155ms
+ ✓ tests/browser/actualsOverheadMode.test.tsx > ACT-010: actual-cost overhead has two explicit modes (baselineAllocation | actualFlat), matching DATA_CONTRACT.md > defaults to "Use baseline allocation" and shows the frozen baseline overhead, not an editable blank box 2938ms
+ ✓ tests/browser/proApp.harness.test.tsx > ProApp harness: new project -> add room -> save -> reload persists (real UI, real storage) > creates a project via the real "+ New project" button, renames it, adds a room, saves, and the same data survives a full unmount/remount 3035ms
+ ✓ tests/ui/interiorCalculator.test.tsx > INT-014: additional prep/cleanup hours — previously did not exist as a field at all > adds directly to labor hours and cost, on top of wall production hours (independently derived) 652ms
+ ✓ tests/ui/interiorCalculator.test.tsx > INT-014: additional prep/cleanup hours — previously did not exist as a field at all > a negative prep-hours entry is rejected as invalid, not silently clamped to zero 319ms
+ ✓ tests/browser/rateRefreshUndo.test.tsx > Pre-refresh recovery (DATA_CONTRACT.md #3): rate refresh can be undone > confirming a rate refresh updates the draft cost; "Undo refresh" restores the exact pre-refresh draft 3433ms
+ ✓ tests/lib/clientLicense.test.ts > checkAccess() — never grants access from an editable local record alone > reports noAccess when nothing is stored 59ms
+ ✓ tests/lib/clientLicense.test.ts > checkAccess() — never grants access from an editable local record alone > REGRESSION (fabricated record): an invented payment ID/license key, combined with a simulated network outage, must NOT grant access 2ms
+ ✓ tests/lib/clientLicense.test.ts > checkAccess() — never grants access from an editable local record alone > a malformed stored record (unparseable JSON) is treated as no record at all, not as a crash 1ms
+ ✓ tests/lib/clientLicense.test.ts > checkAccess() — never grants access from an editable local record alone > unavailable network never grants access even across repeated retries with the SAME fabricated record 1ms
+ ✓ tests/lib/clientLicense.test.ts > checkAccess() — never grants access from an editable local record alone > REGRESSION (server error): a forged record is REJECTED when the server responds, even with a config-error response — never silently accepted 2ms
+ ✓ tests/lib/clientLicense.test.ts > checkAccess() — never grants access from an editable local record alone > a revoked/refunded entitlement fails closed and clears storage 1ms
+ ✓ tests/lib/clientLicense.test.ts > checkAccess() — never grants access from an editable local record alone > an invalid (never-existed) entitlement fails closed identically to a revoked one 4ms
+ ✓ tests/lib/clientLicense.test.ts > checkAccess() — never grants access from an editable local record alone > a valid, live-confirmed entitlement is granted 1ms
+ ✓ tests/lib/clientLicense.test.ts > checkAccess() — never grants access from an editable local record alone > the configured offline policy: a genuine network failure on a PREVIOUSLY-GRANTED, real payment still does not grant access — it reports unavailable, distinct from a confirmed rejection 1ms
+ ✓ tests/browser/proApp.harness.test.tsx > ProApp harness: backup import conflict UI — the real Confirm/Cancel/Keep-local/Use-imported/Keep-both actions > Cancel writes nothing — the real button click leaves storage completely untouched 471ms
+ ✓ tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > accepts a well-formed key for a payment that purchased the configured Pro product 200ms
+stderr | tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > REGRESSION: a well-formed key whose real payment purchased an UNRELATED product must not redeem
+evaluatePaymentEntitlement: payment pay_1 succeeded but did not purchase the configured Pro product (prod_pro_configured); cart: ["prod_some_other_thing"].
+
+stderr | tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > returns 500 with missing configuration, never calling Dodo
+Dodo Payments not configured (missing API key or product id).
+
+stderr | tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > returns 502 on a provider failure
+License redeem failed: Error: ECONNRESET
+    at C:/Users/amits/SEOSites/paintingestimatepro/tests/api/licenseRedeem.test.ts:97:43
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:1628:35
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:2783:26
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3319:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3314:10)
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3299:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3257:10)
+    at file:///C:/Users/amits/SEOSites/paintingestimatepro/node_modules/vitest/dist/chunks/run.CQOUYP-x.js:3876:64
+
+ ✓ tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > REGRESSION: a well-formed key whose real payment purchased an UNRELATED product must not redeem 3ms
+ ✓ tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > rejects a malformed key before ever calling Dodo 2ms
+ ✓ tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > rejects a pending payment 2ms
+ ✓ tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > rejects a refunded payment 2ms
+ ✓ tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > returns 500 with missing configuration, never calling Dodo 2ms
+ ✓ tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > returns 502 on a provider failure 5ms
+ ✓ tests/api/licenseRedeem.test.ts > POST /api/license/redeem — real handler, mocked Dodo SDK > rejects an invalid JSON body 2ms
+stderr | tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > REGRESSION: rejects a succeeded payment for an UNRELATED product, even though status is "succeeded"
+evaluatePaymentEntitlement: payment pay_1 succeeded but did not purchase the configured Pro product (prod_pro_configured); cart: ["prod_totally_different_thing"].
+
+stderr | tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > rejects a payment with an empty/missing product_cart rather than assuming it matches
+evaluatePaymentEntitlement: payment pay_1 succeeded but did not purchase the configured Pro product (prod_pro_configured); cart: [].
+evaluatePaymentEntitlement: payment pay_1 succeeded but did not purchase the configured Pro product (prod_pro_configured); cart: [].
+
+ ✓ tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > accepts a succeeded payment that purchased the configured Pro product 84ms
+ ✓ tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > REGRESSION: rejects a succeeded payment for an UNRELATED product, even though status is "succeeded" 6ms
+ ✓ tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > rejects a payment with an empty/missing product_cart rather than assuming it matches 3ms
+ ✓ tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > rejects a pending payment 2ms
+ ✓ tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > rejects a failed payment 2ms
+ ✓ tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > rejects a fully refunded payment even though status is still "succeeded" 1ms
+ ✓ tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > does NOT reject a partially refunded payment (a merchant policy choice, not an API fact) 2ms
+stderr | tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > REGRESSION: refuses every payment, even a perfectly valid one, when the Pro product id is not configured at all
+evaluatePaymentEntitlement: DODO_PRODUCT_ID_PRO is not configured — refusing to grant access for any payment.
+
+ ✓ tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > a missing/malformed status is treated as unknown, never as success 3ms
+ ✓ tests/lib/serverDodo.test.ts > evaluatePaymentEntitlement — single shared entitlement decision > REGRESSION: refuses every payment, even a perfectly valid one, when the Pro product id is not configured at all 2ms
+ ✓ tests/browser/proApp.harness.test.tsx > ProApp harness: backup import conflict UI — the real Confirm/Cancel/Keep-local/Use-imported/Keep-both actions > choosing "Use imported" then clicking the real Confirm button commits the change to actual storage 380ms
+ ✓ tests/browser/detailedOpenings.test.tsx > Pro room editor: quick/detailed opening entry mode > switching to detailed mode and adding a measured opening changes materials cost using the MEASURED dimensions, not the 20/15 constants 1706ms
+ ✓ tests/property/pricing.property.test.ts > PROPERTY 1: margin inverse > for cost>=0, 0<=target<1, requiredPrice: margin(requiredPrice, cost) === target (excluding cost=0) 16ms
+ ✓ tests/property/pricing.property.test.ts > PROPERTY 2: minimum-cent guarantee > margin(minimumTargetPrice, cost) >= target; one cent less would fail (when that cent is still positive) 19ms
+ ✓ tests/property/pricing.property.test.ts > PROPERTY 3: price monotonicity > at fixed positive cost, increasing positive selling price cannot decrease margin 7ms
+ ✓ tests/property/pricing.property.test.ts > PROPERTY 4: cost monotonicity > at fixed positive selling price, increasing cost cannot increase profit or margin 14ms
+ ✓ tests/property/pricing.property.test.ts > PROPERTY 5: required-price monotonicity > increased cost cannot reduce the required price, within the supported range 3ms
+ ✓ tests/property/pricing.property.test.ts > PROPERTY 5: required-price monotonicity > increased target (at fixed cost) cannot reduce the required price 5ms
+ ✓ tests/browser/actualsOverheadMode.test.tsx > ACT-010: actual-cost overhead has two explicit modes (baselineAllocation | actualFlat), matching DATA_CONTRACT.md > switching to "Enter actual amount" clears the field for real manual entry 1197ms
+ ✓ tests/browser/actualsLaborBreakdown.test.tsx > ACT-011: actual labor can be entered as hours × rate, not only a flat amount > switching to "Hours × rate" shows hours/rate fields and computes the amount live once confirmed 1385ms
+ ✓ tests/browser/proApp.harness.test.tsx > ProApp harness: backup import conflict UI — the real Confirm/Cancel/Keep-local/Use-imported/Keep-both actions > choosing "Keep both" then Confirm creates a genuinely NEW project alongside the untouched original 426ms
+ ✓ tests/storage/versionConflict.test.ts > storage/db: version-checked project writes (emulator-backed, fake-indexeddb) > creating a brand-new project (expectedVersion=null) succeeds and commits version 1 9ms
+ ✓ tests/storage/versionConflict.test.ts > storage/db: version-checked project writes (emulator-backed, fake-indexeddb) > creating with expectedVersion=null FAILS if a project with that id already exists (real requirement, not skippable) 3ms
+ ✓ tests/storage/versionConflict.test.ts > storage/db: version-checked project writes (emulator-backed, fake-indexeddb) > a write whose expected version matches the stored version succeeds and advances the version by exactly 1 2ms
+ ✓ tests/storage/versionConflict.test.ts > storage/db: version-checked project writes (emulator-backed, fake-indexeddb) > REGRESSION: two saves that land in the exact same millisecond (identical updatedAt) still conflict correctly, because the check is version-number-based, not timestamp-based 1ms
+ ✓ tests/storage/versionConflict.test.ts > storage/db: version-checked project writes (emulator-backed, fake-indexeddb) > a stale write (expected version behind the stored one) is rejected with a ConflictError, and the stored record is untouched 2ms
+ ✓ tests/storage/versionConflict.test.ts > storage/db: version-checked project writes (emulator-backed, fake-indexeddb) > a stale save cannot silently recreate a project deleted by another tab 2ms
+ ✓ tests/storage/versionConflict.test.ts > storage/db: version-checked project writes (emulator-backed, fake-indexeddb) > a ConflictError carries the current stored record so the caller can offer reload or save-as-copy 2ms
+ ✓ tests/storage/versionConflict.test.ts > storage/db: version-checked project writes (emulator-backed, fake-indexeddb) > a failed save leaves the previously committed state completely intact (no partial write) 1ms
+ ✓ tests/review-v5/tools-workflows.test.tsx > Independent v5 tools workflows > V5-08: pre-refresh recovery is still available after saving and reopening 4082ms
+ ✓ tests/audit/independent-ui.test.tsx > Independent v4 user-workflow regressions > R11: a copied project from version 7 can be edited and saved immediately 1680ms
+ ✓ tests/audit/independent-ui.test.tsx > Independent v4 user-workflow regressions > R12: export includes a project committed by another tab after this tab loaded 194ms
+ ✓ tests/review-v5/tools-workflows.test.tsx > Independent v5 tools workflows > V5-09: free-calculator prep hours are transferred to Pro or explicitly listed as omitted 457ms
+ ✓ tests/browser/proApp.harness.test.tsx > ProApp harness: backup import conflict UI — the real Confirm/Cancel/Keep-local/Use-imported/Keep-both actions > the default "Keep local" resolution, left unchanged, preserves the local project on Confirm 324ms
+ ✓ tests/review-v5/tools-workflows.test.tsx > Independent v5 tools workflows > V5-10: a new trim service requires an explicit developed width instead of inventing 4 feet 245ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Backup export completeness and secret exclusion > export includes the issued revision, its rate snapshot, and its actual review 7ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Backup export completeness and secret exclusion > exported data contains no payment/entitlement fields — there are none in the entity model to begin with 1ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Restore into an empty store, through real IndexedDB transactions > a validated backup restored into a fresh (empty) store preserves the complete business graph 13ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Restore into an empty store, through real IndexedDB transactions > restoring the identical backup a second time does not duplicate records (planRestoreMerge + real re-write) 2ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Restore into an empty store, through real IndexedDB transactions > a corrupt import (fails validation) causes NO writes at all — the store stays exactly as it was 2ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Item 5: conflict preview/choice/confirm/cancel through real storage, via planFullRestoreMerge > cancelling an import (never committing) leaves storage completely untouched 2ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Item 5: conflict preview/choice/confirm/cancel through real storage, via planFullRestoreMerge > confirming "replaceImported" on a conflicting project overwrites it atomically; "keepLocal" (default) leaves it untouched 2ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Item 5: conflict preview/choice/confirm/cancel through real storage, via planFullRestoreMerge > "keep both" on a conflicting project commits a genuinely new copy (remapped IDs, including the actual-review baseline) alongside the original, never a raw ID collision 3ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Item 5: conflict preview/choice/confirm/cancel through real storage, via planFullRestoreMerge > a differing business settings singleton produces exactly one businessSettings conflict, never silently overwritten 1ms
+ ✓ tests/integration/backupRestoreStorage.test.ts > Item 8, end-to-end through the REAL chain (plan -> applyFullRestoreResolutions -> writeImportedBackup): the two-tab scenario > Tab A previews a "replace imported" resolution; Tab B saves a real edit in between; Tab A's confirm conflicts and never overwrites Tab B's work 6ms
+ ✓ tests/domain/backup.test.ts > BACK-D07: exportBackup preserves accumulated importProvenance, never resets it (item 6) > REGRESSION: a real, non-empty existing provenance list is included in the export, not silently wiped to [] 5ms
+ ✓ tests/domain/backup.test.ts > BACK-D07: exportBackup preserves accumulated importProvenance, never resets it (item 6) > defaults to an empty list when the installation has no accumulated provenance yet 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D11: validation rejects before any write > rejects a wrong/missing schemaVersion 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D11: validation rejects before any write > rejects an oversized file before parsing further 0ms
+ ✓ tests/domain/backup.test.ts > BACK-D11: validation rejects before any write > rejects duplicate paint variant IDs 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D11: validation rejects before any write > rejects a project revision missing its embedded rate snapshot (dangling reference) 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D11: validation rejects before any write > accepts a well-formed envelope 1ms
+ ✓ tests/domain/backup.test.ts > BACK-015: an actual-review baseline pointing at a missing revision is a dangling reference > rejects an actualReview whose baselineIssuedRevisionId does not match any revision in the same project 1ms
+ ✓ tests/domain/backup.test.ts > BACK-015: an actual-review baseline pointing at a missing revision is a dangling reference > accepts an actualReview whose baseline correctly matches an existing ISSUED revision 1ms
+ ✓ tests/domain/backup.test.ts > V5-06 (related path): import validation of rawCalculatedOutputs, previously never checked at all > rejects an imported revision whose rawCalculatedOutputs contains a NaN jobCost 1ms
+ ✓ tests/domain/backup.test.ts > V5-06 (related path): import validation of rawCalculatedOutputs, previously never checked at all > accepts a null rawCalculatedOutputs (a draft, or an issued revision predating the freeze mechanism) 1ms
+ ✓ tests/domain/backup.test.ts > V5-06 (related path): import validation of rawCalculatedOutputs, previously never checked at all > accepts a well-formed rawCalculatedOutputs, including a negative profit/margin (a real loss) 1ms
+ ✓ tests/domain/backup.test.ts > BACK-020: unknown enums, negative costs, and non-decimal scalars in imported financial data are rejected, never silently coerced > rejects a paint variant with a negative price 1ms
+ ✓ tests/domain/backup.test.ts > BACK-020: unknown enums, negative costs, and non-decimal scalars in imported financial data are rejected, never silently coerced > rejects a paint variant with a non-decimal price scalar 1ms
+ ✓ tests/domain/backup.test.ts > BACK-020: unknown enums, negative costs, and non-decimal scalars in imported financial data are rejected, never silently coerced > rejects a revision with an unknown state enum value 0ms
+ ✓ tests/domain/backup.test.ts > BACK-020: unknown enums, negative costs, and non-decimal scalars in imported financial data are rejected, never silently coerced > rejects a revision with a negative proposedPrice 0ms
+ ✓ tests/domain/backup.test.ts > BACK-020: unknown enums, negative costs, and non-decimal scalars in imported financial data are rejected, never silently coerced > a null proposedPrice (genuinely unpriced) is still accepted — null is not the same as invalid 0ms
+ ✓ tests/domain/backup.test.ts > BACK-D09: restore/merge — identical skip, new add, conflicting requires a choice (default keep-local) > an identical existing project is skipped, not duplicated 2ms
+ ✓ tests/domain/backup.test.ts > BACK-D09: restore/merge — identical skip, new add, conflicting requires a choice (default keep-local) > a brand-new project ID is added 0ms
+ ✓ tests/domain/backup.test.ts > BACK-D09: restore/merge — identical skip, new add, conflicting requires a choice (default keep-local) > same ID, different content -> a conflict defaulting to keep-local (never auto timestamp-wins) 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D09: restore/merge — identical skip, new add, conflicting requires a choice (default keep-local) > D09 repeated identical restore -> zero duplicates on a second run 0ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a null entry inside projects[].revisions[] is rejected with a structured error, never an uncaught exception 1ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a null entry inside a revision surfaces[] array is rejected without throwing 1ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a wrong-typed business settings field (overheadRatio as a number, not a decimal string) is rejected 1ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a malformed (non-decimal) business settings field is rejected 1ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a room missing its required name field is rejected 1ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > duplicate revision IDs within the same project are rejected 1ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > duplicate room IDs within the same revision are rejected 1ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > duplicate surface IDs within the same revision are rejected 0ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a paint variant with zero coverage (a divide-by-zero risk) is rejected, not merely "non-negative" 0ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a project whose activeRevisionId does not match any of its own revisions is rejected (dangling reference) 0ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a room whose surfaceIds references a surface not present in the revision is rejected (dangling reference) 0ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a surface whose roomId references a room not present in the revision is rejected (dangling reference) 0ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > an actual review whose baseline targets a DRAFT revision (never issued) is rejected 1ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > a negative actual-review category amount is rejected (a cost cannot be negative) 1ms
+ ✓ tests/domain/backup.test.ts > BACK-COMPLETE: full schema validation (item 5) — null entries, wrong types, missing fields, duplicate IDs, invalid settings, zero coverage, dangling references, draft-targeting actual reviews > still accepts a fully well-formed envelope with rooms, surfaces, and a valid issued-baseline actual review 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D05/D06: full restore/merge preview spans projects, paint catalog, and business settings > an identical settings/catalog/projects triple produces zero conflicts and nothing to add 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D05/D06: full restore/merge preview spans projects, paint catalog, and business settings > a new paint variant ID is queued to add; a conflicting one is flagged (default keepLocal) 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D05/D06: full restore/merge preview spans projects, paint catalog, and business settings > differing business settings produce exactly one businessSettings conflict, defaulting to keepLocal 0ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > keepLocal (default) leaves a conflicting project untouched — no write queued for it at all 1ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > replaceImported queues the incoming project with the CAPTURED expectedVersion, not a re-read one 1ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > keepBoth produces a genuinely new copy (fresh ID, expectedVersion=null) alongside leaving the original untouched 1ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > a brand-new project (no conflict at all) is always queued with expectedVersion=null 0ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > businessSettings replaceImported swaps in the incoming settings; keepLocal (default) preserves the local ones 0ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > a new paint variant is added; a conflicting one keeps local by default, replaces on choice, or keeps-both as a new copy 1ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > REGRESSION (independent-review R05): "keep both" on a conflicting paint variant remaps every incoming service definition's paintVariantId to the copy, never leaving it pointing at the old local variant 1ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > V5-02: "keep both" on a conflicting paint variant remaps ONLY the incoming service, never a pre-existing LOCAL service that already referenced the same paint ID 0ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > V5-02: keepLocal and replaceImported on a conflicting paint variant never remap a local service — only keepBoth mints a copy to remap toward 0ms
+ ✓ tests/domain/backup.test.ts > applyFullRestoreResolutions: pure resolution-application logic (item 8 concurrency, tested directly) > a "keep both" project copy returns real provenance, not silently dropped (independent-review §5 secondary finding) 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D10: import-as-copies — provenance-based skip, full ID remap including actual baselines > remaps project/revision IDs and the actual-review baseline reference together 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D10: import-as-copies — provenance-based skip, full ID remap including actual baselines > REGRESSION (item 6): remaps room and surface IDs too, and rewrites their cross-references, not just project/revision IDs 1ms
+ ✓ tests/domain/backup.test.ts > BACK-D10: import-as-copies — provenance-based skip, full ID remap including actual baselines > a paint-catalog reference (surface.paintVariantId) is preserved as a legitimate shared reference, never remapped 0ms
+ ✓ tests/domain/backup.test.ts > BACK-D10: import-as-copies — provenance-based skip, full ID remap including actual baselines > drops (never carries over) an actual review whose baseline cannot be remapped, instead of retaining a dangling reference 0ms
+ ✓ tests/domain/backup.test.ts > BACK-D10: import-as-copies — provenance-based skip, full ID remap including actual baselines > repeat import of the same export skips by provenance unless another copy is explicitly requested 0ms
+ ✓ tests/browser/projectCostEntry.test.tsx > Completing the paid costing interface: prep labor, itemized materials, supplies allowance, travel/expenses > a customer can enter every additional-cost input through the REAL interface, and it correctly contributes to cost/overhead/price, survives save/reopen/issue 5384ms
+ ✓ tests/audit/independent-ui.test.tsx > Independent v4 user-workflow regressions > R13: issuing a valid estimate persists its calculated outputs 878ms
+ ✓ tests/browser/detailedOpenings.test.tsx > Pro room editor: quick/detailed opening entry mode > an incomplete measured opening (blank height) reports invalid, never crashes, and blocks the priced result 1250ms
+ ✓ tests/browser/actualsOverheadMode.test.tsx > ACT-010: actual-cost overhead has two explicit modes (baselineAllocation | actualFlat), matching DATA_CONTRACT.md > saving in baseline-allocation mode persists mode:"baselineAllocation" and the baseline figure as the recorded amount 1219ms
+ ✓ tests/domain/estimateAssembly.test.ts > PRO-001 through the domain assembly: wall and ceiling in the SAME room use DIFFERENT variants > produces two separate purchases, one per variant 11ms
+ ✓ tests/domain/estimateAssembly.test.ts > Standalone surfaces with no room > a project with only a standalone door surface (roomId null) is complete and priced 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Standalone surfaces with no room > BOUND-026: a trim surface with trimLengthFt=0 is ACCEPTED at field validation (zero-demand geometry, not a field error) 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Standalone surfaces with no room > a standalone trim surface with missing developed width is incomplete, not silently zero 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Disabled surfaces never contribute (mutation check regression) > a disabled surface with garbage geometry does not block or pollute an otherwise-valid project 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Suggested-price mode reports real profit/margin at the effective price (regression) > profit and margin are NOT null when priceMode is "suggested" — found live in the browser: proposed price showed a number but profit/margin showed "—" 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > A surface referencing a variant absent from the draft's OWN snapshot is invalid, not silently substituted > found live in the browser: the UI let a user pick a variant added to the LIVE catalog after this draft was created, which the draft's frozen snapshot does not have yet 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > V5-01 (related path): targetMarginRatio boundary in the Pro estimate summary itself, not just Price Book Health > a saved 100% target settings value returns invalid, never throws 2ms
+ ✓ tests/domain/estimateAssembly.test.ts > V5-01 (related path): targetMarginRatio boundary in the Pro estimate summary itself, not just Price Book Health > a negative target settings value returns invalid 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > V5-01 (related path): targetMarginRatio boundary in the Pro estimate summary itself, not just Price Book Health > a target just below 100% (0.999) is still a complete, priced result 3ms
+ ✓ tests/domain/estimateAssembly.test.ts > Per-surface override vs. snapshot default fallback (DECISIONS.md #3) > a surface with an explicit throughput override is not silently replaced by the settings default 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > a freshly-added additionalLabor line with blank hours/rate reports incomplete, never throws 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > an additionalLabor line with malformed hours ("abc") reports invalid, never throws 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > a complete additionalLabor line correctly adds hours*rate to laborCost 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > a freshly-added otherMaterialLines entry with blank quantity/unitCost reports incomplete, never throws 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > a complete otherMaterialLines entry correctly adds quantity*unitCost to materials 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > a freshly-added otherExpenses entry with a blank amount reports incomplete, never throws 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > a complete otherExpenses entry correctly adds its amount to directCost 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > a blank suppliesAllowance amount/ratio reports incomplete, never throws 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > a malformed suppliesAllowance amount reports invalid, never throws 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI) > a valid flat supplies allowance correctly adds to materials 4ms
+ ✓ tests/domain/estimateAssembly.test.ts > V5-07/CORE-021: a custom selling total enforces at most two fractional digits > rejects three fractional digits (12.005) 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > V5-07/CORE-021: a custom selling total enforces at most two fractional digits > accepts exactly two fractional digits (12.01) 1ms
+ ✓ tests/domain/estimateAssembly.test.ts > V5-07/CORE-021: a custom selling total enforces at most two fractional digits > accepts a whole-dollar amount with no decimal point 0ms
+ ✓ tests/domain/estimateAssembly.test.ts > V5-07/CORE-021: a custom selling total enforces at most two fractional digits > rejects four fractional digits (500.0001) 0ms
+ ✓ tests/browser/actualsLaborBreakdown.test.tsx > ACT-011: actual labor can be entered as hours × rate, not only a flat amount > saves labor.amount as hours*rate and persists laborBreakdown 1303ms
+ ✓ tests/integration/draftIssuedIsolation.test.ts > Draft vs. issued isolation, 11-step sequence — priceMode=suggested > draft A at $42 survives a live catalog change to $49; a new draft B sees $49; refresh preview/cancel/confirm behave correctly; issuing A freezes it against a later new draft revision 26ms
+ ✓ tests/integration/draftIssuedIsolation.test.ts > Draft vs. issued isolation, 11-step sequence — priceMode=custom > draft A at $42 survives a live catalog change to $49; a new draft B sees $49; refresh preview/cancel/confirm behave correctly; issuing A freezes it against a later new draft revision 8ms
+ ✓ tests/review-v5/tools-workflows.test.tsx > Independent v5 tools workflows > V5-11: baseline overhead with more than ten fractional digits remains confirmable 1001ms
+ ✓ tests/property/paint.property.test.ts > PROPERTY 6: project pooling is order-independent > any permutation of the same demand list yields identical totals per variant 22ms
+ ✓ tests/property/paint.property.test.ts > PROPERTY 7: same-variant split invariance > splitting one area across two same-variant surfaces vs. one combined surface gives the same raw total 5ms
+ ✓ tests/property/paint.property.test.ts > PROPERTY 8: pooling inequality (same variant only) > sum of individual ceilings >= ceiling of the summed demand, for the SAME variant 5ms
+ ✓ tests/property/paint.property.test.ts > PROPERTY 8: pooling inequality (same variant only) > never applies across different variants (each keeps its own ceiling, no cross-variant pooling) 2ms
+ ✓ tests/property/paint.property.test.ts > PROPERTY 9: gallon bound > purchasedGallons(raw) is always an integer >= raw, and < raw + 1 (except exact-integer raw) 3ms
+ ✓ tests/property/paint.property.test.ts > PROPERTY 13: variant independence > changing variant A's demand never changes variant B's purchased quantity 6ms
+ ✓ tests/browser/rateRefreshUndo.test.tsx > Pre-refresh recovery (DATA_CONTRACT.md #3): rate refresh can be undone > V5-08: the undo affordance is a DURABLE checkpoint -- it survives saving over the refresh AND a full unmount/remount/reopen 2434ms
+ ✓ tests/browser/proApp.harness.test.tsx > ProApp harness: the two-tab save conflict — real "Reload latest" and "Save my edit as a copy" actions > "Reload latest" discards the local edit and adopts the version another tab actually saved 1161ms
+ ✓ tests/property/document.property.test.ts > PROPERTY 15: free-document ledger reconciliation > sum of rounded line cents + rounded tax === document total, exactly, for any line set 29ms
+ ✓ tests/property/document.property.test.ts > PROPERTY 16: cost-display reconciliation never touches the raw model > displayed components + adjustment always equals the displayed total, and adjustment is derived, not model-mutating 14ms
+ ✓ tests/storage/db.test.ts > storage/db: transactional writes > D-storage-01: writeAll commits every record across multiple stores together 15ms
+ ✓ tests/storage/db.test.ts > storage/db: transactional writes > D-storage-02 (BACK-D12): a failure partway through a multi-record write leaves the store as it was before — no partial write 6ms
+ ✓ tests/storage/db.test.ts > storage/db: transactional writes > D-storage-03: a failure in one store rolls back writes already queued for an unrelated store in the SAME call 4ms
+ ✓ tests/browser/actualsOverheadMode.test.tsx > ACT-010: actual-cost overhead has two explicit modes (baselineAllocation | actualFlat), matching DATA_CONTRACT.md > saving in actual-flat mode persists mode:"actualFlat" and the manually typed figure, independent of the baseline 690ms
+ ✓ tests/browser/proApp.harness.test.tsx > ProApp harness: the two-tab save conflict — real "Reload latest" and "Save my edit as a copy" actions > "Save my edit as a copy" preserves BOTH the other tab's save and this tab's conflicting edit, as two separate projects 529ms
+ ✓ tests/browser/detailedOpenings.test.tsx > Pro room editor: quick/detailed opening entry mode > persists the detailed opening mode and its measured entry through save and reopen 1115ms
+ ✓ tests/review-v5/tools-contract.test.ts > Independent v5 tools contract review > V5-01: an invalid 100% target returns structured invalid state instead of crashing service health 9ms
+ ✓ tests/review-v5/tools-contract.test.ts > Independent v5 tools contract review > V5-02: keeping both paints preserves the LOCAL service reference while remapping the imported service 5ms
+ ✓ tests/review-v5/tools-contract.test.ts > Independent v5 tools contract review > V5-03: upgrading a real v2 database must not reuse a token and accept a stale editor save 19ms
+ ✓ tests/review-v5/tools-contract.test.ts > Independent v5 tools contract review > V5-04: a backup remains valid after issuing revision 2 when actuals still belong to revision 1 7ms
+ ✓ tests/review-v5/tools-contract.test.ts > Independent v5 tools contract review > V5-05: a new draft includes a configured $50 supplies allowance in material cost 6ms
+ ✓ tests/review-v5/tools-contract.test.ts > Independent v5 tools contract review > V5-06: NaN is not accepted as a frozen historical job cost 3ms
+ ✓ tests/review-v5/tools-contract.test.ts > Independent v5 tools contract review > V5-07: a user-entered selling total with three decimal places is invalid 2ms
+ ✓ tests/browser/actualsLaborBreakdown.test.tsx > ACT-011: actual labor can be entered as hours × rate, not only a flat amount > reopening restores the hoursRate mode and its hours/rate values 803ms
+ ✓ tests/domain/lifecycle.test.ts > LIFE-D01: draft snapshot survives a live catalog edit > a draft created at paint $42 still shows $42 after the live catalog changes to $49; a NEW draft shows $49 7ms
+ ✓ tests/domain/lifecycle.test.ts > LIFE-D01: draft snapshot survives a live catalog edit > mutating the returned snapshot object never touches the source settings/catalog objects (deep copy, not a reference) 1ms
+ ✓ tests/domain/lifecycle.test.ts > LIFE-D02: issuing freezes a revision; editing after issue creates a NEW draft, original unchanged > the issued revision object is never mutated by a later edit 4ms
+ ✓ tests/domain/lifecycle.test.ts > LIFE-D02: issuing freezes a revision; editing after issue creates a NEW draft, original unchanged > creating a draft from an issued revision does NOT itself supersede the issued one; only a new issue does 1ms
+ ✓ tests/domain/lifecycle.test.ts > DOC-P01: customer document allow-list > never exposes internal cost/margin fields even if present on the source revision 2ms
+ ✓ tests/domain/lifecycle.test.ts > DOC-P01: customer document allow-list > a hand-assembled object with a leaked private field is caught by the allow-list guard 1ms
+ ✓ tests/domain/lifecycle.test.ts > upsertRevision: saving a NEW draft revision must APPEND it, not silently drop it (found live in the browser) > a revision whose id is not yet in project.revisions gets appended, not lost 3ms
+ ✓ tests/domain/lifecycle.test.ts > upsertRevision: saving a NEW draft revision must APPEND it, not silently drop it (found live in the browser) > a revision whose id already exists in project.revisions is replaced in place, not duplicated 1ms
+ ✓ tests/domain/lifecycle.test.ts > upsertActualReview: ACT-013/014 regression — recorded actuals must actually persist onto the project > a first-time save appends a new ActualReview rather than leaving it as unsaved UI state 1ms
+ ✓ tests/domain/lifecycle.test.ts > upsertActualReview: ACT-013/014 regression — recorded actuals must actually persist onto the project > re-saving the same review id updates it in place rather than duplicating 1ms
+ ✓ tests/domain/lifecycle.test.ts > LIFE-D07: duplicating a project gets fresh IDs and drops issued/actual state > produces independent nested objects with correctly remapped room/surface links 2ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: divide cost by (1+margin) instead of (1-margin) > would give the wrong required price for the door-homepage fixture ($103.08 real vs a different wrong value) 7ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: round target price nearest instead of upward > would ship a suggested price for wall-service that falls slightly BELOW target margin 2ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: clamp negative profit to zero > would hide the loss fixture's -$15.00 profit and -17.6% margin 1ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: gate actual margin on profit > 0 instead of baselinePrice > 0 > would wrongly null-out the margin on the actual-final-loss regression 1ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: convert null price to 0 > would make "unpriced" indistinguishable from "no-charge" (zero_price) 1ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: ceil paint per room instead of per project > would over-buy on the pool-same-product fixture (4 gallons instead of the correct 3) 1ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: pool different colors > would under-count purchases on the separate-colors fixture (3 gallons instead of the correct 2+2) 1ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: subtract an epsilon from all raw demands > would wrongly under-round the exact-purchase-boundary fixture's "over" case 1ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: round subtotal only, not each line, in the free document > would produce $24.01 instead of the correct $24.02 for two $12.005 lines 1ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: use wall throughput for ceiling > would give the wrong total hours on interior-with-ceiling (should be 12.84, not a wall-rate-only figure) 1ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: include stale inactive-mode inputs (a disabled surface contributes to the project) > would inflate materials/labor with a disabled surface's huge garbage geometry, instead of correctly excluding it 2ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: copy live rates into a draft's snapshot without an explicit refresh > would let a live catalog price change retroactively affect an already-saved draft's calculation 3ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: mutate a revision in place instead of append-or-replace (upsertRevision) > would silently drop a brand-new draft revision created from an issued one (BUG_FIX_LOG #7) 3ms
+ ✓ tests/mutation/mutation.test.ts > MUTATION: unlock Pro from a success query param or a local flag > is structurally impossible in this codebase: no entitlement module exists to unlock (see ACCESS_SPEC.md — blocked pending provider selection) 0ms
+ ✓ tests/domain/rateRefresh.test.ts > previewRateRefresh > reports a changed price for a variant the draft actually uses 8ms
+ ✓ tests/domain/rateRefresh.test.ts > previewRateRefresh > flags a variant that was deleted from the live catalog but is still referenced by a surface 1ms
+ ✓ tests/domain/rateRefresh.test.ts > applyRateRefresh > does nothing until applied — preview alone never mutates the draft 1ms
+ ✓ tests/domain/rateRefresh.test.ts > applyRateRefresh > "retain" keeps a deleted variant usable by copying it forward from the OLD snapshot 1ms
+ ✓ tests/domain/rateRefresh.test.ts > applyRateRefresh > "replaceWith" repoints the surface at a new variant and does not need to retain the old one 1ms
+ ✓ tests/domain/rateRefresh.test.ts > applyRateRefresh > never touches a custom proposed price 1ms
+ ✓ tests/domain/rateRefresh.test.ts > applyRateRefresh > throws rather than silently refreshing an issued revision 1ms
+ ✓ tests/domain/rateRefresh.test.ts > V5-08: preRefreshCheckpoint (DATA_CONTRACT.md #3 durable recovery point) > applyRateRefresh embeds the exact pre-refresh revision as a checkpoint field on its result 1ms
+ ✓ tests/domain/rateRefresh.test.ts > V5-08: preRefreshCheckpoint (DATA_CONTRACT.md #3 durable recovery point) > undoRateRefresh restores the exact pre-refresh revision 1ms
+ ✓ tests/domain/rateRefresh.test.ts > V5-08: preRefreshCheckpoint (DATA_CONTRACT.md #3 durable recovery point) > returns null when there is no checkpoint to restore 1ms
+ ✓ tests/domain/rateRefresh.test.ts > V5-08: preRefreshCheckpoint (DATA_CONTRACT.md #3 durable recovery point) > a SECOND refresh replaces the checkpoint rather than nesting it -- only the most recent pre-refresh state is kept 1ms
+ ✓ tests/browser/actualsLaborBreakdown.test.tsx > ACT-011: actual labor can be entered as hours × rate, not only a flat amount > an incomplete hours/rate entry (blank rate) never crashes and blocks save 444ms
+ ✓ tests/browser/actualsOverheadMode.test.tsx > ACT-010: actual-cost overhead has two explicit modes (baselineAllocation | actualFlat), matching DATA_CONTRACT.md > reopening a saved review restores the mode it was actually saved with 605ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > job-original-brief (job) 6ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > job-homepage (job) 1ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > door-homepage (price) 1ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > loss (price) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > at-target (price) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > unpriced (price) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > no-charge (price) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > rounding-target-boundary (price) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > interior-walls-brief (interior) 1ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > interior-with-ceiling (interior) 1ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > document-rounding (document) 1ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > pool-same-product (paint) 1ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > separate-colors (paint) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > exact-purchase-boundaries (paint) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > wall-service (service) 1ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > trim-surface (surface) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > door-two-faces (surface) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > actual-final (actual) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > actual-final-loss (actual) 0ms
+ ✓ tests/engine/fixtures.test.ts > NUM fixtures — production engine (acceptance-fixtures.json) > actual-zero-price (actual) 0ms
+ ↓ tests/audit/independent-contract.test.ts > Independent v4 contract regressions > R01: temporary HTTP 503 preserves the payment and reports unavailable without granting access
+ ↓ tests/audit/independent-contract.test.ts > Independent v4 contract regressions > R02: a failed checkout verification retains its session for retry
+ ✓ tests/audit/independent-contract.test.ts > Independent v4 contract regressions > R03: replace-all leaves exactly the imported business-settings record 16ms
+ ✓ tests/audit/independent-contract.test.ts > Independent v4 contract regressions > R04: replacement cannot roll back a project token and let a stale draft overwrite the restored project 11ms
+ ✓ tests/audit/independent-contract.test.ts > Independent v4 contract regressions > R05: keep-both remaps an imported service to its imported paint variant 3ms
+ ✓ tests/audit/independent-contract.test.ts > Independent v4 contract regressions > R06: import rejects an unusable frozen customer document 5ms
+ ✓ tests/audit/independent-contract.test.ts > Independent v4 contract regressions > R07: the zero-price confirmation gate treats 0.00 as zero 1ms
+ ↓ tests/audit/independent-contract.test.ts > Independent v4 contract regressions > R14: purchaser recovery links use the purchased production domain
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > carries room dimensions, opening counts, and paint price/coverage over exactly 8ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > INT-008/009: marks the wall surface disabled for a ceiling-only room (includeWalls:false) 1ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > a payload with no includeWalls field at all (pre-INT-008/009) still enables the wall surface, for backward compatibility 1ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > adds a ceiling surface when the free tool had it enabled 2ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > explicitly lists the labor rate as an unsupported/not-transferred field, never silently dropped 1ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > the resulting revision computes a COMPLETE, correct estimate through the real Pro assembly pipeline 8ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > never mutates the input payload (pure function) 1ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > V5-09: prep/cleanup hours are preserved as an additionalLabor line, or explicitly disclosed > preserves entered prep hours as a named additionalLabor line, costed at the DESTINATION business rate (32/hr from settings()) 1ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > V5-09: prep/cleanup hours are preserved as an additionalLabor line, or explicitly disclosed > the transferred hours contribute real labor cost through the actual Pro assembly pipeline 2ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > V5-09: prep/cleanup hours are preserved as an additionalLabor line, or explicitly disclosed > discloses prep hours as explicitly omitted when the destination business has no configured loaded hourly rate 1ms
+ ✓ tests/domain/interiorHandoff.test.ts > buildProjectFromInteriorHandoff > V5-09: prep/cleanup hours are preserved as an additionalLabor line, or explicitly disclosed > a blank/zero prepHours adds no line and no disclosure note — nothing was actually entered 1ms
+ ✓ tests/browser/actualsOverheadMode.test.tsx > V5-11: a repeating-decimal baseline overhead (an ordinary, non-round production rate) remains confirmable > the baseline overhead field is non-empty, and Save actuals is enabled once confirmed 359ms
+ ✓ tests/storage/dbUpgrade.test.ts > V5-03: v2-to-v3 upgrade with SEVERAL existing projects at different versions > EACH of several legacy projects independently: a correct post-upgrade edit succeeds, then a second edit still expecting the OLD legacy version conflicts 26ms
+ ✓ tests/storage/dbUpgrade.test.ts > V5-03: v2-to-v3 upgrade with SEVERAL existing projects at different versions > a correctly-reloaded (current-version) save on a legacy project still succeeds after upgrade 3ms
+ ✓ tests/storage/dbUpgrade.test.ts > V5-03: v2-to-v3 upgrade with SEVERAL existing projects at different versions > a post-upgrade IMPORT write also advances strictly past every pre-existing legacy version 3ms
+ ✓ tests/storage/dbUpgrade.test.ts > V5-03: v2-to-v3 upgrade with SEVERAL existing projects at different versions > a brand-new (never-existed-before) database still starts its counter at 1, unaffected by this seeding logic 2ms
+ ✓ tests/domain/createDraftRevision.test.ts > createDraftRevision: applies configured business defaults, not hardcoded ones > mode "none" (the factory default) yields no supplies allowance and no travel line, same as before this fix 8ms
+ ✓ tests/domain/createDraftRevision.test.ts > createDraftRevision: applies configured business defaults, not hardcoded ones > a configured flat $50 supplies default is applied to a new draft and contributes to materials 7ms
+ ✓ tests/domain/createDraftRevision.test.ts > createDraftRevision: applies configured business defaults, not hardcoded ones > a configured paintPercent supplies default (10% of paint cost) is applied and scales off paint cost only 2ms
+ ✓ tests/domain/createDraftRevision.test.ts > createDraftRevision: applies configured business defaults, not hardcoded ones > a configured $75 travel default inserts exactly ONE expense line, contributing to otherExpenses and overhead 2ms
+ ✓ tests/domain/createDraftRevision.test.ts > createDraftRevision: applies configured business defaults, not hardcoded ones > a zero (factory-default) travel amount never inserts a phantom $0.00 expense line 1ms
+ ✓ tests/domain/createDraftRevision.test.ts > createDraftRevision: applies configured business defaults, not hardcoded ones > creating a SECOND draft from the same (unchanged) settings does not duplicate or re-insert a second travel line beyond the one per draft 2ms
+ ✓ tests/browser/actualsOverheadMode.test.tsx > V5-11: a repeating-decimal baseline overhead (an ordinary, non-round production rate) remains confirmable > saves and reopens with the confirmed baseline allocation intact, in_progress state (other categories still blank) 383ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > CORE-parse-01: blank/undefined/null are missing, never invalid or zero 4ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > CORE-parse-02: explicit "0" is valid-zero, distinct from missing 1ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-accept: whitespace trimmed 4ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-accept: leading zeros 1ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-accept: negative zero normalizes to zero 1ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-reject: mixed unit text ("12abc") is invalid, not zero 0ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-reject: currency/unit suffixes 0ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-reject: thousands separators 0ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-reject: scientific notation 0ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-reject: negative when not allowed 0ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-accept: negative when explicitly allowed 0ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-reject: NaN/Infinity text 0ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-grammar-reject: multiple decimal points / bare sign / bare dot 0ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-precision: rejects more than the configured max fraction digits 0ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > CORE-parse-count: whole numbers only, with min/max 1ms
+ ✓ tests/engine/parse.test.ts > CORE-parse: missing vs invalid vs valid-zero > BOUND-divisor: extraordinarily small positive divisor is rejected, not silently accepted 1ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > round-trips a complete summary's job cost exactly 5ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > ACT-010: also round-trips the frozen overhead — the actual-cost review's "baseline allocation" mode needs this, not just jobCost 1ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > serializes every decimal as a plain string, never a live Decimal instance (DATA_CONTRACT: decimal scalars are text at rest) 1ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > a null jobCost (incomplete summary) freezes as null, not a fabricated zero 1ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > REGRESSION: an old record with rawCalculatedOutputs still null (issued before this fix) is reported as "missing," never crashes or silently claims a frozen zero 2ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > a malformed/incompatible stored value (wrong schema version) is treated as missing, not guessed at 0ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > a corrupted jobCost string is treated as missing rather than throwing 1ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > a non-object value is treated as missing 0ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > V5-06: NaN/Infinity are rejected, never accepted as a trusted historical cost > rejects jobCost:"NaN" even though `new PEP("NaN")` does not throw 1ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > V5-06: NaN/Infinity are rejected, never accepted as a trusted historical cost > rejects "Infinity" and "-Infinity" for any cost field 1ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > V5-06: NaN/Infinity are rejected, never accepted as a trusted historical cost > rejects a negative cost field (materials, laborCost, directCost, overhead, effectivePrice, jobCost) 1ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > V5-06: NaN/Infinity are rejected, never accepted as a trusted historical cost > accepts a negative profit and a negative marginRatio — a real loss is valid, not corruption 0ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > V5-06: NaN/Infinity are rejected, never accepted as a trusted historical cost > rejects NaN/Infinity even in profit/marginRatio, which otherwise allow negative values 0ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > V5-06: NaN/Infinity are rejected, never accepted as a trusted historical cost > rejects a non-string numeric field (a raw JS number, never a canonical decimal string) 0ms
+ ✓ tests/domain/calculationSnapshot.test.ts > freezeCalculatedOutputs / readFrozenCalculatedOutputs > V5-06: NaN/Infinity are rejected, never accepted as a trusted historical cost > still accepts a genuinely well-formed record with an explicit zero jobCost 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > computes a wall service unit cost matching hand-derived arithmetic 8ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > reports incomplete when no paint variant is selected 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > reports incomplete when the referenced paint variant no longer exists in the catalog 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > a missing selling price is a valid state, not an error — the row still computes a required price 2ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > a zero selling price is valid (not treated as missing) and retains the real negative profit, per the established zero-price-margin rule (margin undefined only when price is exactly 0) 1ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > a selling price above modeled cost produces a positive margin; below cost produces a negative one 1ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > falls back to the global settings default throughput/rate when the service has no override 1ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > reports incomplete when there is no per-service AND no global default throughput 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > computes a ceiling service using the ceiling throughput default 1ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > computes a trim service using developedWidthFt as the per-linear-ft area basis 1ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > reports incomplete for a trim service missing developedWidthFt 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > computes a door service using width*height*paintedSides as the per-door area basis 1ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > reports incomplete for a door service missing paintedSides 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > rejects an invalid (non-numeric) waste ratio 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > V5-01: targetMarginRatio boundary (CALCULATION_SPEC §1: 0 <= m < 1) > rejects a 100% target as a structured invalid state, never throwing 2ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > V5-01: targetMarginRatio boundary (CALCULATION_SPEC §1: 0 <= m < 1) > rejects a target just above 100% (1.001) 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > V5-01: targetMarginRatio boundary (CALCULATION_SPEC §1: 0 <= m < 1) > rejects a negative target 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > V5-01: targetMarginRatio boundary (CALCULATION_SPEC §1: 0 <= m < 1) > accepts a target just below 100% (0.999) 0ms
+ ✓ tests/domain/serviceHealthAssembly.test.ts > assembleServiceHealth > V5-01: targetMarginRatio boundary (CALCULATION_SPEC §1: 0 <= m < 1) > accepts exactly 0% (a valid, if unusual, target) 0ms
+ ✓ tests/property/geometry.property.test.ts > PROPERTY 10: opening deduction > for deductions between 0 and gross, net = gross - deduction; beyond gross, invalid (never a valid negative/zero final) 13ms
+ ✓ tests/property/geometry.property.test.ts > PROPERTY 11: application labor linearity > doubling valid area at fixed rate/coats doubles raw hours (within the engine precision floor) 10ms
+ ✓ tests/property/geometry.property.test.ts > PROPERTY 12: coats/waste monotonicity > increasing coats cannot decrease raw paint demand 10ms
+ ✓ tests/property/geometry.property.test.ts > PROPERTY 12: coats/waste monotonicity > increasing waste ratio cannot decrease raw paint demand 23ms
+ ✓ tests/engine/estimate.test.ts > PRO-001: independent wall vs ceiling paint variant in the same room > pools wall and ceiling demand SEPARATELY when they use different variants 9ms
+ ✓ tests/engine/estimate.test.ts > PRO-001: independent wall vs ceiling paint variant in the same room > pools wall and ceiling TOGETHER when they share the same variant (never splits by surface kind) 1ms
+ ✓ tests/engine/estimate.test.ts > Standalone trim and door surfaces (no room required) > computes a standalone trim surface using linear-length labor and area-based paint demand 1ms
+ ✓ tests/engine/estimate.test.ts > Standalone trim and door surfaces (no room required) > computes a standalone door surface using per-side-per-coat labor, independent of any room 1ms
+ ✓ tests/engine/estimate.test.ts > Disabled-surface independence (mutation check: "Include stale inactive mode inputs") > a disabled surface contributes zero to demand, labor, and cost 1ms
+ ✓ tests/engine/estimate.test.ts > Enabled-and-invalid propagation > marks the whole project invalid when any ENABLED surface is invalid, and returns no partial result 1ms
+ ✓ tests/engine/estimate.test.ts > No enabled surfaces > is treated as invalid/empty, not as a zero-cost complete project 0ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > tool-specs/02 "original brief acceptance" fixture — independently derived expected values, not computed by the function under test > 42hr*$32 labor (hoursRate) + 22gal*$42 + $180 supplies (itemized) + $100 travel + $75 other -> direct $2623, overhead $393.45, total $3016.45, approx/min $4640.69/$4640.70 9ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > materialsMode: lumpSum vs itemized never blend stale values from the inactive mode > lumpSum mode ignores itemized fields even if they carry stale text 1ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > materialsMode: lumpSum vs itemized never blend stale values from the inactive mode > itemized mode ignores the lumpSum field even if it carries stale text 1ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > materialsMode: lumpSum vs itemized never blend stale values from the inactive mode > itemized mode blocks (incomplete) when gallons is blank, even though lumpSum has stale data 0ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > laborMode: direct vs hoursRate never blend stale values > hoursRate mode ignores the direct field even if it carries stale text 1ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > JOB-001/002 regression: missing required active fields block a result — never a false $0.00 "complete" > a completely blank form (first render) is incomplete, not a priced $0.00 result 0ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > JOB-001/002 regression: missing required active fields block a result — never a false $0.00 "complete" > materials alone filled (labor still blank) stays incomplete 0ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > JOB-001/002 regression: missing required active fields block a result — never a false $0.00 "complete" > explicit zero materials AND labor is a valid, complete (not incomplete) zero-cost scenario 1ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > otherExpenseLines: a real list, not a single flat field > sums multiple named expense lines plus travel 1ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > otherExpenseLines: a real list, not a single flat field > a touched-but-invalid expense line blocks the result with a clear message 1ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > overheadMode: percent vs flat never blend > flat overhead ignores the percent field 1ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > Pricing: unpriced vs zero-price vs below-cost, forwarded from the shared pricing engine unchanged > solveForPrice mode never has a price entered -> "unpriced" status is impossible here (always shows approx/min target) 1ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > Pricing: unpriced vs zero-price vs below-cost, forwarded from the shared pricing engine unchanged > enterPrice mode with no price entered yet reports unpriced 0ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > Pricing: unpriced vs zero-price vs below-cost, forwarded from the shared pricing engine unchanged > enterPrice mode with an explicit price below cost shows negative profit, not a suppressed/clamped one 1ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > V5-07/CORE-021 (related path): an entered price enforces at most two fractional digits, same rule as Pro > rejects three fractional digits (12.005) 0ms
+ ✓ tests/ui/jobCostCalculatorLogic.test.ts > V5-07/CORE-021 (related path): an entered price enforces at most two fractional digits, same rule as Pro > accepts exactly two fractional digits (12.01) 1ms
+ ✓ tests/storage/importAtomicity.test.ts > writeImportedBackup: atomic multi-store commit, version-checked per project > commits businessSettings, paintVariants, otherMaterials, serviceDefinitions, projects, and provenance together in one call 20ms
+ ✓ tests/storage/importAtomicity.test.ts > writeImportedBackup: atomic multi-store commit, version-checked per project > a new project (expectedVersion=null) is committed at version 1 2ms
+ ✓ tests/storage/importAtomicity.test.ts > writeImportedBackup: atomic multi-store commit, version-checked per project > THE TWO-TAB SCENARIO (item 8): Tab B saves after Tab A previews an import; Tab A confirming the STALE import conflicts and never overwrites Tab B's newer work 4ms
+ ✓ tests/storage/importAtomicity.test.ts > writeImportedBackup: atomic multi-store commit, version-checked per project > an atomic import touching multiple projects rolls back ALL of them if even one conflicts (no partial commit) 2ms
+ ✓ tests/storage/importAtomicity.test.ts > writeImportedBackup: atomic multi-store commit, version-checked per project > a failed import commit leaves businessSettings/paintVariants untouched too (whole-transaction rollback, not just projects) 2ms
+ ✓ tests/storage/importAtomicity.test.ts > writeReplaceAllBackup: full atomic wipe-and-restore > replaces every store completely — a local-only project not in the imported set is gone afterward 4ms
+ ✓ tests/storage/importAtomicity.test.ts > writeReplaceAllBackup: full atomic wipe-and-restore > uses the IMPORTED file's own provenance, not the local installation's prior history 2ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > REGRESSION: reproduces the exact old bug — the old inline logic silently substituted 0 for invalid tax and never blocked printing 4ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > rejects a blank tax percentage when tax is enabled 1ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > rejects malformed tax text 0ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > rejects negative tax 0ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > rejects tax above 100 1ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > accepts exactly 100 1ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > accepts explicit zero as valid (not the same as disabled) 0ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > warns above 25% but does not invalidate it 1ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > does not warn at exactly 25% 0ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-010/011: validateTaxPercent — the confirmed bug (negative tax silently falls back to zero and still allows printing) > disabled tax is never invalid, regardless of the stale percent text 0ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-012: zero-total no-charge confirmation > a genuinely zero total requires explicit confirmation before printing 0ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-012: zero-total no-charge confirmation > printing is allowed once the zero-total is explicitly confirmed 0ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-012: zero-total no-charge confirmation > a nonzero total never requires the no-charge confirmation 0ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-012: zero-total no-charge confirmation > confirming no-charge can NEVER bypass an incomplete row 1ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-012: zero-total no-charge confirmation > confirming no-charge can NEVER bypass invalid tax 0ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-014: duplicate independence > the clone gets a fresh id, fresh line ids, and a cleared estimate number 2ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-014: duplicate independence > editing the clone never mutates the original (no shared references) 2ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > TPL-014: duplicate independence > editing the original after duplicating never mutates the clone 1ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > evaluateLines (unchanged behavior, still covered here for completeness) > an untouched blank row (default quantity "1") is ignored, not incomplete 1ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > evaluateLines (unchanged behavior, still covered here for completeness) > a touched-but-incomplete row (description with no price) blocks printing 1ms
+ ✓ tests/ui/estimateTemplateLogic.test.ts > Exact rounding: two $12.005 lines reconcile to $24.02, tax on the rounded subtotal > matches the spec example exactly 1ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-01: rectangular gross wall area 5ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-02: ceiling area 1ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-03: quick opening area uses exact 20/15 defaults from the brief 1ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-04: detailed opening area sums width*height*count, and 3x6.67 != 20 1ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-05: net wall area = gross - openings when deduction enabled 1ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-06: deduction disabled ignores opening entries entirely 0ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-07 (V05): openings exceeding gross wall area -> invalid, not a valid zero/negative room 1ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-08: opening area exactly equal to gross wall area -> valid zero net area 0ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-09: trim paintable area = length * developed width, not treated as square feet of a face alone 1ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-10: door paintable area scales with painted sides 1ms
+ ✓ tests/engine/geometry.test.ts > GEO: room and surface geometry > GEO-11: doors of different dimensions/sides must be modeled as separate surfaces (no implicit averaging) 1ms
+ ✓ tests/engine/pricing.test.ts > CORE pricing: status boundaries > CORE-price-01: status is exactly at_target on an exact match, not below/above 6ms
+ ✓ tests/engine/pricing.test.ts > CORE pricing: status boundaries > CORE-price-02: unpriced vs zero_price are different states and different profit values 2ms
+ ✓ tests/engine/pricing.test.ts > CORE pricing: status boundaries > CORE-price-03 (BOUND V04): target ratio of 1 throws rather than silently dividing by zero 2ms
+ ✓ tests/engine/pricing.test.ts > CORE pricing: status boundaries > CORE-price-04 (BOUND V04): target ratio negative throws 1ms
+ ✓ tests/engine/pricing.test.ts > CORE pricing: status boundaries > CORE-price-05 (BOUND V04): extreme cost near a 100% target returns out_of_supported_range, never Infinity 1ms
+ ✓ tests/engine/pricing.test.ts > CORE pricing: status boundaries > CORE-price-06: minimumTargetPrice is always >= the raw required price (never rounds down below target) 1ms
+ ✓ tests/engine/pricing.test.ts > CORE pricing: status boundaries > CORE-price-07: negative profit and negative margin are never clamped to zero 1ms
+ ✓ tests/engine/pricing.test.ts > CORE pricing: status boundaries > CORE-price-08: markup is distinct from margin and only null-guarded on cost, not price 0ms
+ ✓ tests/ui/estimateTemplateStorage.test.ts > loadStoredDrafts > reports "empty" (not "corrupted") for a genuine first visit — no stored key at all 4ms
+ ✓ tests/ui/estimateTemplateStorage.test.ts > loadStoredDrafts > loads a well-formed stored value 1ms
+ ✓ tests/ui/estimateTemplateStorage.test.ts > loadStoredDrafts > REGRESSION: distinguishes a corrupted stored value from a first visit, and preserves the raw bytes under a backup key rather than silently discarding them 1ms
+ ✓ tests/ui/estimateTemplateStorage.test.ts > loadStoredDrafts > a well-formed JSON value with the wrong shape (missing drafts array) is also reported as corrupted, not silently accepted 0ms
+ ✓ tests/ui/estimateTemplateStorage.test.ts > loadStoredDrafts > an empty drafts array is treated as corrupted/invalid, never a silently-accepted valid state 0ms
+ ✓ tests/ui/estimateTemplateStorage.test.ts > loadStoredDrafts > storage being completely inaccessible (getItem itself throws) is treated as empty, not a crash 0ms
+ ✓ tests/ui/estimateTemplateStorage.test.ts > persistDrafts > reports "saved" on a successful write 1ms
+ ✓ tests/ui/estimateTemplateStorage.test.ts > persistDrafts > REGRESSION: reports "failed" (not silent success) when the underlying storage write throws — e.g. quota exceeded 1ms
+ ✓ tests/ui/estimateTemplateStorage.test.ts > persistDrafts > a failed write never touches the previously committed value — the prior save stays intact 1ms
+ ✓ tests/engine/serviceHealth.test.ts > HEALTH: Price Book Health service unit model > HEALTH-01: null currentSellingPrice prompts entry rather than showing a false 0%/alarming status 5ms
+ ✓ tests/engine/serviceHealth.test.ts > HEALTH: Price Book Health service unit model > HEALTH-02 (V11): a null unitCost (missing required assumption) is incomplete, not a fabricated cheap row 1ms
+ ✓ tests/engine/serviceHealth.test.ts > HEALTH: Price Book Health service unit model > HEALTH-03: a price below modeled cost shows a genuine negative margin, never clamped to zero 1ms
+ ✓ tests/engine/serviceHealth.test.ts > HEALTH: Price Book Health service unit model > HEALTH-04 (forward-derived fixture, not the homepage illustration): $1.80/unit -> ~55.9% margin 2ms
+ ✓ tests/engine/actuals.test.ts > ACT: actual-cost review > ACT-01 (V10): confirming materials alone leaves the review in_progress with no final profit/margin 5ms
+ ✓ tests/engine/actuals.test.ts > ACT: actual-cost review > ACT-02: explicit zero in every category is valid and finalizes (zero is not "missing") 2ms
+ ✓ tests/engine/actuals.test.ts > ACT: actual-cost review > ACT-03: confirmed=true but amount=null does not count as a completed category 1ms
+ ✓ tests/engine/actuals.test.ts > ACT: actual-cost review > ACT-04 (loss, v2.1 regression): a loss retains negative profit AND a real negative margin, never suppressed 1ms
+ ✓ tests/engine/actuals.test.ts > ACT: actual-cost review > ACT-05 (zero baseline price, v2.1 regression): margin is null, but the loss amount is still retained 1ms
+ ✓ tests/engine/actuals.test.ts > ACT: actual-cost review > ACT-06 (mutation guard): margin is gated on baselinePrice > 0, NOT on profit being positive 1ms
+ ✓ tests/engine/decimal.test.ts > CORE-026: HALF_UP rounds negative ties away from zero (symmetric), not toward +Infinity > -0.005 rounds to -0.01, not 0.00 or -0.00 3ms
+ ✓ tests/engine/decimal.test.ts > CORE-026: HALF_UP rounds negative ties away from zero (symmetric), not toward +Infinity > -0.015 rounds to -0.02 0ms
+ ✓ tests/engine/decimal.test.ts > CORE-030: exact decimal arithmetic has no binary-float artifact > 0.1 + 0.2 is exactly 0.3, unlike native JS floating point (0.1+0.2=0.30000000000000004) 1ms
+ ✓ tests/engine/decimal.test.ts > CORE-030: exact decimal arithmetic has no binary-float artifact > a sum landing exactly on a whole gallon never gets nudged by float noise before ceiling 0ms
+ ✓ tests/engine/document.test.ts > DOC: free-document ledger and cost-breakdown reconciliation > DOC-01: an untouched blank line contributes nothing (caller filters it before this call) 4ms
+ ✓ tests/engine/document.test.ts > DOC: free-document ledger and cost-breakdown reconciliation > DOC-02: tax computes on the ROUNDED subtotal, not on raw unrounded line sums 3ms
+ ✓ tests/engine/document.test.ts > DOC: free-document ledger and cost-breakdown reconciliation > DOC-03 (mutation guard): rounding each line first differs from summing raw then rounding once 1ms
+ ✓ tests/engine/document.test.ts > DOC: free-document ledger and cost-breakdown reconciliation > COST-reconcile-01: mismatched rounded components surface an explicit adjustment row 1ms
+ ✓ tests/engine/cost.test.ts > COST: materials, supplies allowance, overhead > COST-01: allowance mode "none" contributes zero regardless of stale flat/percent fields 2ms
+ ✓ tests/engine/cost.test.ts > COST: materials, supplies allowance, overhead > COST-02: allowance mode "flat" ignores paintPercentRatio 0ms
+ ✓ tests/engine/cost.test.ts > COST: materials, supplies allowance, overhead > COST-03: allowance mode "paintPercent" ignores flatAmount and scales off paint cost only 1ms
+ ✓ tests/engine/cost.test.ts > COST: materials, supplies allowance, overhead > COST-04 (mutation guard): allowance never applies to the full materials total, only to paint cost 1ms
+ ✓ tests/engine/cost.test.ts > COST: materials, supplies allowance, overhead > COST-05: overhead is a single allocation method — percent of full direct cost 1ms
+ ✓ tests/engine/cost.test.ts > COST: materials, supplies allowance, overhead > COST-06: travel/expense lines add to otherExpenses, which itself feeds overhead (no double burden) 1ms
+ ✓ tests/ui/shared.test.ts > money() formatting > formats a positive amount as $X.XX 3ms
+ ✓ tests/ui/shared.test.ts > money() formatting > formats a negative amount with the sign BEFORE the dollar sign 0ms
+ ✓ tests/ui/shared.test.ts > money() formatting > formats zero without a sign 0ms
+ ✓ tests/ui/shared.test.ts > money() formatting > formats null/undefined as an em dash 0ms
+ ✓ tests/ui/shared.test.ts > parseCoatsInput(): the Pro app's per-surface coats override, matching CALCULATION_SPEC's 1..5 integer bound > blank input clears the override (falls back to the default elsewhere) 0ms
+ ✓ tests/ui/shared.test.ts > parseCoatsInput(): the Pro app's per-surface coats override, matching CALCULATION_SPEC's 1..5 integer bound > rejects "0" instead of silently coercing it to 1 (BOUND-003) 0ms
+ ✓ tests/ui/shared.test.ts > parseCoatsInput(): the Pro app's per-surface coats override, matching CALCULATION_SPEC's 1..5 integer bound > rejects a value above 5 instead of silently accepting it (BOUND-004) 0ms
+ ✓ tests/ui/shared.test.ts > parseCoatsInput(): the Pro app's per-surface coats override, matching CALCULATION_SPEC's 1..5 integer bound > rejects a non-integer instead of silently truncating it (BOUND-005) 0ms
+ ✓ tests/ui/shared.test.ts > parseCoatsInput(): the Pro app's per-surface coats override, matching CALCULATION_SPEC's 1..5 integer bound > accepts every integer in the valid 1..5 range 0ms
+ ✓ tests/ui/shared.test.ts > parseCoatsInput(): the Pro app's per-surface coats override, matching CALCULATION_SPEC's 1..5 integer bound > rejects malformed text 0ms
+ ✓ tests/lib/license.test.ts > buildLicenseKey / parseLicenseKey round-trip > builds a key embedding the Dodo payment id 2ms
+ ✓ tests/lib/license.test.ts > buildLicenseKey / parseLicenseKey round-trip > parses a well-formed key back into its payment id 1ms
+ ✓ tests/lib/license.test.ts > buildLicenseKey / parseLicenseKey round-trip > is case-insensitive on the fixed prefix only — the payment id is captured verbatim 0ms
+ ✓ tests/lib/license.test.ts > buildLicenseKey / parseLicenseKey round-trip > tolerates surrounding whitespace (pasted from an email) 0ms
+ ✓ tests/lib/license.test.ts > buildLicenseKey / parseLicenseKey round-trip > rejects malformed or unrelated input rather than guessing 0ms
+ ✓ tests/lib/license.test.ts > buildLicenseKey / parseLicenseKey round-trip > round-trips: build then parse recovers the exact original payment id 0ms
+ ✓ tests/lib/license.test.ts > buildRecoveryUrl > builds a URL pointing at the pricing section with a sessionId 1ms
+ ✓ tests/lib/license.test.ts > buildRecoveryUrl > falls back to paymentId when no sessionId is given 0ms
+ ✓ tests/lib/license.test.ts > buildRecoveryUrl > prefers sessionId over paymentId when both are given 0ms
+
+ Test Files  52 passed (52)
+      Tests  471 passed | 3 skipped (474)
+   Start at  17:23:25
+   Duration  12.46s (tests 54%, environment 22%, transform 10%, import 9%, setup 4%)
+
+    Isolate  52 workers spawned · ~906ms startup each (spawn + environment, per file)
+             at least ~3.38s faster with isolate: false — reuses workers across files instead of one per file
+

@@ -1,13 +1,18 @@
-# Tool Bug Fix Log — v5 session
+# Tool Bug Fix Log — v5 and v6 sessions
 
-Covers the defects investigated and fixed under the current task (item 4's 14
-independent-review regressions, minus R01/R02/R14 which are explicitly out of
-scope, plus the "starting point, not the entire audit" source findings this
-session's own inspection surfaced). Every entry follows: reproduction → root
-cause → change → failing-test evidence → passing-test evidence. Prior
-sessions' entries (#1–#28) remain in `BUG_FIX_LOG.md` and are not duplicated
-here; this file exists specifically for item 10's `TOOL_BUG_FIX_LOG.md`
-deliverable and covers only this session's work.
+Covers the defects investigated and fixed under this task across two
+sessions: v5 (item 4's 14 independent-review regressions, minus R01/R02/R14
+which are explicitly out of scope, plus source findings that session's own
+inspection surfaced) and v6 (an independent tools-only review's 11 NEW
+regressions against the delivered v5 source, plus completing the paid
+costing interface and other item-5/6 gaps). Every entry follows:
+reproduction → root cause → change → failing-test evidence → passing-test
+evidence. Prior sessions' entries (#1–#28) remain in `BUG_FIX_LOG.md` and
+are not duplicated here; this file exists specifically for item 10/12's
+`TOOL_BUG_FIX_LOG.md` deliverable.
+
+**v6 session entries are below the v5 section, under "v6 session: independent
+tools-only review + paid costing interface completion."**
 
 All fixes below were developed test-first: the cited failing-test evidence
 was run against the code as it stood **before** the corresponding commit and
@@ -362,9 +367,322 @@ refresh" control existed).
 
 ---
 
-## Out of scope, explicitly not touched
+## Out of scope, explicitly not touched (v5 session)
 
 **R01, R02, R14** — payment/checkout/domain-recovery behavior. Left as
 `it.skip(...)` in `tests/audit/independent-contract.test.ts` with a comment
 citing this task's own item-4 exclusion. Never fixed, never deleted, never
 counted as passing.
+
+---
+
+# v6 session: independent tools-only review + paid costing interface completion
+
+A second independent review (`painting-estimate-pro-v5-tools-review.zip`)
+reproduced 11 new regressions against the delivered v5 source
+(`tests/review-v5/`), and separately identified that the main Pro project
+editor exposed no way to enter additional labor, itemized materials, a
+supplies allowance, or direct expenses/travel — a core completeness gap
+beyond the shorter missing-feature list in the v5 completeness report. It
+also caught an evidence-accuracy error: v5's LIFE-003 was marked "verified"
+based on a test that actually proved the WRONG (in-memory-only) behavior.
+
+## V5-01 — 100% target margin crashes service-health calculation
+
+**Reproduction:** A saved wall service with `targetMarginRatio: "1"` (or any
+value outside 0 ≤ m < 1). `assembleServiceHealth` calls the pricing
+engine's `requiredPriceRaw()`, which throws `targetMarginRatio out of
+range` rather than returning a structured result.
+
+**Root cause:** Neither `assembleServiceHealth` nor `assembleProjectEstimate`
+validated the range before calling the pricing engine — only the free
+job-cost calculator already had this guard.
+
+**Change:** Both assemblies now check `targetMarginRatio.greaterThanOrEqualTo(1)
+|| .isNegative()` and return a structured `invalid` result before ever
+calling `requiredPriceRaw`.
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-contract.test.ts`
+V5-01; extended boundary coverage (exactly 100%, just above/below, negative,
+exactly 0%) in `tests/domain/serviceHealthAssembly.test.ts` and
+`tests/domain/estimateAssembly.test.ts`. Commit `57dcb7a`.
+
+## V5-02 — keep-both rewrites local services to the imported paint
+
+**Reproduction:** Local paint `paint-1` ($42) with a local service
+referencing it; incoming backup has a conflicting $99 paint plus its own new
+service. Choosing "keep both" for the paint remapped the LOCAL service's
+`paintVariantId` to the new copy too, even though the local paint variant
+itself was untouched.
+
+**Root cause:** `applyFullRestoreResolutions`'s keep-both remap applied to
+every final service definition sharing the remapped ID string, without
+distinguishing local-preserved content from incoming-origin content.
+
+**Change:** Tracks a `localPreservedIds` set (local, non-conflicting records,
+and local records whose OWN conflict resolved to keepLocal/keepBoth) and
+excludes them from the remap entirely; only incoming-origin content
+(new/replaced/keepBoth-copy) is ever remapped.
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-contract.test.ts`
+V5-02; extended coverage for local+incoming service combinations and for
+keepLocal/replaceImported (which never mint a copy to remap toward) in
+`tests/domain/backup.test.ts`. Commit `57dcb7a`.
+
+## V5-03 — v2-to-v3 database upgrade reuses project versions
+
+**Reproduction:** A real pre-v3 IndexedDB database with an existing project
+at version 1. Upgrading via `openAppDb` creates an empty `meta` store, so
+the new global counter restarts at 0 — the first post-upgrade save reissues
+version 1, and a second, genuinely stale save (also expecting version 1)
+incorrectly succeeds instead of conflicting.
+
+**Root cause:** The upgrade never seeded the counter relative to versions
+already present under the old per-project scheme.
+
+**Change:** On a v2→v3 upgrade with an existing `projects` store, the
+upgrade reads every existing project's version and seeds the counter to the
+maximum found, before any new write can read it.
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-contract.test.ts`
+V5-03; extended to several pre-existing projects at different legacy
+versions, plus normal saves and import writes post-upgrade, in the new
+`tests/storage/dbUpgrade.test.ts`. Commit `57dcb7a`.
+
+## V5-04 — a legitimate revised project produces a rejected backup
+
+**Reproduction:** Issue revision 1, record a final actual review against it,
+issue revision 2 (superseding revision 1 via the production `supersede()`
+helper). Exporting now fails validation, even though it validated fine
+before the second issue.
+
+**Root cause:** `validateActualReview` required the baseline's state to be
+exactly `'issued'`, rejecting the valid historical `'superseded'` state.
+
+**Change:** Accepts a baseline that is `'issued'` OR `'superseded'`, still
+rejecting `'draft'`.
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-contract.test.ts`
+V5-04. Commit `57dcb7a`.
+
+## V5-05 — the configured supplies default is omitted from calculated cost
+
+**Reproduction:** Configure a $50 flat supplies default; create a new draft
+with a 400 ft² wall. Materials come out to $126 (paint only) instead of
+$176 (paint + the configured allowance).
+
+**Root cause:** `createDraftRevision` hardcoded
+`suppliesAllowance: {mode:'none', amount:'0', ratio:'0'}` regardless of the
+configured `defaultSuppliesAllowance`, and never inserted a travel expense
+line from `defaultTravelAmount` either (the same root cause as CAT-010/
+COST-014/015).
+
+**Change:** `createDraftRevision` now reads both defaults from the
+snapshot's own captured `businessSettings`.
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-contract.test.ts`
+V5-05; none/flat/paintPercent supplies modes and travel-line duplication
+checks in the new `tests/domain/createDraftRevision.test.ts`. Commit
+`57dcb7a`.
+
+## V5-06 — the frozen-output reader accepts NaN as historical cost
+
+**Reproduction:** `readFrozenCalculatedOutputs({schemaVersion:1,
+engineVersion:"2.1.0", jobCost:"NaN", overhead:"0"})` reports
+`status:"frozen"`.
+
+**Root cause:** `new PEP('NaN')` / `new PEP('Infinity')` do not throw in
+decimal.js — the existing try/catch guard caught nothing. The import
+validator also never checked `rawCalculatedOutputs` at all.
+
+**Change:** Added a finiteness + sign check applied to every field in the
+frozen structure (cost/price fields non-negative; profit/margin may be
+negative). Wired the same check into `validateBackupEnvelope` so a
+present-but-corrupted structure is rejected on import too (null/absent is
+still accepted — normal for a draft or a pre-freeze issued revision).
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-contract.test.ts`
+V5-06; NaN/Infinity/negative-cost/non-string rejection and negative-
+profit/margin acceptance in `tests/domain/calculationSnapshot.test.ts`;
+import-level rejection/acceptance in `tests/domain/backup.test.ts`. Commit
+`733e687`.
+
+## V5-07 — a three-decimal selling total is accepted as complete
+
+**Reproduction:** A custom selling total of `12.005` is accepted as
+`complete` in both the Pro estimate summary and the free job-cost
+calculator.
+
+**Root cause:** Neither `parseDecimalField` call for these fields passed
+`maxFractionDigits: 2` — both used the general 10-digit text-entry limit.
+
+**Change:** Both now pass `maxFractionDigits: 2`, per CALCULATION_SPEC.md
+§6's "at most two decimal places" rule (CORE-021).
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-contract.test.ts`
+V5-07; boundary coverage (3/4 digits rejected, exactly 2 and whole-dollar
+accepted) in `tests/domain/estimateAssembly.test.ts` and
+`tests/ui/jobCostCalculatorLogic.test.ts`. Commit `01b0cfa`.
+
+## V5-08 — pre-refresh recovery disappears on save/reopen
+
+**Reproduction:** Refresh a draft's rates, save, reopen (full remount) — the
+"Undo refresh" recovery point is gone.
+
+**Root cause:** The prior session's fix stored the pre-refresh snapshot as
+plain `useState` in `ProApp`, and `saveDraft()` explicitly cleared it. The
+prior session's OWN test asserted this disappearance as desired behavior —
+verifying the bug instead of DATA_CONTRACT.md #3's actual "keep a
+recoverable pre-refresh draft snapshot" requirement.
+
+**Change:** Moved the checkpoint into the data model: `EstimateRevision`
+gains an optional `preRefreshCheckpoint` field, populated by
+`applyRateRefresh()` with the pre-refresh revision (its own checkpoint
+stripped, so repeated refreshes replace rather than nest). Being a normal
+field, it now persists through the existing save path automatically. A new
+pure `undoRateRefresh()` domain helper restores it exactly.
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-workflows.test.tsx`
+V5-08; checkpoint capture/undo/no-checkpoint/repeated-refresh-replaces in
+`tests/domain/rateRefresh.test.ts`; rewrote the prior session's own
+`tests/browser/rateRefreshUndo.test.tsx` test that had the wrong assertion,
+now verifying survival through save AND a full unmount/remount/reopen.
+Commit `73093b6`.
+
+## V5-09 — newly added prep hours disappear in the free-to-Pro handoff
+
+**Reproduction:** Enter 3 prep/cleanup hours in the free interior
+calculator, click "Continue this room in Pro" — the built Pro revision has
+no additional labor and no disclosure note mentioning the hours.
+
+**Root cause:** `InteriorHandoffPayload` had no `prepHours` field at all;
+the existing "labor rate not transferred" note doesn't explain losing the
+entered hours themselves.
+
+**Change:** The payload carries `prepHours`; `buildProjectFromInteriorHandoff`
+preserves it as a named additionalLabor line costed at the DESTINATION
+business's own loaded rate, or explicitly discloses the omission when no
+rate is configured yet.
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-workflows.test.tsx`
+V5-09; preserved-with-correct-rate, contributes real cost through the full
+assembly pipeline, disclosed-when-no-rate, and blank/zero-adds-nothing in
+`tests/domain/interiorHandoff.test.ts`. Commit `779176e`.
+
+## V5-10 — a new trim service invents four feet of developed width
+
+**Reproduction:** Clicking "+ trim service" pre-fills `Developed width (ft)`
+with `4`; a new door service similarly gets an assumed 3×6.67 two-sided
+door.
+
+**Root cause:** `addService()` hardcoded these "sample" geometry values
+instead of leaving them unset.
+
+**Change:** Every required geometry field on a new service now starts
+`null`, matching every other required-with-no-default field in the app.
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-workflows.test.tsx`
+V5-10; extended to the door kind (the review's own test only covered trim)
+in the new `tests/browser/addServiceNoInventedGeometry.test.tsx`. Commit
+`3588bdc`.
+
+## V5-11 — baseline overhead rejects the app's own calculated precision
+
+**Reproduction:** Set wall throughput to 137 ft²/hr/coat (an ordinary,
+editable rate), issue a 10×10×8 room, open actual review — "Save actuals"
+is disabled because the baseline overhead's computed string exceeds 10
+fractional digits.
+
+**Root cause:** `deriveActualCategory` fed the baselineAllocation overhead
+value through `parseDecimalField`, the same parser that enforces a
+10-fractional-digit TEXT-ENTRY limit meant to catch human mistakes — not
+appropriate for the app's own internal, fully-precise calculation result.
+
+**Change:** Added `baselineOverheadValue()` returning the `Dec` directly and
+a dedicated `deriveOverheadCategory()` that uses it as-is in
+baselineAllocation mode, never round-tripped through the text parser.
+
+**Failing/passing-test evidence:** `tests/review-v5/tools-workflows.test.tsx`
+V5-11; discovered that the PRIOR session's own ACT-010 tests (wallThroughput
+150, overheadRatio 0.15) happened to cancel out to a clean 2-decimal result
+by numeric coincidence and never actually exercised this bug — added a new
+regression using the review's own deliberately non-round 137 ft²/hr/coat
+rate in `tests/browser/actualsOverheadMode.test.tsx`. Commit `faf48d1`.
+
+## Completing the paid costing interface (item 5)
+
+**Reproduction (completeness gap, not a single failing test):** The main
+Pro project editor exposed no way to enter additional-labor lines, itemized
+other materials, a supplies allowance, or direct-expense/travel inputs —
+`assembleProjectEstimate` already fully consumed
+`revision.additionalLabor`/`otherMaterialLines`/`suppliesAllowance`/
+`otherExpenses`, but no interface control ever wrote to any of them.
+
+**Change:** Added a real "Additional costs" section to the project editor
+with add/edit/remove UI for all four: named additional-labor tasks (hours +
+rate), itemized other materials (description/unit/quantity/unit cost), the
+supplies-allowance mode selector (now actually editable), and named other
+direct expenses (including the travel line a configured default already
+seeds).
+
+**Genuine crash found while building the completion test:**
+`assembleProjectEstimate` constructed `new PEP(rawString)` directly from
+these four line-item arrays' raw text with zero validation — a freshly-added
+blank line (the normal state the instant "+ Add task"/"+ Add
+material"/"+ Add expense" is clicked, before the customer finishes typing
+every field) threw a `DecimalError` and crashed the whole estimate summary.
+Fixed by validating every field through `parseDecimalField` first (missing
+→ incomplete, malformed → invalid), exactly like every other user-entered
+field in this assembly.
+
+**Failing/passing-test evidence:** `tests/browser/projectCostEntry.test.tsx`
+drives the independent review's own "Required completion test" verbatim
+through the real interface (empty project → named prep task, itemized
+material, allowance, travel expense → independently-derived cost/overhead/
+price → save → reopen → issue → restored results), confirmed failing (no
+such UI existed, then a real crash) against the pre-fix component, passing
+after. 9 new domain-level tests in `tests/domain/estimateAssembly.test.ts`
+cover blank/malformed/valid states for all four line-item kinds. Commit
+`41f7122`.
+
+## Pro room editor: quick/detailed opening entry (item 6)
+
+**Reproduction (completeness gap):** `estimateAssembly.ts`'s
+`resolveSurface` already fully supported `Room.openingMode: 'detailed'` and
+`Room.openings[]`, correctly computing net area from measured width × height
+× count — but the real Pro room editor never exposed a way to reach it,
+identical in spirit to the free calculator's own INT-010 gap, just in the
+paid tool.
+
+**Change:** Added an "Opening entry" mode selector (shown once "Deduct
+openings" is enabled) and, in detailed mode, a real add/edit/remove list of
+measured openings, superseding the quick 20/15 ft² constants.
+
+**Failing/passing-test evidence:** `tests/browser/detailedOpenings.test.tsx`,
+confirmed failing (no such controls existed) against the pre-fix component,
+passing after — independently-derived Materials cost for both the quick-
+mode default (5 gal → $210.00) and the detailed-mode measured opening (4
+gal → $168.00), confirming the measured dimensions drive the calculation.
+Commit `37c2e15`.
+
+## Actual labor as hours × rate (ACT-011, item 6)
+
+**Reproduction (completeness gap):** `ActualReview.laborBreakdown` was
+defined in the domain model and validated on import, but no UI ever exposed
+the `hoursRate` mode — actual labor could only ever be entered as one flat
+dollar amount.
+
+**Change:** Added a labor-mode toggle mirroring the existing overhead
+dual-mode pattern (ACT-010): "Enter amount directly" or "Hours × rate",
+using one authoritative active mode with no blending from the inactive
+mode's fields.
+
+**Failing/passing-test evidence:** `tests/browser/actualsLaborBreakdown.test.tsx`,
+confirmed failing (no such toggle existed) against the pre-fix component,
+passing after — covers default mode, live computation, persistence,
+restore-on-reopen, and incomplete-entry safety. Commit `55ef334`.
+
+## Out of scope, explicitly not touched (v6 session)
+
+Same exclusions as v5: payment/checkout/domain/licensing/authentication/
+deployment/infrastructure. No new payment-adjacent findings this session.

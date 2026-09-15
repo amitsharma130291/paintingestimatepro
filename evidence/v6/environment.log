@@ -1,0 +1,3 @@
+v24.13.1
+11.8.0
+tests/api and tests/lib excluded per task scope (payment/licensing out of scope)
