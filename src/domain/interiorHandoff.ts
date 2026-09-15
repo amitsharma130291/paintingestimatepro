@@ -22,6 +22,10 @@ export interface InteriorHandoffPayload {
   lengthFt: string;
   widthFt: string;
   heightFt: string;
+  // Optional, defaulting to true, for backward compatibility with payloads
+  // written before the free calculator had an includeWalls toggle
+  // (INT-008/009) — every wall was always enabled before this field existed.
+  includeWalls?: boolean;
   includeCeiling: boolean;
   deductOpenings: boolean;
   doorCount: string;
@@ -101,7 +105,7 @@ export function buildProjectFromInteriorHandoff(payload: InteriorHandoffPayload,
     id: wallSurfaceId,
     roomId,
     kind: 'wall',
-    enabled: true,
+    enabled: payload.includeWalls !== false,
     measurementMode: 'roomDerived',
     areaFt2: null,
     trimLengthFt: null,
@@ -127,6 +131,7 @@ export function buildProjectFromInteriorHandoff(payload: InteriorHandoffPayload,
       ...wallSurface,
       id: ceilingSurfaceId,
       kind: 'ceiling',
+      enabled: true, // independent of the wall surface's own enabled state (INT-008/009: ceiling-only rooms disable the wall, never the ceiling)
     });
     surfaceIds.push(ceilingSurfaceId);
   }

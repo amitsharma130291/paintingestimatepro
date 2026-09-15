@@ -43,6 +43,23 @@ describe('buildProjectFromInteriorHandoff', () => {
     expect(result.surfaces[0].coats).toBe(2);
   });
 
+  it('INT-008/009: marks the wall surface disabled for a ceiling-only room (includeWalls:false)', () => {
+    const ids = sequentialIdSource();
+    const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');
+    const result = buildProjectFromInteriorHandoff({ ...fixturePayload, includeWalls: false, includeCeiling: true }, snapshot, ids);
+    const wall = result.surfaces.find((s) => s.kind === 'wall')!;
+    expect(wall.enabled).toBe(false);
+    const ceiling = result.surfaces.find((s) => s.kind === 'ceiling')!;
+    expect(ceiling.enabled).toBe(true);
+  });
+
+  it('a payload with no includeWalls field at all (pre-INT-008/009) still enables the wall surface, for backward compatibility', () => {
+    const ids = sequentialIdSource();
+    const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');
+    const result = buildProjectFromInteriorHandoff(fixturePayload, snapshot, ids);
+    expect(result.surfaces.find((s) => s.kind === 'wall')!.enabled).toBe(true);
+  });
+
   it('adds a ceiling surface when the free tool had it enabled', () => {
     const ids = sequentialIdSource();
     const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');

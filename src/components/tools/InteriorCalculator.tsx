@@ -16,9 +16,9 @@ import { writeInteriorHandoff } from '../../domain/interiorHandoff';
 // spec, which "Load sample data" below reproduces exactly for a user who
 // wants to see the tool work before entering their own room).
 const DEFAULTS = {
-  length: '', width: '', height: '8', includeCeiling: false, deductOpenings: true,
+  length: '', width: '', height: '8', includeWalls: true, includeCeiling: false, deductOpenings: true,
   doorCount: '0', windowCount: '0', coats: '2', coverage: '350', wastePercent: '10', pricePerGal: '45',
-  calculateLabor: false, hourlyRate: '32', wallThroughput: '150', ceilingThroughput: '120',
+  calculateLabor: false, hourlyRate: '32', wallThroughput: '150', ceilingThroughput: '120', prepHours: '0',
 };
 const FIXTURE_SAMPLE = { length: '20', width: '16', height: '9', doorCount: '2', windowCount: '3', coats: '2', coverage: '350', wastePercent: '10', pricePerGal: '42' };
 
@@ -26,6 +26,7 @@ export default function InteriorCalculator() {
   const [length, setLength] = useState(DEFAULTS.length);
   const [width, setWidth] = useState(DEFAULTS.width);
   const [height, setHeight] = useState(DEFAULTS.height);
+  const [includeWalls, setIncludeWalls] = useState(DEFAULTS.includeWalls);
   const [includeCeiling, setIncludeCeiling] = useState(DEFAULTS.includeCeiling);
   const [deductOpenings, setDeductOpenings] = useState(DEFAULTS.deductOpenings);
   const [doorCount, setDoorCount] = useState(DEFAULTS.doorCount);
@@ -38,11 +39,13 @@ export default function InteriorCalculator() {
   const [hourlyRate, setHourlyRate] = useState(DEFAULTS.hourlyRate);
   const [wallThroughput, setWallThroughput] = useState(DEFAULTS.wallThroughput);
   const [ceilingThroughput, setCeilingThroughput] = useState(DEFAULTS.ceilingThroughput);
+  const [prepHours, setPrepHours] = useState(DEFAULTS.prepHours);
 
   function loadSampleData() {
     setLength(FIXTURE_SAMPLE.length);
     setWidth(FIXTURE_SAMPLE.width);
     setHeight(FIXTURE_SAMPLE.height);
+    setIncludeWalls(true);
     setIncludeCeiling(false);
     setDeductOpenings(true);
     setDoorCount(FIXTURE_SAMPLE.doorCount);
@@ -71,11 +74,14 @@ export default function InteriorCalculator() {
     const missing = pLength.kind === 'missing' || pWidth.kind === 'missing';
 
     const errors: string[] = [];
+    // tool-specs/03: "includeWalls default true; includeCeiling default
+    // false; at least one enabled" (INT-008/009).
+    if (!includeWalls && !includeCeiling) errors.push('Enable at least one surface (walls or ceiling) to calculate paint.');
     if (pLength.kind === 'invalid' || (pLength.kind === 'valid' && pLength.value.lessThanOrEqualTo(0))) errors.push('Room length must be a positive number.');
     if (pWidth.kind === 'invalid' || (pWidth.kind === 'valid' && pWidth.value.lessThanOrEqualTo(0))) errors.push('Room width must be a positive number.');
     if (pHeight.kind !== 'valid' || pHeight.value.lessThanOrEqualTo(0)) errors.push('Wall height must be a positive number.');
-    if (pDoors.kind === 'invalid') errors.push(`Doors: ${pDoors.message}`);
-    if (pWindows.kind === 'invalid') errors.push(`Windows: ${pWindows.message}`);
+    if (includeWalls && deductOpenings && pDoors.kind === 'invalid') errors.push(`Doors: ${pDoors.message}`);
+    if (includeWalls && deductOpenings && pWindows.kind === 'invalid') errors.push(`Windows: ${pWindows.message}`);
     if (pCoats.kind !== 'valid') errors.push('Coats must be a whole number from 1 to 5.');
     if (pCoverage.kind !== 'valid' || pCoverage.value.lessThanOrEqualTo(0)) errors.push('Coverage must be a positive number.');
     if (pWaste.kind !== 'valid') errors.push('Waste % must be a number.');
@@ -85,16 +91,25 @@ export default function InteriorCalculator() {
     let wallRateVal: Dec | null = null;
     let ceilingRateVal: Dec | null = null;
     let rateVal: Dec | null = null;
+    let prepHoursVal: Dec | null = null;
     if (calculateLabor) {
       const pRate = parseDecimalField(hourlyRate);
-      const pWallRate = parseDecimalField(wallThroughput);
-      const pCeilingRate = parseDecimalField(ceilingThroughput);
+      const pPrep = parseDecimalField(prepHours);
       if (pRate.kind !== 'valid') laborRateErr = 'Hourly rate must be a number.';
       else rateVal = pRate.value;
-      if (pWallRate.kind !== 'valid' || pWallRate.value.lessThanOrEqualTo(0)) laborRateErr = 'Wall production rate must be positive.';
-      else wallRateVal = pWallRate.value;
-      if (includeCeiling && (pCeilingRate.kind !== 'valid' || pCeilingRate.value.lessThanOrEqualTo(0))) laborRateErr = 'Ceiling production rate must be positive.';
-      else if (pCeilingRate.kind === 'valid') ceilingRateVal = pCeilingRate.value;
+      if (pPrep.kind === 'invalid' || (pPrep.kind === 'valid' && pPrep.value.isNegative())) laborRateErr = 'Prep/cleanup hours must be zero or positive.';
+      else if (pPrep.kind === 'valid') prepHoursVal = pPrep.value;
+      else prepHoursVal = new PEP(0); // blank prep hours defaults to 0, not missing (tool-specs/03: "default 0")
+      if (includeWalls) {
+        const pWallRate = parseDecimalField(wallThroughput);
+        if (pWallRate.kind !== 'valid' || pWallRate.value.lessThanOrEqualTo(0)) laborRateErr = 'Wall production rate must be positive.';
+        else wallRateVal = pWallRate.value;
+      }
+      if (includeCeiling) {
+        const pCeilingRate = parseDecimalField(ceilingThroughput);
+        if (pCeilingRate.kind !== 'valid' || pCeilingRate.value.lessThanOrEqualTo(0)) laborRateErr = 'Ceiling production rate must be positive.';
+        else ceilingRateVal = pCeilingRate.value;
+      }
     }
     if (laborRateErr) errors.push(laborRateErr);
 
@@ -107,15 +122,16 @@ export default function InteriorCalculator() {
       pWaste.kind !== 'valid' ||
       pPrice.kind !== 'valid' ||
       pCoats.kind !== 'valid' ||
-      pDoors.kind !== 'valid' ||
-      pWindows.kind !== 'valid'
+      (includeWalls && deductOpenings && (pDoors.kind !== 'valid' || pWindows.kind !== 'valid'))
     ) {
       return { errors, missing } as const;
     }
 
-    const gross = grossWallArea(pLength.value, pWidth.value, pHeight.value);
-    const deduction = deductOpenings ? quickOpeningArea(pDoors.value, new PEP(20), pWindows.value, new PEP(15)) : new PEP(0);
-    const net = netWallArea(gross, deduction, deductOpenings);
+    const gross = includeWalls ? grossWallArea(pLength.value, pWidth.value, pHeight.value) : new PEP(0);
+    const activeDeduction = includeWalls && deductOpenings;
+    const deduction =
+      activeDeduction && pDoors.kind === 'valid' && pWindows.kind === 'valid' ? quickOpeningArea(pDoors.value, new PEP(20), pWindows.value, new PEP(15)) : new PEP(0);
+    const net = includeWalls ? netWallArea(gross, deduction, activeDeduction) : { valid: true as const, area: new PEP(0) };
 
     if (!net.valid) {
       return { errors: ['Openings exceed the wall area — reduce the door/window count or turn off deductions.'], preview: clampForPreview(net.area) } as const;
@@ -130,9 +146,11 @@ export default function InteriorCalculator() {
 
     let laborCost: Dec | null = null;
     let hours: Dec | null = null;
-    if (calculateLabor && rateVal && wallRateVal) {
-      hours = wallOrCeilingHours(net.area, coatsN, wallRateVal);
+    if (calculateLabor && rateVal && (includeWalls ? wallRateVal : true) && (includeCeiling ? ceilingRateVal : true)) {
+      hours = new PEP(0);
+      if (includeWalls && wallRateVal) hours = hours.plus(wallOrCeilingHours(net.area, coatsN, wallRateVal));
       if (includeCeiling && ceilingRateVal) hours = hours.plus(wallOrCeilingHours(ceiling, coatsN, ceilingRateVal));
+      hours = hours.plus(prepHoursVal ?? new PEP(0));
       laborCost = hours.times(rateVal);
     }
 
@@ -149,7 +167,7 @@ export default function InteriorCalculator() {
       laborCost,
       total: laborCost ? paintCost.plus(laborCost) : paintCost,
     } as const;
-  }, [length, width, height, includeCeiling, deductOpenings, doorCount, windowCount, coats, coverage, wastePercent, pricePerGal, calculateLabor, hourlyRate, wallThroughput, ceilingThroughput]);
+  }, [length, width, height, includeWalls, includeCeiling, deductOpenings, doorCount, windowCount, coats, coverage, wastePercent, pricePerGal, calculateLabor, hourlyRate, wallThroughput, ceilingThroughput, prepHours]);
 
   return (
     <div className="card p-6 sm:p-7">
@@ -167,16 +185,23 @@ export default function InteriorCalculator() {
             <Field label="Height (ft)" value={height} onChange={setHeight} />
           </div>
           <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={includeCeiling} onChange={(e) => setIncludeCeiling(e.target.checked)} /> Include ceiling (same paint)
+            <input type="checkbox" checked={includeWalls} onChange={(e) => setIncludeWalls(e.target.checked)} /> Include walls
           </label>
           <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={deductOpenings} onChange={(e) => setDeductOpenings(e.target.checked)} /> Deduct doors/windows
+            <input type="checkbox" checked={includeCeiling} onChange={(e) => setIncludeCeiling(e.target.checked)} /> Include ceiling (same paint)
           </label>
-          {deductOpenings && (
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Doors (20 ft² each)" value={doorCount} onChange={setDoorCount} />
-              <Field label="Windows (15 ft² each)" value={windowCount} onChange={setWindowCount} />
-            </div>
+          {includeWalls && (
+            <>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input type="checkbox" checked={deductOpenings} onChange={(e) => setDeductOpenings(e.target.checked)} /> Deduct doors/windows
+              </label>
+              {deductOpenings && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Doors (20 ft² each)" value={doorCount} onChange={setDoorCount} />
+                  <Field label="Windows (15 ft² each)" value={windowCount} onChange={setWindowCount} />
+                </div>
+              )}
+            </>
           )}
 
           <h3 className="pt-2 text-base font-semibold text-ink">Paint</h3>
@@ -194,8 +219,9 @@ export default function InteriorCalculator() {
           {calculateLabor && (
             <div className="grid grid-cols-3 gap-2">
               <Field label="$/hour" value={hourlyRate} onChange={setHourlyRate} />
-              <Field label="Wall sqft/hr/coat" value={wallThroughput} onChange={setWallThroughput} />
+              {includeWalls && <Field label="Wall sqft/hr/coat" value={wallThroughput} onChange={setWallThroughput} />}
               {includeCeiling && <Field label="Ceiling sqft/hr/coat" value={ceilingThroughput} onChange={setCeilingThroughput} />}
+              <Field label="Prep/cleanup hours" value={prepHours} onChange={setPrepHours} />
             </div>
           )}
         </div>
@@ -212,9 +238,9 @@ export default function InteriorCalculator() {
             </div>
           ) : (
             <dl className="mt-3 space-y-2 text-sm">
-              <Row label="Gross wall area" value={`${result.gross!.toFixed(2)} ft²`} />
-              <Row label="Opening deduction" value={`${result.deduction!.toFixed(2)} ft²`} />
-              <Row label="Net wall area" value={`${result.net!.toFixed(2)} ft²`} />
+              {includeWalls && <Row label="Gross wall area" value={`${result.gross!.toFixed(2)} ft²`} />}
+              {includeWalls && deductOpenings && <Row label="Opening deduction" value={`${result.deduction!.toFixed(2)} ft²`} />}
+              {includeWalls && <Row label="Net wall area" value={`${result.net!.toFixed(2)} ft²`} />}
               {includeCeiling && <Row label="Ceiling area" value={`${result.ceiling!.toFixed(2)} ft²`} />}
               <Row label="Total paintable area" value={`${result.totalArea!.toFixed(2)} ft²`} />
               <Row label="Paint needed" value={`${result.purchased} gal`} />
@@ -231,7 +257,7 @@ export default function InteriorCalculator() {
                 type="button"
                 className="btn btn-secondary mt-2"
                 onClick={() => {
-                  writeInteriorHandoff({ lengthFt: length, widthFt: width, heightFt: height, includeCeiling, deductOpenings, doorCount, windowCount, coats, coverageFt2PerGal: coverage, pricePerGal: pricePerGal, wasteRatioPercent: wastePercent });
+                  writeInteriorHandoff({ lengthFt: length, widthFt: width, heightFt: height, includeWalls, includeCeiling, deductOpenings, doorCount, windowCount, coats, coverageFt2PerGal: coverage, pricePerGal: pricePerGal, wasteRatioPercent: wastePercent });
                   window.open('/app?handoff=interior', '_blank');
                 }}
               >

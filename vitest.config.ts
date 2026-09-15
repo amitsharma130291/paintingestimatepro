@@ -12,5 +12,15 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     setupFiles: ['tests/setup/fake-indexeddb.ts'],
+    // The real-browser-style harness tests (jsdom + testing-library + real
+    // IndexedDB transactions via fake-indexeddb) render the full ProApp
+    // component tree and occasionally exceed the 5s default under full
+    // suite runs, where 40+ isolated worker environments start up at once
+    // and compete for CPU -- observed as intermittent "Test timed out in
+    // 5000ms" failures on an otherwise-correct, deterministic test (it
+    // always passes standalone or in small groups). This is CI/environment
+    // contention, not a hung test or product defect; a longer timeout is
+    // the correct fix rather than papering over a real one.
+    testTimeout: 15000,
   },
 });
