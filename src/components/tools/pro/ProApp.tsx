@@ -481,6 +481,26 @@ export default function ProApp() {
     return checkIssueGate(forGate, { sampleAssumptionsConfirmed: settings.sampleAssumptionsConfirmed, zeroPriceConfirmed });
   }, [draftEdit, summary, settings.sampleAssumptionsConfirmed, customPriceRaw, zeroPriceConfirmed]);
 
+  // DOC-004: the customer-facing document preview used to exist ONLY as
+  // the frozen snapshot an issued revision carries -- an unpriced or
+  // otherwise incomplete draft had no scope/print preview at all. Once
+  // issued, the FROZEN snapshot is authoritative and must never be
+  // recomputed live (issued documents stay frozen even after later
+  // edits); before that, buildCustomerDocument already tolerates an
+  // incomplete revision fine (scope lines come from rooms/surfaces
+  // regardless of pricing, and proposedPrice is '' when unset) -- it was
+  // simply never called until issue time.
+  const previewDocument = useMemo(() => {
+    if (draftEdit?.customerDocumentSnapshot) return draftEdit.customerDocumentSnapshot;
+    if (!draftEdit || !activeProject) return null;
+    return buildCustomerDocument(draftEdit, {
+      estimateNumber: `DRAFT-${activeProject.id.slice(-6)}-${draftEdit.revisionNumber}`,
+      estimateDate: now().slice(0, 10),
+      projectAddress: draftEdit.customerInfo.address,
+      revisionLabel: `Rev ${draftEdit.revisionNumber}`,
+    });
+  }, [draftEdit, activeProject]);
+
   async function issueEstimate() {
     if (!draftEdit || !activeProject || !summary || summary.calculationState !== 'complete') return;
     const proposedPrice = draftEdit.priceMode === 'custom' ? customPriceRaw : summary.effectivePrice?.toFixed(2) ?? null;
@@ -1367,33 +1387,39 @@ export default function ProApp() {
               </>
             )}
 
-            {draftEdit.customerDocumentSnapshot && (
+            {previewDocument && (
               <div className="card p-6">
-                <p className="tag-preview mb-2 inline-block print:hidden">Customer-facing document</p>
+                <p className="tag-preview mb-2 inline-block print:hidden">{previewDocument.status === 'issued' ? 'Customer-facing document' : 'Customer-facing document — draft preview'}</p>
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
-                    {draftEdit.customerDocumentSnapshot.businessInfo.name && <p className="font-semibold">{draftEdit.customerDocumentSnapshot.businessInfo.name}</p>}
-                    {draftEdit.customerDocumentSnapshot.businessInfo.contact && <p className="text-sm text-ink-soft">{draftEdit.customerDocumentSnapshot.businessInfo.contact}</p>}
-                    {draftEdit.customerDocumentSnapshot.businessInfo.address && <p className="text-sm text-ink-soft">{draftEdit.customerDocumentSnapshot.businessInfo.address}</p>}
+                    {previewDocument.businessInfo.name && <p className="font-semibold">{previewDocument.businessInfo.name}</p>}
+                    {previewDocument.businessInfo.contact && <p className="text-sm text-ink-soft">{previewDocument.businessInfo.contact}</p>}
+                    {previewDocument.businessInfo.address && <p className="text-sm text-ink-soft">{previewDocument.businessInfo.address}</p>}
                   </div>
                   <button type="button" className="btn btn-primary print:hidden" onClick={() => window.print()}>Print / Save as PDF</button>
                 </div>
-                <p className="font-semibold">{draftEdit.customerDocumentSnapshot.projectTitle}</p>
-                {draftEdit.customerDocumentSnapshot.projectAddress && <p className="text-sm text-ink-soft">{draftEdit.customerDocumentSnapshot.projectAddress}</p>}
-                {(draftEdit.customerDocumentSnapshot.customerInfo.name || draftEdit.customerDocumentSnapshot.customerInfo.address) && (
+                {/* DOC-004: an explicit DRAFT marker on a not-yet-issued
+                    preview -- this is never the final customer document. */}
+                {previewDocument.status === 'draft' && <p className="mb-2 inline-block rounded-btn border border-warn-line bg-warn-soft px-2 py-1 text-xs font-semibold text-warn">DRAFT — not yet issued</p>}
+                <p className="font-semibold">{previewDocument.projectTitle}</p>
+                {previewDocument.projectAddress && <p className="text-sm text-ink-soft">{previewDocument.projectAddress}</p>}
+                {(previewDocument.customerInfo.name || previewDocument.customerInfo.address) && (
                   <p className="text-sm text-ink-soft">
-                    Prepared for: {draftEdit.customerDocumentSnapshot.customerInfo.name || '—'}
-                    {draftEdit.customerDocumentSnapshot.customerInfo.address ? `, ${draftEdit.customerDocumentSnapshot.customerInfo.address}` : ''}
+                    Prepared for: {previewDocument.customerInfo.name || '—'}
+                    {previewDocument.customerInfo.address ? `, ${previewDocument.customerInfo.address}` : ''}
                   </p>
                 )}
-                <p className="text-sm text-ink-soft">Estimate {draftEdit.customerDocumentSnapshot.estimateNumber} — {draftEdit.customerDocumentSnapshot.estimateDate} · {draftEdit.customerDocumentSnapshot.revisionLabel} · {draftEdit.customerDocumentSnapshot.status}</p>
+                <p className="text-sm text-ink-soft">Estimate {previewDocument.estimateNumber} — {previewDocument.estimateDate} · {previewDocument.revisionLabel} · {previewDocument.status}</p>
                 <ul className="mt-3 text-sm text-ink-soft">
-                  {draftEdit.customerDocumentSnapshot.scopeLines.map((line, i) => (<li key={i}>{line}</li>))}
+                  {previewDocument.scopeLines.map((line, i) => (<li key={i}>{line}</li>))}
                 </ul>
-                <p className="mt-3 text-2xl font-semibold tabular-nums">${draftEdit.customerDocumentSnapshot.proposedPrice}</p>
-                <p className="text-xs text-ink-soft">{draftEdit.customerDocumentSnapshot.taxNotice}</p>
-                {draftEdit.customerDocumentSnapshot.notes && <p className="mt-3 text-sm text-ink-soft whitespace-pre-wrap">{draftEdit.customerDocumentSnapshot.notes}</p>}
-                {draftEdit.customerDocumentSnapshot.terms && <p className="mt-2 text-xs text-ink-soft whitespace-pre-wrap">{draftEdit.customerDocumentSnapshot.terms}</p>}
+                {/* DOC-004: never show $0.00 (or a bare "$") as though it
+                    were an assumed selling price when none has actually
+                    been set yet. */}
+                <p className="mt-3 text-2xl font-semibold tabular-nums">{previewDocument.proposedPrice ? `$${previewDocument.proposedPrice}` : 'PRICE PENDING'}</p>
+                <p className="text-xs text-ink-soft">{previewDocument.taxNotice}</p>
+                {previewDocument.notes && <p className="mt-3 text-sm text-ink-soft whitespace-pre-wrap">{previewDocument.notes}</p>}
+                {previewDocument.terms && <p className="mt-2 text-xs text-ink-soft whitespace-pre-wrap">{previewDocument.terms}</p>}
                 <p className="mt-3 text-xs text-ink-soft italic print:hidden">No cost, overhead, or margin figures appear on this document — verified by allow-list, see IMPLEMENTATION_DECISIONS.md.</p>
               </div>
             )}

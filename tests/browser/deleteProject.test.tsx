@@ -82,8 +82,16 @@ describe('LIFE-014: deleting a project requires explicit confirmation and is ato
 
     const before = await readProjects();
     expect(before).toHaveLength(2);
-    const [keepId, deleteId] = [before[0].id, before[1].id];
+    // IndexedDB's getAll() orders by primary key (a random UUID here), NOT
+    // insertion order -- identify which record is which by its own
+    // revision title (set distinctly above), not by array position.
+    const jobA = before.find((p) => p.revisions[0].title === 'Job A')!;
+    const jobB = before.find((p) => p.revisions[0].title === 'Job B')!;
+    expect(jobA).toBeTruthy();
+    expect(jobB).toBeTruthy();
 
+    // The list itself renders in insertion order (React state), so Job B
+    // (created second) is the second row.
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete' });
     fireEvent.click(deleteButtons[1]);
     await screen.findByText(/cannot be undone/i);
@@ -91,8 +99,8 @@ describe('LIFE-014: deleting a project requires explicit confirmation and is ato
 
     await waitFor(async () => expect((await readProjects())).toHaveLength(1));
     const after = await readProjects();
-    expect(after[0].id).toBe(keepId);
-    expect(after.some((p) => p.id === deleteId)).toBe(false);
+    expect(after[0].id).toBe(jobA.id);
+    expect(after.some((p) => p.id === jobB.id)).toBe(false);
   });
 
   it('deleting the only project leaves the list in its correct empty state', async () => {
