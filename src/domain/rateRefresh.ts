@@ -114,10 +114,31 @@ export function applyRateRefresh(revision: EstimateRevision, liveSnapshot: RateS
     return s;
   });
 
+  // V5-08: capture the complete pre-refresh revision as a durable
+  // checkpoint traveling WITH the result — it is a normal field on the
+  // returned revision, so it survives the caller's own saveDraft()/reload
+  // exactly like any other field, unlike an in-memory-only React variable
+  // the caller might discard. Strip the pre-refresh revision's OWN
+  // checkpoint first so a second (or third...) refresh never accumulates
+  // an unbounded chain — only the most recent pre-refresh state is ever kept.
+  const { preRefreshCheckpoint: _dropOldCheckpoint, ...revisionWithoutOwnCheckpoint } = structuredClone(revision);
+
   return {
     ...structuredClone(revision),
     surfaces: structuredClone(surfaces),
     activeRateSnapshot: newSnapshot,
+    preRefreshCheckpoint: revisionWithoutOwnCheckpoint,
     updatedAt: ids.now(),
   };
+}
+
+/**
+ * V5-08: restores the revision exactly as it stood before its most recent
+ * confirmed rate refresh, or returns null when there is nothing to
+ * restore (no refresh has been confirmed since the last save/undo/issue).
+ * Pure — the caller decides what to do with the result (e.g. replace its
+ * own in-memory draft).
+ */
+export function undoRateRefresh(revision: EstimateRevision): EstimateRevision | null {
+  return revision.preRefreshCheckpoint ? structuredClone(revision.preRefreshCheckpoint) : null;
 }

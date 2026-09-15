@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { sequentialIdSource } from '../../src/domain/ids';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision } from '../../src/domain/project';
-import { previewRateRefresh, applyRateRefresh } from '../../src/domain/rateRefresh';
+import { previewRateRefresh, applyRateRefresh, undoRateRefresh } from '../../src/domain/rateRefresh';
 import type { BusinessSettings, PaintVariant, Surface } from '../../src/domain/entities';
 
 function settings(rate: string): BusinessSettings {
@@ -113,5 +113,57 @@ describe('applyRateRefresh', () => {
     const draft = { ...createDraftRevision('p1', oldSnap, ids), state: 'issued' as const };
     const liveSnap = createSnapshot(settings('32'), [variant('paint-1', '49')], [], ids, 'rev-2');
     expect(() => applyRateRefresh(draft, liveSnap, [], ids)).toThrow();
+  });
+});
+
+describe('V5-08: preRefreshCheckpoint (DATA_CONTRACT.md #3 durable recovery point)', () => {
+  it('applyRateRefresh embeds the exact pre-refresh revision as a checkpoint field on its result', () => {
+    const ids = sequentialIdSource();
+    const oldSnap = createSnapshot(settings('32'), [variant('paint-1', '42')], [], ids, 'rev-1');
+    let draft = createDraftRevision('p1', oldSnap, ids);
+    draft = { ...draft, surfaces: [wallSurface('paint-1')], title: 'Before refresh' };
+    const liveSnap = createSnapshot(settings('32'), [variant('paint-1', '49')], [], ids, 'rev-2');
+
+    const refreshed = applyRateRefresh(draft, liveSnap, [], ids);
+    expect(refreshed.preRefreshCheckpoint?.title).toBe('Before refresh');
+    expect(refreshed.preRefreshCheckpoint?.activeRateSnapshot.paintVariants[0].pricePerGal).toBe('42');
+    expect(refreshed.activeRateSnapshot.paintVariants[0].pricePerGal).toBe('49');
+  });
+
+  it('undoRateRefresh restores the exact pre-refresh revision', () => {
+    const ids = sequentialIdSource();
+    const oldSnap = createSnapshot(settings('32'), [variant('paint-1', '42')], [], ids, 'rev-1');
+    let draft = createDraftRevision('p1', oldSnap, ids);
+    draft = { ...draft, surfaces: [wallSurface('paint-1')], title: 'Before refresh' };
+    const liveSnap = createSnapshot(settings('32'), [variant('paint-1', '49')], [], ids, 'rev-2');
+    const refreshed = applyRateRefresh(draft, liveSnap, [], ids);
+
+    const restored = undoRateRefresh(refreshed);
+    expect(restored?.title).toBe('Before refresh');
+    expect(restored?.activeRateSnapshot.paintVariants[0].pricePerGal).toBe('42');
+  });
+
+  it('returns null when there is no checkpoint to restore', () => {
+    const ids = sequentialIdSource();
+    const draft = createDraftRevision('p1', createSnapshot(settings('32'), [variant('paint-1', '42')], [], ids, 'rev-1'), ids);
+    expect(undoRateRefresh(draft)).toBeNull();
+  });
+
+  it('a SECOND refresh replaces the checkpoint rather than nesting it -- only the most recent pre-refresh state is kept', () => {
+    const ids = sequentialIdSource();
+    const oldSnap = createSnapshot(settings('32'), [variant('paint-1', '42')], [], ids, 'rev-1');
+    let draft = createDraftRevision('p1', oldSnap, ids);
+    draft = { ...draft, surfaces: [wallSurface('paint-1')], title: 'Original' };
+    const midSnap = createSnapshot(settings('32'), [variant('paint-1', '49')], [], ids, 'rev-2');
+    const afterFirstRefresh = applyRateRefresh(draft, midSnap, [], ids);
+
+    const laterSnap = createSnapshot(settings('32'), [variant('paint-1', '55')], [], ids, 'rev-3');
+    const afterSecondRefresh = applyRateRefresh(afterFirstRefresh, laterSnap, [], ids);
+
+    // The checkpoint reflects the state right before the SECOND refresh (at $49), not the original ($42).
+    expect(afterSecondRefresh.preRefreshCheckpoint?.activeRateSnapshot.paintVariants[0].pricePerGal).toBe('49');
+    expect(afterSecondRefresh.activeRateSnapshot.paintVariants[0].pricePerGal).toBe('55');
+    // No nested chain: the checkpoint itself carries no further checkpoint.
+    expect(afterSecondRefresh.preRefreshCheckpoint?.preRefreshCheckpoint).toBeUndefined();
   });
 });

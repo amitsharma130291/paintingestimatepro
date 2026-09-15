@@ -99,8 +99,16 @@ describe('Pre-refresh recovery (DATA_CONTRACT.md #3): rate refresh can be undone
     expect(screen.queryByRole('button', { name: 'Undo refresh' })).toBeNull();
   });
 
-  it('saving over a confirmed refresh clears the undo affordance — the save itself is the new recoverable point', async () => {
-    await mountAndOpenProject();
+  it('V5-08: the undo affordance is a DURABLE checkpoint -- it survives saving over the refresh AND a full unmount/remount/reopen', async () => {
+    const { unmount } = render(<ProApp />);
+    // mountAndOpenProject() already rendered once above in other tests via
+    // its own render() call; this test needs its own handle to unmount, so
+    // it repeats the setup here rather than reusing the shared helper.
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Job A/ }));
+    expect(await screen.findByText('$126.00')).toBeTruthy();
+
     changeLivePaintPriceTo('49');
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
     await screen.findByText('$126.00');
@@ -110,6 +118,23 @@ describe('Pre-refresh recovery (DATA_CONTRACT.md #3): rate refresh can be undone
 
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(screen.getByText('Draft saved.')).toBeTruthy(), { timeout: 5000 });
+    // Saving must NOT clear the recovery point -- that was the exact
+    // evidence-accuracy defect the independent review caught: this
+    // assertion previously (incorrectly) expected the button to disappear
+    // here, which verified the buggy behavior instead of the actual
+    // DATA_CONTRACT.md #3 requirement.
+    expect(screen.getByRole('button', { name: 'Undo refresh' })).toBeTruthy();
+
+    unmount();
+    render(<ProApp />);
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Job A/ }));
+    expect(await screen.findByText('$147.00')).toBeTruthy(); // the refreshed value, correctly persisted
+    expect(screen.getByRole('button', { name: 'Undo refresh' })).toBeTruthy(); // still recoverable after a full reload
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo refresh' }));
+    expect(await screen.findByText('$126.00')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Undo refresh' })).toBeNull();
   });
 });

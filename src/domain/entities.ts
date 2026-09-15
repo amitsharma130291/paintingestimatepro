@@ -188,6 +188,18 @@ export interface EstimateRevision {
   rawCalculatedOutputs: Record<string, unknown> | null;
   customerDocumentSnapshot: CustomerDocumentSnapshot | null; // set on issue
   issuedAt: string | null;
+  // V5-08 (DATA_CONTRACT.md #3: "Keep a recoverable pre-refresh draft
+  // snapshot"): the complete revision exactly as it stood immediately
+  // before the most recent confirmed rate refresh, so "Undo refresh" is
+  // still available after the refreshed draft is saved and reopened --
+  // an in-memory-only recovery point disappears the moment the tab
+  // closes or the draft is saved over it, which does not satisfy
+  // "recoverable." Never itself carries a further nested checkpoint
+  // (each refresh replaces the previous one, no unbounded chain), and is
+  // never surfaced in the customer document (buildCustomerDocument
+  // constructs its allow-listed fields explicitly, never by spreading
+  // the source revision).
+  preRefreshCheckpoint?: EstimateRevision | null;
   createdAt: string;
   updatedAt: string;
 }

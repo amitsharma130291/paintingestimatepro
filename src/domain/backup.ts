@@ -630,6 +630,22 @@ export function validateBackupEnvelope(raw: unknown, rawByteLength: number): { o
           }
         }
 
+        // V5-08: preRefreshCheckpoint is optional and, when present, must
+        // be a plain object with its own valid id -- and must NOT itself
+        // carry a further nested checkpoint, which would let a corrupted
+        // or maliciously-crafted import build an unbounded/self-referential
+        // chain. Only this shallow shape is checked (not a full recursive
+        // re-validation of the entire nested revision) since the field is
+        // an internal recovery aid, never read by any calculation or
+        // customer-facing path.
+        if (rev.preRefreshCheckpoint !== null && rev.preRefreshCheckpoint !== undefined) {
+          if (!isPlainObject(rev.preRefreshCheckpoint) || typeof rev.preRefreshCheckpoint.id !== 'string') {
+            issues.push({ path: `${revPath}.preRefreshCheckpoint`, message: 'preRefreshCheckpoint, when present, must be a plain object with its own id.' });
+          } else if (rev.preRefreshCheckpoint.preRefreshCheckpoint !== null && rev.preRefreshCheckpoint.preRefreshCheckpoint !== undefined) {
+            issues.push({ path: `${revPath}.preRefreshCheckpoint.preRefreshCheckpoint`, message: 'preRefreshCheckpoint must not itself carry a further nested checkpoint.' });
+          }
+        }
+
         // Surfaces are validated before rooms so rooms can cross-reference
         // the resulting ID set (surfaceIds -> real surfaces in this revision).
         const surfaceIds = new Set<string>();
