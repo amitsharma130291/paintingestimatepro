@@ -1,6 +1,6 @@
 // Thin persistence facade for the Pro app island — wraps storage/db.ts so
 // the UI component doesn't touch IndexedDB directly.
-import { openAppDb, writeAll, writeProjectWithVersionCheck, writeImportedBackup, writeReplaceAllBackup, readAppSnapshot, STORES, type AppSnapshot } from '../../../storage/db';
+import { openAppDb, writeAll, writeProjectWithVersionCheck, writeImportedBackup, writeReplaceAllBackup, readAppSnapshot, deleteOne, STORES, type AppSnapshot } from '../../../storage/db';
 import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, ImportProvenanceRecord } from '../../../domain/entities';
 import { defaultIdSource } from '../../../domain/ids';
 
@@ -37,6 +37,27 @@ export async function saveProjects(projects: Project[]): Promise<void> {
   const db = await openAppDb();
   try {
     await writeAll(db, [{ store: STORES.projects, records: projects }]);
+  } finally {
+    db.close();
+  }
+}
+
+/** Independent-review R08: Price Book Health now persists real service
+ * definitions (previously nothing in the UI ever wrote to this store at
+ * all). */
+export async function saveServiceDefinition(service: ServiceDefinition): Promise<void> {
+  const db = await openAppDb();
+  try {
+    await writeAll(db, [{ store: STORES.serviceDefinitions, records: [service] }]);
+  } finally {
+    db.close();
+  }
+}
+
+export async function deleteServiceDefinition(id: string): Promise<void> {
+  const db = await openAppDb();
+  try {
+    await deleteOne(db, STORES.serviceDefinitions, id);
   } finally {
     db.close();
   }

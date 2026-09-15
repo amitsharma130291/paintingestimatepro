@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PEP } from '../../../engine/decimal';
 import { evaluateActualReview, type ActualCategory } from '../../../engine/actuals';
-import { computeServiceUnitCost, evaluateServiceHealth } from '../../../engine/serviceHealth';
+import { assembleServiceHealth } from '../../../domain/serviceHealthAssembly';
 import { statusBadge, money, parseCoatsInput } from '../shared';
 import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope } from '../../../domain/entities';
 import { createSnapshot } from '../../../domain/snapshot';
@@ -17,7 +17,7 @@ import {
 import { defaultIdSource } from '../../../domain/ids';
 import { readInteriorHandoff, clearInteriorHandoff, buildProjectFromInteriorHandoff, type InteriorHandoffPayload, type HandoffFieldNote } from '../../../domain/interiorHandoff';
 import { ConflictError } from '../../../storage/db';
-import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveImportedBackup, saveReplaceAllBackup } from './proStore';
+import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveImportedBackup, saveReplaceAllBackup, saveServiceDefinition, deleteServiceDefinition } from './proStore';
 
 const ids = defaultIdSource;
 const now = () => new Date().toISOString();
@@ -69,6 +69,9 @@ export default function ProApp() {
 
   const [settings, setSettings] = useState<BusinessSettings>(defaultSettings());
   const [catalog, setCatalog] = useState<PaintVariant[]>([]);
+  // independent-review R08: Price Book Health previously never read any
+  // persisted ServiceDefinition at all.
+  const [serviceDefinitions, setServiceDefinitions] = useState<ServiceDefinition[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [draftEdit, setDraftEdit] = useState<EstimateRevision | null>(null);
@@ -105,6 +108,7 @@ export default function ProApp() {
         if (snap.businessSettings[0]) setSettings(snap.businessSettings[0]);
         if (snap.paintVariants.length) setCatalog(snap.paintVariants);
         if (snap.projects.length) setProjects(snap.projects);
+        setServiceDefinitions(snap.serviceDefinitions);
       })
       .catch(() => {
         /* fresh install — defaults stand */
@@ -399,26 +403,41 @@ export default function ProApp() {
     }
   }
 
-  // ---- Price Book Health (uses catalog[0] + settings as a live service model) ----
-  const healthRows = useMemo(() => {
-    if (catalog.length === 0 || !settings.loadedHourlyRate) return [];
-    const variant = catalog[0];
-    const unit = computeServiceUnitCost({
-      kind: 'wall',
-      areaPerUnit: new PEP(1),
-      coats: settings.defaultCoats,
-      wasteRatio: new PEP(settings.defaultWasteRatio),
-      coverageFt2PerGal: new PEP(variant.coverageFt2PerGal),
-      pricePerGal: new PEP(variant.pricePerGal),
-      applicationHoursPerUnit: new PEP(settings.defaultCoats).dividedBy(new PEP(settings.wallThroughput ?? '150')),
-      additionalLaborHoursPerUnit: new PEP(0),
-      loadedHourlyRate: new PEP(settings.loadedHourlyRate),
-      suppliesCostPerUnit: new PEP(0),
-      directExpensePerUnit: new PEP(0),
-      overheadRatio: new PEP(settings.overheadRatio),
+  // ---- Price Book Health (independent-review R08: reads REAL persisted
+  // service definitions — previously one hardcoded wall service from
+  // catalog[0] with a null price, never any actually saved data) ----
+  const healthResults = useMemo(
+    () => serviceDefinitions.map((service) => ({ service, result: assembleServiceHealth(service, catalog, settings) })),
+    [serviceDefinitions, catalog, settings]
+  );
+
+  function addService(kind: ServiceKind) {
+    const t = now();
+    const service: ServiceDefinition = {
+      id: ids.nextId(), name: `New ${kind} service`, unit: kind === 'door' ? 'door' : kind === 'trim' ? 'linearFt' : 'ft2', kind,
+      paintVariantId: catalog[0]?.id ?? null, coats: null, wasteRatio: null, loadedHourlyRate: null, throughput: null,
+      hoursPerSidePerCoat: null, developedWidthFt: kind === 'trim' ? '4' : null, widthFt: kind === 'door' ? '3' : null,
+      heightFt: kind === 'door' ? '6.67' : null, paintedSides: kind === 'door' ? 2 : null,
+      additionalLaborHoursPerUnit: '0', suppliesCostPerUnit: '0', directExpensePerUnit: '0', currentSellingPrice: null,
+      createdAt: t, updatedAt: t,
+    };
+    setServiceDefinitions((ss) => [...ss, service]);
+    saveServiceDefinition(service).catch(() => setSaveMessage('Service created locally, but saving failed.'));
+  }
+
+  function patchService(id: string, patch: Partial<ServiceDefinition>) {
+    setServiceDefinitions((ss) => {
+      const next = ss.map((s) => (s.id === id ? { ...s, ...patch, updatedAt: now() } : s));
+      const updated = next.find((s) => s.id === id);
+      if (updated) saveServiceDefinition(updated).catch(() => setSaveMessage('Service change saved locally, but persisting failed.'));
+      return next;
     });
-    return [evaluateServiceHealth('wall-standard', unit, null, new PEP(settings.targetMarginRatio))];
-  }, [catalog, settings]);
+  }
+
+  function removeService(id: string) {
+    setServiceDefinitions((ss) => ss.filter((s) => s.id !== id));
+    deleteServiceDefinition(id).catch(() => setSaveMessage('Removed locally, but deleting from storage failed.'));
+  }
 
   // ---- Actuals (scoped to the active project's issued revision) ----
   const issuedRevision = activeProject?.revisions.find((r) => r.state === 'issued' && r.id === activeProject.activeRevisionId) ?? activeProject?.revisions.find((r) => r.state === 'issued') ?? null;
@@ -997,17 +1016,87 @@ export default function ProApp() {
         )}
 
         {tab === 'health' && (
-          <div className="card p-6">
-            {healthRows.length === 0 && <p className="text-sm text-ink-soft">Add a paint variant and set a labor rate first.</p>}
-            {healthRows.map((row) => (
-              <div key={row.serviceId} className="rounded-btn border border-line p-4">
-                <p className="font-semibold">Wall (standard) — $/ft²</p>
-                {row.unitCost && (
-                  <dl className="mt-2 space-y-1 text-sm">
-                    <Row label="Modeled cost/unit" value={money(row.unitCost.modeledCostPerUnit)} />
-                    <Row label="Status" value={row.price ? statusBadge(row.price).label : 'Set a price to review'} />
-                  </dl>
-                )}
+          <div className="card space-y-4 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-semibold">Price Book Health</h3>
+                <p className="text-xs text-ink-soft">Reviews your OWN saved services against their modeled cost — consumption-based, not the purchased quantities a real project rounds to.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(['wall', 'ceiling', 'trim', 'door'] as ServiceKind[]).map((k) => (
+                  <button key={k} type="button" className="btn btn-secondary" disabled={catalog.length === 0} onClick={() => addService(k)}>
+                    + {k} service
+                  </button>
+                ))}
+              </div>
+            </div>
+            {catalog.length === 0 && <p className="text-sm text-ink-soft">Add a paint variant to the catalog first.</p>}
+            {catalog.length > 0 && healthResults.length === 0 && <p className="text-sm text-ink-soft">No services yet — add one above to review its price against its modeled cost.</p>}
+            {healthResults.map(({ service, result }) => (
+              <div key={service.id} className="rounded-btn border border-line p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold">{service.name || 'Untitled service'}</p>
+                  <button type="button" className="text-link text-xs" onClick={() => removeService(service.id)}>Remove</button>
+                </div>
+                <TextField label="Service name" value={service.name} onChange={(v) => patchService(service.id, { name: v })} />
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <label className="block text-sm">
+                    <span className="font-medium text-ink-soft">Paint variant</span>
+                    <select
+                      className="mt-1 w-full rounded-btn border border-line bg-card px-2 py-2 text-sm"
+                      value={service.paintVariantId ?? ''}
+                      onChange={(e) => patchService(service.id, { paintVariantId: e.target.value || null })}
+                    >
+                      <option value="">— none —</option>
+                      {catalog.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
+                    </select>
+                  </label>
+                  <NumField label="Coats (blank = default)" value={service.coats?.toString() ?? ''} onChange={(v) => { const parsed = parseCoatsInput(v); if (parsed !== 'reject') patchService(service.id, { coats: parsed }); }} />
+                  <NumField label="Waste ratio (blank = default)" value={service.wasteRatio ?? ''} onChange={(v) => patchService(service.id, { wasteRatio: v.trim() === '' ? null : v })} />
+                  <NumField label="Loaded $/hr (blank = default)" value={service.loadedHourlyRate ?? ''} onChange={(v) => patchService(service.id, { loadedHourlyRate: v.trim() === '' ? null : v })} />
+                  {(service.kind === 'wall' || service.kind === 'ceiling') && (
+                    <NumField label="Throughput sqft/hr/coat (blank = default)" value={service.throughput ?? ''} onChange={(v) => patchService(service.id, { throughput: v.trim() === '' ? null : v })} />
+                  )}
+                  {service.kind === 'trim' && (
+                    <>
+                      <NumField label="Developed width (ft)" value={service.developedWidthFt ?? ''} onChange={(v) => patchService(service.id, { developedWidthFt: v })} />
+                      <NumField label="Throughput linear-ft/hr/coat (blank = default)" value={service.throughput ?? ''} onChange={(v) => patchService(service.id, { throughput: v.trim() === '' ? null : v })} />
+                    </>
+                  )}
+                  {service.kind === 'door' && (
+                    <>
+                      <NumField label="Width (ft)" value={service.widthFt ?? ''} onChange={(v) => patchService(service.id, { widthFt: v })} />
+                      <NumField label="Height (ft)" value={service.heightFt ?? ''} onChange={(v) => patchService(service.id, { heightFt: v })} />
+                      <label className="block text-sm">
+                        <span className="font-medium text-ink-soft">Painted sides</span>
+                        <select className="mt-1 w-full rounded-btn border border-line bg-card px-2 py-2 text-sm" value={service.paintedSides ?? ''} onChange={(e) => patchService(service.id, { paintedSides: e.target.value ? (Number(e.target.value) as 1 | 2) : null })}>
+                          <option value="">—</option>
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                        </select>
+                      </label>
+                      <NumField label="Hours/side/coat (blank = default)" value={service.hoursPerSidePerCoat ?? ''} onChange={(v) => patchService(service.id, { hoursPerSidePerCoat: v.trim() === '' ? null : v })} />
+                    </>
+                  )}
+                  <NumField label="Current selling price ($, blank = none)" value={service.currentSellingPrice ?? ''} onChange={(v) => patchService(service.id, { currentSellingPrice: v.trim() === '' ? null : v })} />
+                </div>
+                <div className="mt-3">
+                  {result.state !== 'ok' ? (
+                    <p className={`text-sm ${result.state === 'invalid' ? 'text-bad' : 'text-ink-soft'}`}>{result.reasons.join(' ')}</p>
+                  ) : (
+                    <dl className="space-y-1 text-sm">
+                      <Row label="Modeled cost/unit" value={money(result.row.unitCost!.modeledCostPerUnit)} />
+                      <Row label="Current price" value={service.currentSellingPrice ? money(new PEP(service.currentSellingPrice)) : '— (none set)'} />
+                      <Row label="Status" value={result.row.price ? statusBadge(result.row.price).label : 'Set a price to review'} />
+                      {result.row.price && (
+                        <>
+                          <Row label="Margin" value={result.row.price.marginRatio ? `${result.row.price.marginRatio.times(100).toFixed(1)}%` : '—'} />
+                          <Row label="Required price for target margin" value={money(result.row.price.minimumTargetPrice)} />
+                        </>
+                      )}
+                    </dl>
+                  )}
+                </div>
               </div>
             ))}
           </div>
