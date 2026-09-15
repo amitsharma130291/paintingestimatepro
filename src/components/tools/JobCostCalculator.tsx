@@ -163,7 +163,12 @@ export default function JobCostCalculator() {
           )}
 
           {result.state === 'complete' && (
-            <dl className="mt-4 space-y-2 text-sm">
+            // UX-004: announce recalculated totals to screen readers.
+            // aria-live="polite" queues one announcement per settled
+            // React update rather than per keystroke, and the announced
+            // text is exactly what's visually rendered (full "$..."
+            // formatting, minus signs included) -- no stripping.
+            <dl className="mt-4 space-y-2 text-sm" aria-live="polite" aria-atomic="true">
               <Row label="Materials" value={money(result.materials)} />
               <Row label="Labor" value={money(result.labor)} />
               <Row label="Other expenses (incl. travel)" value={money(result.otherExpenses)} />

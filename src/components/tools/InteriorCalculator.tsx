@@ -237,7 +237,8 @@ export default function InteriorCalculator() {
               ))}
             </div>
           ) : (
-            <dl className="mt-3 space-y-2 text-sm">
+            // UX-004: announce recalculated totals to screen readers.
+            <dl className="mt-3 space-y-2 text-sm" aria-live="polite" aria-atomic="true">
               {includeWalls && <Row label="Gross wall area" value={`${result.gross!.toFixed(2)} ft²`} />}
               {includeWalls && deductOpenings && <Row label="Opening deduction" value={`${result.deduction!.toFixed(2)} ft²`} />}
               {includeWalls && <Row label="Net wall area" value={`${result.net!.toFixed(2)} ft²`} />}

@@ -1324,7 +1324,8 @@ export default function ProApp() {
                   )}
                   {summary && summary.calculationState === 'complete' && (
                     <>
-                      <dl className="mt-2 space-y-2 text-sm">
+                      {/* UX-004: announce recalculated totals to screen readers. */}
+                      <dl className="mt-2 space-y-2 text-sm" aria-live="polite" aria-atomic="true">
                         <Row label="Materials" value={money(summary.materials)} />
                         <Row label="Labor" value={money(summary.laborCost)} />
                         <Row label="Direct cost" value={money(summary.directCost)} />
@@ -1338,7 +1339,7 @@ export default function ProApp() {
                       </div>
                       {draftEdit.priceMode === 'custom' && <NumField label="Your price ($)" value={customPriceRaw} onChange={setCustomPriceRaw} className="mt-2 max-w-xs" />}
 
-                      <dl className="mt-4 space-y-2 text-sm">
+                      <dl className="mt-4 space-y-2 text-sm" aria-live="polite" aria-atomic="true">
                         <Row label="Proposed price" value={summary.effectivePrice ? money(summary.effectivePrice) : '—'} strong />
                         <Row label="Profit" value={summary.price?.profit ? money(summary.price.profit) : '—'} />
                         <Row label="Margin" value={summary.price?.marginRatio ? `${summary.price.marginRatio.times(100).toFixed(1)}%` : '—'} />
