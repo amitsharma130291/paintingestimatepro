@@ -159,6 +159,41 @@ describe('A surface referencing a variant absent from the draft\'s OWN snapshot 
   });
 });
 
+describe('V5-01 (related path): targetMarginRatio boundary in the Pro estimate summary itself, not just Price Book Health', () => {
+  function doorRevision(targetMarginRatio: string): EstimateRevision {
+    const door: Surface = {
+      id: 'door-1', roomId: null, kind: 'door', enabled: true, measurementMode: 'manual',
+      areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: 3, widthFt: '2.5', heightFt: '6.67', paintedSides: 2,
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+    };
+    const revision = baseRevision();
+    return {
+      ...revision,
+      rooms: [],
+      surfaces: [door],
+      activeRateSnapshot: { ...revision.activeRateSnapshot, businessSettings: { ...revision.activeRateSnapshot.businessSettings, targetMarginRatio } },
+    };
+  }
+
+  it('a saved 100% target settings value returns invalid, never throws', () => {
+    let out: ReturnType<typeof assembleProjectEstimate> | undefined;
+    expect(() => {
+      out = assembleProjectEstimate(doorRevision('1'), { priceMode: 'suggested', customPriceRaw: '' });
+    }).not.toThrow();
+    expect(out!.calculationState).toBe('invalid');
+  });
+
+  it('a negative target settings value returns invalid', () => {
+    const out = assembleProjectEstimate(doorRevision('-0.1'), { priceMode: 'suggested', customPriceRaw: '' });
+    expect(out.calculationState).toBe('invalid');
+  });
+
+  it('a target just below 100% (0.999) is still a complete, priced result', () => {
+    const out = assembleProjectEstimate(doorRevision('0.999'), { priceMode: 'suggested', customPriceRaw: '' });
+    expect(out.calculationState).toBe('complete');
+  });
+});
+
 describe('Per-surface override vs. snapshot default fallback (DECISIONS.md #3)', () => {
   it('a surface with an explicit throughput override is not silently replaced by the settings default', () => {
     const wall: Surface = {

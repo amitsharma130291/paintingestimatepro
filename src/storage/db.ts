@@ -38,18 +38,39 @@ const VERSION_COUNTER_KEY = 'projectVersionCounter';
 
 export async function openAppDb(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
+    async upgrade(db, _oldVersion, _newVersion, transaction) {
       if (!db.objectStoreNames.contains(STORES.businessSettings)) db.createObjectStore(STORES.businessSettings, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(STORES.paintVariants)) db.createObjectStore(STORES.paintVariants, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(STORES.otherMaterials)) db.createObjectStore(STORES.otherMaterials, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(STORES.serviceDefinitions)) db.createObjectStore(STORES.serviceDefinitions, { keyPath: 'id' });
-      if (!db.objectStoreNames.contains(STORES.projects)) db.createObjectStore(STORES.projects, { keyPath: 'id' });
+      const projectsStoreExistedBefore = db.objectStoreNames.contains(STORES.projects);
+      if (!projectsStoreExistedBefore) db.createObjectStore(STORES.projects, { keyPath: 'id' });
       // Keyed by copiedProjectId (always unique — one provenance record per
       // successfully-copied project) rather than a compound (exportId,
       // sourceProjectId) key; "already imported this export" lookups read
       // the whole (small, infrequent) store and filter in JS.
       if (!db.objectStoreNames.contains(STORES.importProvenance)) db.createObjectStore(STORES.importProvenance, { keyPath: 'copiedProjectId' });
-      if (!db.objectStoreNames.contains(STORES.meta)) db.createObjectStore(STORES.meta, { keyPath: 'id' });
+      const metaStoreIsNew = !db.objectStoreNames.contains(STORES.meta);
+      if (metaStoreIsNew) db.createObjectStore(STORES.meta, { keyPath: 'id' });
+
+      // V5-03: an existing pre-v3 database (real projects saved under the
+      // OLD per-project version scheme) upgrading to v3 got a brand-new,
+      // EMPTY meta store, so the global counter restarted at 0/1 --
+      // coinciding with legacy version numbers already stored on real
+      // projects. The very first post-upgrade save could then reissue a
+      // version number a stale pre-upgrade editor was already holding,
+      // recreating exactly the ABA hazard R04 fixed, just via the upgrade
+      // path instead of replace-all. Seed the counter above every version
+      // number already present in this database before any new write ever
+      // reads it, so no future-issued token can coincide with one already
+      // committed under the old scheme.
+      if (metaStoreIsNew && projectsStoreExistedBefore) {
+        const existingProjects = (await transaction.objectStore(STORES.projects).getAll()) as { version?: number }[];
+        const maxExistingVersion = existingProjects.reduce((max, p) => Math.max(max, p.version ?? 0), 0);
+        if (maxExistingVersion > 0) {
+          await transaction.objectStore(STORES.meta).put({ id: VERSION_COUNTER_KEY, value: maxExistingVersion });
+        }
+      }
     },
   });
 }

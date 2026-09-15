@@ -194,6 +194,15 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
 
   const targetField = parseDecimalField(settings.targetMarginRatio);
   if (targetField.kind !== 'valid') return invalidResult(['Target margin is invalid.']);
+  // V5-01 (related path): CALCULATION_SPEC.md §1 requires 0 <= targetMarginRatio
+  // < 1. requiredPriceRaw() throws outside that range instead of returning a
+  // structured result -- guard it here too, matching the free job-cost
+  // calculator's existing check, so a saved 100%/negative target settings
+  // value can't crash the Pro estimate summary the same way it crashed
+  // Price Book Health.
+  if (targetField.value.greaterThanOrEqualTo(1) || targetField.value.isNegative()) {
+    return invalidResult(['Target margin must be a percentage from 0% up to (but not including) 100%.']);
+  }
 
   const customPriceField = opts.priceMode === 'custom' ? parseDecimalField(opts.customPriceRaw, { allowNegative: false }) : { kind: 'missing' as const };
   if (opts.priceMode === 'custom' && customPriceField.kind === 'invalid') return invalidResult(['Custom price is invalid.']);

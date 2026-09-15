@@ -129,4 +129,34 @@ describe('assembleServiceHealth', () => {
     const result = assembleServiceHealth(wallService({ wasteRatio: 'abc' }), [variant()], settings());
     expect(result.state).toBe('invalid');
   });
+
+  describe('V5-01: targetMarginRatio boundary (CALCULATION_SPEC §1: 0 <= m < 1)', () => {
+    it('rejects a 100% target as a structured invalid state, never throwing', () => {
+      let result: ReturnType<typeof assembleServiceHealth> | undefined;
+      expect(() => {
+        result = assembleServiceHealth(wallService(), [variant()], settings({ targetMarginRatio: '1' }));
+      }).not.toThrow();
+      expect(result!.state).toBe('invalid');
+    });
+
+    it('rejects a target just above 100% (1.001)', () => {
+      const result = assembleServiceHealth(wallService(), [variant()], settings({ targetMarginRatio: '1.001' }));
+      expect(result.state).toBe('invalid');
+    });
+
+    it('rejects a negative target', () => {
+      const result = assembleServiceHealth(wallService(), [variant()], settings({ targetMarginRatio: '-0.01' }));
+      expect(result.state).toBe('invalid');
+    });
+
+    it('accepts a target just below 100% (0.999)', () => {
+      const result = assembleServiceHealth(wallService(), [variant()], settings({ targetMarginRatio: '0.999' }));
+      expect(result.state).toBe('ok');
+    });
+
+    it('accepts exactly 0% (a valid, if unusual, target)', () => {
+      const result = assembleServiceHealth(wallService(), [variant()], settings({ targetMarginRatio: '0' }));
+      expect(result.state).toBe('ok');
+    });
+  });
 });

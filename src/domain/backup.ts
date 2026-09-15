@@ -421,10 +421,19 @@ function validateActualReview(path: string, raw: unknown, revisionsById: Map<str
   // document to compare actuals against.
   const baselineId = raw.baselineIssuedRevisionId;
   const baseline = typeof baselineId === 'string' ? revisionsById.get(baselineId) : undefined;
+  // V5-04: a baseline that WAS issued and has since been superseded by a
+  // later issue is still a legitimate, frozen historical baseline — DATA_
+  // CONTRACT.md's "actual reviews stay linked to the chosen issued
+  // revision" describes the revision an actual review was recorded
+  // against, not a requirement that it remain the CURRENTLY active one.
+  // Only 'draft' (still editable, no frozen customer document) is truly
+  // invalid to link against; rejecting 'superseded' made every legitimately
+  // revised, previously-actualed project's own backup reject itself the
+  // moment a second revision was issued.
   if (!baseline) {
     issues.push({ path: `${path}.baselineIssuedRevisionId`, message: `Dangling reference: actual review baseline "${String(baselineId)}" does not match any revision in this project.` });
-  } else if (baseline.state !== 'issued') {
-    issues.push({ path: `${path}.baselineIssuedRevisionId`, message: `Actual review baseline "${String(baselineId)}" targets a revision in state "${String(baseline.state)}", not "issued" — actual reviews may only be linked to an issued baseline.` });
+  } else if (baseline.state !== 'issued' && baseline.state !== 'superseded') {
+    issues.push({ path: `${path}.baselineIssuedRevisionId`, message: `Actual review baseline "${String(baselineId)}" targets a revision in state "${String(baseline.state)}" — actual reviews may only be linked to a revision that was (or still is) issued, never a draft.` });
   }
 }
 
@@ -821,11 +830,30 @@ export function applyFullRestoreResolutions(
   // service-to-paint-variant relationship it touched).
   const keepBothIdRemap = new Map<string, string>();
 
+  // V5-02: a service definition's own remap-eligibility depends on WHERE
+  // its content came from, not merely whether its current paintVariantId
+  // string happens to match a remapped key. A local service that was never
+  // touched by this import (or was explicitly kept-local/kept-both on its
+  // OWN conflict) still points at the LOCAL paint variant under that same
+  // ID string — remapping it would silently repoint a customer's existing
+  // cost assumption at the freshly-imported copy instead. Only
+  // incoming-origin content (a brand-new record, a "replace imported"
+  // record, or a keep-both COPY) should ever have its references corrected
+  // to the copy actually committed.
+  const localPreservedIds = new Set<string>();
+
   function mergeArray<T extends { id: string }>(kind: ImportConflict['kind'], local: T[], incoming: T[], toAdd: T[]): T[] {
     const conflictIds = new Set(plan.conflicts.filter((c) => c.kind === kind).map((c) => c.id));
     let result = local.map((item) => {
-      if (!conflictIds.has(item.id)) return item;
-      return resolutionFor(kind, item.id) === 'replaceImported' ? (incoming.find((i) => i.id === item.id) ?? item) : item;
+      if (!conflictIds.has(item.id)) {
+        localPreservedIds.add(item.id);
+        return item;
+      }
+      if (resolutionFor(kind, item.id) === 'replaceImported') {
+        return incoming.find((i) => i.id === item.id) ?? item;
+      }
+      localPreservedIds.add(item.id); // keepLocal or keepBoth: the local record itself is untouched
+      return item;
     });
     result = [...result, ...toAdd];
     for (const id of conflictIds) {
@@ -844,13 +872,13 @@ export function applyFullRestoreResolutions(
   const finalPaintVariants = mergeArray('paintVariant', existing.paintVariants, envelope.paintVariants, plan.toAdd.paintVariants);
   const finalOtherMaterials = mergeArray('otherMaterial', existing.otherMaterials, envelope.otherMaterials, plan.toAdd.otherMaterials);
   const rawFinalServiceDefinitions = mergeArray('serviceDefinition', existing.serviceDefinitions, envelope.serviceDefinitions, plan.toAdd.serviceDefinitions);
-  // Rewrite every service definition's paintVariantId through the
-  // keep-both remap — a no-op for any ID that was never remapped (kept
-  // local, replaced in place, or untouched), and correct for the one
-  // case that actually changed identity.
-  const finalServiceDefinitions = rawFinalServiceDefinitions.map((svc) =>
-    svc.paintVariantId && keepBothIdRemap.has(svc.paintVariantId) ? { ...svc, paintVariantId: keepBothIdRemap.get(svc.paintVariantId)! } : svc
-  );
+  // Rewrite ONLY incoming-origin service definitions' paintVariantId
+  // through the keep-both remap; a local-preserved service's reference is
+  // never touched, regardless of what string it currently holds.
+  const finalServiceDefinitions = rawFinalServiceDefinitions.map((svc) => {
+    if (localPreservedIds.has(svc.id)) return svc;
+    return svc.paintVariantId && keepBothIdRemap.has(svc.paintVariantId) ? { ...svc, paintVariantId: keepBothIdRemap.get(svc.paintVariantId)! } : svc;
+  });
 
   const projectWrites: RestoreResolutionResult['projectWrites'] = plan.toAdd.projects.map((project) => ({ project, expectedVersion: null }));
   const projectConflicts = plan.conflicts.filter((c) => c.kind === 'project');

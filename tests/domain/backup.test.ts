@@ -531,6 +531,57 @@ describe('applyFullRestoreResolutions: pure resolution-application logic (item 8
     expect(result.finalServiceDefinitions[0].paintVariantId).toBe(copiedVariant.id); // remapped, not left at 'paint-1'
   });
 
+  it('V5-02: "keep both" on a conflicting paint variant remaps ONLY the incoming service, never a pre-existing LOCAL service that already referenced the same paint ID', () => {
+    const ids = sequentialIdSource();
+    const localVariant = makeVariant(); // id 'paint-1', pricePerGal '42'
+    const incomingVariant = { ...makeVariant(), pricePerGal: '99' }; // same id, different price -> conflict
+    const localService = {
+      id: 'local-service', name: 'Existing local wall service', unit: 'ft2' as const, kind: 'wall' as const, paintVariantId: 'paint-1',
+      coats: 2, wasteRatio: '0.1', loadedHourlyRate: '32', throughput: '150', hoursPerSidePerCoat: null, developedWidthFt: null,
+      widthFt: null, heightFt: null, paintedSides: null, additionalLaborHoursPerUnit: '0', suppliesCostPerUnit: '0',
+      directExpensePerUnit: '0', currentSellingPrice: '1.80', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const incomingService = { ...localService, id: 'incoming-service', name: 'Incoming wall service' };
+    const envelope = exportBackup('install-1', makeSettings(), [incomingVariant], [], [incomingService], [], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [localService], projects: [] },
+      { businessSettings: makeSettings(), paintVariants: [incomingVariant], otherMaterials: [], serviceDefinitions: [incomingService], projects: [] }
+    );
+    const result = applyFullRestoreResolutions(
+      { businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [localService] },
+      envelope, plan, { 'paintVariant:paint-1': 'keepBoth' }, {}, ids
+    );
+    const copiedVariant = result.finalPaintVariants.find((v) => v.pricePerGal === '99' && v.id !== 'paint-1')!;
+    expect(result.finalServiceDefinitions.find((s) => s.id === 'local-service')?.paintVariantId).toBe('paint-1'); // untouched local reference
+    expect(result.finalServiceDefinitions.find((s) => s.id === 'incoming-service')?.paintVariantId).toBe(copiedVariant.id); // remapped incoming reference
+  });
+
+  it('V5-02: keepLocal and replaceImported on a conflicting paint variant never remap a local service — only keepBoth mints a copy to remap toward', () => {
+    const ids = sequentialIdSource();
+    const localVariant = makeVariant();
+    const incomingVariant = { ...makeVariant(), pricePerGal: '99' };
+    const localService = {
+      id: 'local-service', name: 'Existing local wall service', unit: 'ft2' as const, kind: 'wall' as const, paintVariantId: 'paint-1',
+      coats: 2, wasteRatio: '0.1', loadedHourlyRate: '32', throughput: '150', hoursPerSidePerCoat: null, developedWidthFt: null,
+      widthFt: null, heightFt: null, paintedSides: null, additionalLaborHoursPerUnit: '0', suppliesCostPerUnit: '0',
+      directExpensePerUnit: '0', currentSellingPrice: '1.80', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const envelope = exportBackup('install-1', makeSettings(), [incomingVariant], [], [], [], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [localService], projects: [] },
+      { businessSettings: makeSettings(), paintVariants: [incomingVariant], otherMaterials: [], serviceDefinitions: [], projects: [] }
+    );
+    const local = { businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [localService] };
+
+    const keepLocalResult = applyFullRestoreResolutions(local, envelope, plan, {}, {}, ids);
+    expect(keepLocalResult.finalServiceDefinitions[0].paintVariantId).toBe('paint-1');
+
+    const replaceResult = applyFullRestoreResolutions(local, envelope, plan, { 'paintVariant:paint-1': 'replaceImported' }, {}, ids);
+    // The local service still references paint-1 by ID -- replaceImported keeps the SAME id, just swaps its content, so no remap is needed or expected.
+    expect(replaceResult.finalServiceDefinitions[0].paintVariantId).toBe('paint-1');
+    expect(replaceResult.finalPaintVariants.find((v) => v.id === 'paint-1')?.pricePerGal).toBe('99');
+  });
+
   it('a "keep both" project copy returns real provenance, not silently dropped (independent-review §5 secondary finding)', () => {
     const ids = sequentialIdSource();
     const localProject = makeProject('p1', ids);

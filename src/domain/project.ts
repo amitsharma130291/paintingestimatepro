@@ -17,6 +17,23 @@ export function createDraftRevision(
   revisionNumber = 1
 ): EstimateRevision {
   const now = ids.now();
+  // V5-05/CAT-010: this used to hardcode {mode:'none'} regardless of the
+  // configured business default, silently omitting the assumption from
+  // every new draft's material cost. tool-specs/04: "Travel default
+  // becomes exactly one new-draft expense line" plus "Supplies allowance
+  // is one mutually exclusive mode" — both defaults live on the snapshot's
+  // OWN captured businessSettings, so a new draft applies exactly the
+  // configuration in effect at creation time, and an already-created
+  // draft's own snapshot is never retroactively changed by a later
+  // settings edit (this function is never called again for an existing
+  // draft — only for a brand-new one).
+  const settings = snapshot.businessSettings;
+  const suppliesAllowance = { ...settings.defaultSuppliesAllowance };
+  const travelField = parseDecimalField(settings.defaultTravelAmount);
+  const otherExpenses =
+    travelField.kind === 'valid' && travelField.value.greaterThan(0)
+      ? [{ id: ids.nextId(), description: 'Travel', amount: settings.defaultTravelAmount }]
+      : [];
   return {
     id: ids.nextId(),
     projectId,
@@ -30,8 +47,8 @@ export function createDraftRevision(
     activeRateSnapshot: snapshot,
     additionalLabor: [],
     otherMaterialLines: [],
-    suppliesAllowance: { mode: 'none', amount: '0', ratio: '0' },
-    otherExpenses: [],
+    suppliesAllowance,
+    otherExpenses,
     priceMode: 'suggested',
     proposedPrice: null,
     notes: '',

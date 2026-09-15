@@ -85,6 +85,15 @@ export function assembleServiceHealth(service: ServiceDefinition, catalog: Paint
   if (overheadRatioField.kind !== 'valid' || targetMarginField.kind !== 'valid') {
     return { state: 'invalid', reasons: ['Business overhead ratio / target margin settings are invalid.'] };
   }
+  // V5-01: CALCULATION_SPEC.md §1 requires 0 <= targetMarginRatio < 1.
+  // requiredPriceRaw() throws outside that range rather than returning a
+  // structured result — the free job-cost calculator already guards this
+  // boundary before calling evaluatePrice(); this assembly did not, so a
+  // 100% (or negative) target crashed Price Book Health instead of
+  // producing a correctable field error.
+  if (targetMarginField.value.greaterThanOrEqualTo(1) || targetMarginField.value.isNegative()) {
+    return { state: 'invalid', reasons: ['Target margin must be a percentage from 0% up to (but not including) 100%.'] };
+  }
 
   const unitCost = computeServiceUnitCost({
     kind: service.kind,
