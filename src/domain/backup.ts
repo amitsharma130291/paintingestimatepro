@@ -478,6 +478,149 @@ export interface ValidationIssue {
 
 export const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
 
+/**
+ * V6-02: validates one revision's COMPLETE structure -- every field a
+ * normal revision requires, including its nested rooms/surfaces/openings/
+ * line items/snapshot. Used both for a project's real revisions AND
+ * (recursively, exactly one level deep) for `preRefreshCheckpoint`, which
+ * is a full embedded revision itself (see rateRefresh.ts's
+ * `applyRateRefresh` -- it stores `structuredClone(revision)` verbatim,
+ * minus that clone's own checkpoint). Previously the checkpoint only got a
+ * shallow "is it a plain object with a string id" check, so a value like
+ * `{ id: rev.id }` passed import validation and only failed later, deep
+ * inside assembleProjectEstimate, when Undo activated it -- a shape bug
+ * that should never have reached local storage in the first place.
+ *
+ * `opts.allowCheckpoint` bounds the recursion to one level: the top-level
+ * call (a real revision) allows exactly one nested checkpoint; the
+ * recursive call it makes into that checkpoint passes `allowCheckpoint:
+ * false`, so a checkpoint-of-a-checkpoint is rejected by the same generic
+ * "not allowed here" branch rather than a separate ad-hoc check.
+ */
+function validateRevisionStructure(
+  revPath: string,
+  rev: unknown,
+  expectedProjectId: string,
+  issues: ValidationIssue[],
+  opts: { allowCheckpoint: boolean } = { allowCheckpoint: true }
+): void {
+  if (!isPlainObject(rev)) {
+    issues.push({ path: revPath, message: `Expected a revision object at ${revPath}.` });
+    return;
+  }
+  checkRequiredString(`${revPath}.id`, rev.id, issues);
+  if (rev.projectId !== expectedProjectId) {
+    issues.push({ path: `${revPath}.projectId`, message: `Revision projectId "${String(rev.projectId)}" does not match its containing project "${expectedProjectId}".` });
+  }
+  checkRequiredInt(`${revPath}.revisionNumber`, rev.revisionNumber, issues, { min: 1 });
+  checkEnum(`${revPath}.state`, rev.state, REVISION_STATES, issues);
+  checkRequiredString(`${revPath}.title`, rev.title, issues);
+  checkRequiredString(`${revPath}.createdAt`, rev.createdAt, issues);
+  checkRequiredString(`${revPath}.updatedAt`, rev.updatedAt, issues);
+  checkRequiredString(`${revPath}.engineVersion`, rev.engineVersion, issues);
+  checkEnum(`${revPath}.calculationState`, rev.calculationState, CALCULATION_STATES, issues);
+  checkEnum(`${revPath}.priceMode`, rev.priceMode, PRICE_MODES, issues);
+  checkOptionalNonNegativeDecimal(`${revPath}.proposedPrice`, rev.proposedPrice, issues);
+  checkOptionalString(`${revPath}.issuedAt`, rev.issuedAt, issues);
+
+  if (!isPlainObject(rev.businessInfo)) issues.push({ path: `${revPath}.businessInfo`, message: `Expected an object at ${revPath}.businessInfo.` });
+  else {
+    checkRequiredString(`${revPath}.businessInfo.name`, rev.businessInfo.name, issues);
+    checkRequiredString(`${revPath}.businessInfo.contact`, rev.businessInfo.contact, issues);
+    checkRequiredString(`${revPath}.businessInfo.address`, rev.businessInfo.address, issues);
+  }
+  if (!isPlainObject(rev.customerInfo)) issues.push({ path: `${revPath}.customerInfo`, message: `Expected an object at ${revPath}.customerInfo.` });
+  else {
+    checkRequiredString(`${revPath}.customerInfo.name`, rev.customerInfo.name, issues);
+    checkRequiredString(`${revPath}.customerInfo.address`, rev.customerInfo.address, issues);
+    checkRequiredString(`${revPath}.customerInfo.contact`, rev.customerInfo.contact, issues);
+  }
+
+  if (!rev.activeRateSnapshot) issues.push({ path: `${revPath}.activeRateSnapshot`, message: 'Revision missing embedded rate snapshot.' });
+  else validateRateSnapshot(`${revPath}.activeRateSnapshot`, rev.activeRateSnapshot, issues);
+
+  // independent-review R06: an issued revision's frozen customer
+  // document was never validated at all — `{}` passed. The live
+  // renderer dereferences businessInfo.name, customerInfo, and
+  // scopeLines.map(), so an accepted malformed document breaks the
+  // project view. DATA_CONTRACT.md requires it "on issue," so it's
+  // REQUIRED (not merely well-formed-if-present) whenever state is
+  // 'issued'; for a draft it's optional but must still be
+  // well-formed if somehow present.
+  if (rev.state === 'issued' && !rev.customerDocumentSnapshot) {
+    issues.push({ path: `${revPath}.customerDocumentSnapshot`, message: 'An issued revision must have a frozen customer document snapshot.' });
+  } else if (rev.customerDocumentSnapshot !== null && rev.customerDocumentSnapshot !== undefined) {
+    validateCustomerDocumentSnapshot(`${revPath}.customerDocumentSnapshot`, rev.customerDocumentSnapshot, issues);
+  }
+
+  // V5-06 (related path): the import validator never checked
+  // rawCalculatedOutputs at all -- a malformed or NaN/Infinity-laden
+  // frozen-outputs structure would be committed on import and only
+  // caught (if at all) whenever something later happened to call
+  // readFrozenCalculatedOutputs on it. `null`/absent is the normal
+  // state for a draft AND for an issued revision predating R13's
+  // freeze mechanism (readFrozenCalculatedOutputs's own "missing"
+  // compatibility path already handles that at read time) -- so this
+  // only rejects a PRESENT-but-corrupted value, never requires one.
+  if (rev.rawCalculatedOutputs !== null && rev.rawCalculatedOutputs !== undefined) {
+    if (readFrozenCalculatedOutputs(rev.rawCalculatedOutputs).status !== 'frozen') {
+      issues.push({ path: `${revPath}.rawCalculatedOutputs`, message: 'Frozen calculated outputs are malformed, use an unsupported schema version, or contain a non-finite/negative-where-disallowed value.' });
+    }
+  }
+
+  // V5-08/V6-02: preRefreshCheckpoint is optional and, when present, is a
+  // COMPLETE embedded revision belonging to the SAME project and the SAME
+  // revision identity (rateRefresh.ts's applyRateRefresh clones the
+  // revision-before-refresh verbatim, id and all -- Undo restores it back
+  // into this exact revision slot, never a different one). Reject it
+  // before any write if its structure, project identity, or revision
+  // identity don't hold up, and reject a nested checkpoint chain outright.
+  if (rev.preRefreshCheckpoint !== null && rev.preRefreshCheckpoint !== undefined) {
+    if (!opts.allowCheckpoint) {
+      issues.push({ path: `${revPath}.preRefreshCheckpoint`, message: 'preRefreshCheckpoint must not itself carry a further nested checkpoint.' });
+    } else if (!isPlainObject(rev.preRefreshCheckpoint)) {
+      issues.push({ path: `${revPath}.preRefreshCheckpoint`, message: 'preRefreshCheckpoint, when present, must be a plain revision object.' });
+    } else {
+      if (typeof rev.id === 'string' && rev.preRefreshCheckpoint.id !== rev.id) {
+        issues.push({ path: `${revPath}.preRefreshCheckpoint.id`, message: `preRefreshCheckpoint.id "${String(rev.preRefreshCheckpoint.id)}" must match its own revision's id "${rev.id}" -- it is that revision's own pre-refresh state, not a different revision.` });
+      }
+      validateRevisionStructure(`${revPath}.preRefreshCheckpoint`, rev.preRefreshCheckpoint, expectedProjectId, issues, { allowCheckpoint: false });
+    }
+  }
+
+  // Surfaces are validated before rooms so rooms can cross-reference
+  // the resulting ID set (surfaceIds -> real surfaces in this revision).
+  const surfaceIds = new Set<string>();
+  if (!Array.isArray(rev.surfaces)) {
+    issues.push({ path: `${revPath}.surfaces`, message: `Expected an array at ${revPath}.surfaces.` });
+  } else {
+    for (const s of rev.surfaces) if (isPlainObject(s) && typeof s.id === 'string') surfaceIds.add(s.id);
+    checkNoDuplicateIds(`${revPath}.surfaces`, rev.surfaces as { id: unknown }[], issues);
+  }
+  const roomIds = new Set<string>();
+  if (Array.isArray(rev.rooms)) for (const r of rev.rooms) if (isPlainObject(r) && typeof r.id === 'string') roomIds.add(r.id);
+
+  if (Array.isArray(rev.surfaces)) rev.surfaces.forEach((s, i) => validateSurface(`${revPath}.surfaces[${i}]`, s, roomIds, issues));
+
+  if (!Array.isArray(rev.rooms)) {
+    issues.push({ path: `${revPath}.rooms`, message: `Expected an array at ${revPath}.rooms.` });
+  } else {
+    checkNoDuplicateIds(`${revPath}.rooms`, rev.rooms as { id: unknown }[], issues);
+    rev.rooms.forEach((r, i) => validateRoom(`${revPath}.rooms[${i}]`, r, surfaceIds, issues));
+  }
+
+  if (!Array.isArray(rev.additionalLabor)) issues.push({ path: `${revPath}.additionalLabor`, message: `Expected an array at ${revPath}.additionalLabor.` });
+  else rev.additionalLabor.forEach((l, i) => validateAdditionalLaborLine(`${revPath}.additionalLabor[${i}]`, l, issues));
+
+  if (!Array.isArray(rev.otherMaterialLines)) issues.push({ path: `${revPath}.otherMaterialLines`, message: `Expected an array at ${revPath}.otherMaterialLines.` });
+  else rev.otherMaterialLines.forEach((l, i) => validateOtherMaterialLine(`${revPath}.otherMaterialLines[${i}]`, l, issues));
+
+  validateSuppliesAllowance(`${revPath}.suppliesAllowance`, rev.suppliesAllowance, issues);
+
+  if (!Array.isArray(rev.otherExpenses)) issues.push({ path: `${revPath}.otherExpenses`, message: `Expected an array at ${revPath}.otherExpenses.` });
+  else rev.otherExpenses.forEach((l, i) => validateExpenseLine(`${revPath}.otherExpenses[${i}]`, l, issues));
+}
+
 /** Full-shape validation BEFORE any write — D11: "failed/truncated/invalid
  * version/dangling reference/duplicate ID/oversized import -> no writes." */
 export function validateBackupEnvelope(raw: unknown, rawByteLength: number): { ok: true; envelope: BackupEnvelope } | { ok: false; issues: ValidationIssue[] } {
@@ -565,118 +708,7 @@ export function validateBackupEnvelope(raw: unknown, rawByteLength: number): { o
       }
 
       p.revisions.forEach((rev, revIndex) => {
-        const revPath = `${path}.revisions[${revIndex}]`;
-        if (!isPlainObject(rev)) {
-          issues.push({ path: revPath, message: `Expected a revision object at ${revPath}.` });
-          return;
-        }
-        checkRequiredString(`${revPath}.id`, rev.id, issues);
-        if (rev.projectId !== p.id) {
-          issues.push({ path: `${revPath}.projectId`, message: `Revision projectId "${String(rev.projectId)}" does not match its containing project "${String(p.id)}".` });
-        }
-        checkRequiredInt(`${revPath}.revisionNumber`, rev.revisionNumber, issues, { min: 1 });
-        checkEnum(`${revPath}.state`, rev.state, REVISION_STATES, issues);
-        checkRequiredString(`${revPath}.title`, rev.title, issues);
-        checkRequiredString(`${revPath}.createdAt`, rev.createdAt, issues);
-        checkRequiredString(`${revPath}.updatedAt`, rev.updatedAt, issues);
-        checkRequiredString(`${revPath}.engineVersion`, rev.engineVersion, issues);
-        checkEnum(`${revPath}.calculationState`, rev.calculationState, CALCULATION_STATES, issues);
-        checkEnum(`${revPath}.priceMode`, rev.priceMode, PRICE_MODES, issues);
-        checkOptionalNonNegativeDecimal(`${revPath}.proposedPrice`, rev.proposedPrice, issues);
-        checkOptionalString(`${revPath}.issuedAt`, rev.issuedAt, issues);
-
-        if (!isPlainObject(rev.businessInfo)) issues.push({ path: `${revPath}.businessInfo`, message: `Expected an object at ${revPath}.businessInfo.` });
-        else {
-          checkRequiredString(`${revPath}.businessInfo.name`, rev.businessInfo.name, issues);
-          checkRequiredString(`${revPath}.businessInfo.contact`, rev.businessInfo.contact, issues);
-          checkRequiredString(`${revPath}.businessInfo.address`, rev.businessInfo.address, issues);
-        }
-        if (!isPlainObject(rev.customerInfo)) issues.push({ path: `${revPath}.customerInfo`, message: `Expected an object at ${revPath}.customerInfo.` });
-        else {
-          checkRequiredString(`${revPath}.customerInfo.name`, rev.customerInfo.name, issues);
-          checkRequiredString(`${revPath}.customerInfo.address`, rev.customerInfo.address, issues);
-          checkRequiredString(`${revPath}.customerInfo.contact`, rev.customerInfo.contact, issues);
-        }
-
-        if (!rev.activeRateSnapshot) issues.push({ path: `${revPath}.activeRateSnapshot`, message: 'Revision missing embedded rate snapshot.' });
-        else validateRateSnapshot(`${revPath}.activeRateSnapshot`, rev.activeRateSnapshot, issues);
-
-        // independent-review R06: an issued revision's frozen customer
-        // document was never validated at all — `{}` passed. The live
-        // renderer dereferences businessInfo.name, customerInfo, and
-        // scopeLines.map(), so an accepted malformed document breaks the
-        // project view. DATA_CONTRACT.md requires it "on issue," so it's
-        // REQUIRED (not merely well-formed-if-present) whenever state is
-        // 'issued'; for a draft it's optional but must still be
-        // well-formed if somehow present.
-        if (rev.state === 'issued' && !rev.customerDocumentSnapshot) {
-          issues.push({ path: `${revPath}.customerDocumentSnapshot`, message: 'An issued revision must have a frozen customer document snapshot.' });
-        } else if (rev.customerDocumentSnapshot !== null && rev.customerDocumentSnapshot !== undefined) {
-          validateCustomerDocumentSnapshot(`${revPath}.customerDocumentSnapshot`, rev.customerDocumentSnapshot, issues);
-        }
-
-        // V5-06 (related path): the import validator never checked
-        // rawCalculatedOutputs at all -- a malformed or NaN/Infinity-laden
-        // frozen-outputs structure would be committed on import and only
-        // caught (if at all) whenever something later happened to call
-        // readFrozenCalculatedOutputs on it. `null`/absent is the normal
-        // state for a draft AND for an issued revision predating R13's
-        // freeze mechanism (readFrozenCalculatedOutputs's own "missing"
-        // compatibility path already handles that at read time) -- so this
-        // only rejects a PRESENT-but-corrupted value, never requires one.
-        if (rev.rawCalculatedOutputs !== null && rev.rawCalculatedOutputs !== undefined) {
-          if (readFrozenCalculatedOutputs(rev.rawCalculatedOutputs).status !== 'frozen') {
-            issues.push({ path: `${revPath}.rawCalculatedOutputs`, message: 'Frozen calculated outputs are malformed, use an unsupported schema version, or contain a non-finite/negative-where-disallowed value.' });
-          }
-        }
-
-        // V5-08: preRefreshCheckpoint is optional and, when present, must
-        // be a plain object with its own valid id -- and must NOT itself
-        // carry a further nested checkpoint, which would let a corrupted
-        // or maliciously-crafted import build an unbounded/self-referential
-        // chain. Only this shallow shape is checked (not a full recursive
-        // re-validation of the entire nested revision) since the field is
-        // an internal recovery aid, never read by any calculation or
-        // customer-facing path.
-        if (rev.preRefreshCheckpoint !== null && rev.preRefreshCheckpoint !== undefined) {
-          if (!isPlainObject(rev.preRefreshCheckpoint) || typeof rev.preRefreshCheckpoint.id !== 'string') {
-            issues.push({ path: `${revPath}.preRefreshCheckpoint`, message: 'preRefreshCheckpoint, when present, must be a plain object with its own id.' });
-          } else if (rev.preRefreshCheckpoint.preRefreshCheckpoint !== null && rev.preRefreshCheckpoint.preRefreshCheckpoint !== undefined) {
-            issues.push({ path: `${revPath}.preRefreshCheckpoint.preRefreshCheckpoint`, message: 'preRefreshCheckpoint must not itself carry a further nested checkpoint.' });
-          }
-        }
-
-        // Surfaces are validated before rooms so rooms can cross-reference
-        // the resulting ID set (surfaceIds -> real surfaces in this revision).
-        const surfaceIds = new Set<string>();
-        if (!Array.isArray(rev.surfaces)) {
-          issues.push({ path: `${revPath}.surfaces`, message: `Expected an array at ${revPath}.surfaces.` });
-        } else {
-          for (const s of rev.surfaces) if (isPlainObject(s) && typeof s.id === 'string') surfaceIds.add(s.id);
-          checkNoDuplicateIds(`${revPath}.surfaces`, rev.surfaces as { id: unknown }[], issues);
-        }
-        const roomIds = new Set<string>();
-        if (Array.isArray(rev.rooms)) for (const r of rev.rooms) if (isPlainObject(r) && typeof r.id === 'string') roomIds.add(r.id);
-
-        if (Array.isArray(rev.surfaces)) rev.surfaces.forEach((s, i) => validateSurface(`${revPath}.surfaces[${i}]`, s, roomIds, issues));
-
-        if (!Array.isArray(rev.rooms)) {
-          issues.push({ path: `${revPath}.rooms`, message: `Expected an array at ${revPath}.rooms.` });
-        } else {
-          checkNoDuplicateIds(`${revPath}.rooms`, rev.rooms as { id: unknown }[], issues);
-          rev.rooms.forEach((r, i) => validateRoom(`${revPath}.rooms[${i}]`, r, surfaceIds, issues));
-        }
-
-        if (!Array.isArray(rev.additionalLabor)) issues.push({ path: `${revPath}.additionalLabor`, message: `Expected an array at ${revPath}.additionalLabor.` });
-        else rev.additionalLabor.forEach((l, i) => validateAdditionalLaborLine(`${revPath}.additionalLabor[${i}]`, l, issues));
-
-        if (!Array.isArray(rev.otherMaterialLines)) issues.push({ path: `${revPath}.otherMaterialLines`, message: `Expected an array at ${revPath}.otherMaterialLines.` });
-        else rev.otherMaterialLines.forEach((l, i) => validateOtherMaterialLine(`${revPath}.otherMaterialLines[${i}]`, l, issues));
-
-        validateSuppliesAllowance(`${revPath}.suppliesAllowance`, rev.suppliesAllowance, issues);
-
-        if (!Array.isArray(rev.otherExpenses)) issues.push({ path: `${revPath}.otherExpenses`, message: `Expected an array at ${revPath}.otherExpenses.` });
-        else rev.otherExpenses.forEach((l, i) => validateExpenseLine(`${revPath}.otherExpenses[${i}]`, l, issues));
+        validateRevisionStructure(`${path}.revisions[${revIndex}]`, rev, typeof p.id === 'string' ? p.id : String(p.id), issues);
       });
 
       // Project ownership: activeRevisionId must reference one of this

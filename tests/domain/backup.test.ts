@@ -4,6 +4,7 @@ import { sequentialIdSource } from '../../src/domain/ids';
 import { validateBackupEnvelope, planRestoreMerge, planFullRestoreMerge, planImportAsCopies, applyFullRestoreResolutions, exportBackup } from '../../src/domain/backup';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision } from '../../src/domain/project';
+import { applyRateRefresh } from '../../src/domain/rateRefresh';
 import type { BusinessSettings, PaintVariant, Project, CustomerDocumentSnapshot } from '../../src/domain/entities';
 
 function makeSettings(): BusinessSettings {
@@ -738,6 +739,125 @@ describe('V6-04: import validation of opening counts stays consistent with the c
   it('accepts a well-formed quick room within bounds', () => {
     const p = projectWithRoom({ doorCount: 2, windowCount: 3 });
     const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [p], sequentialIdSource());
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+});
+
+describe('V6-02: preRefreshCheckpoint is validated as rigorously as a normal revision before import', () => {
+  // Builds a project whose single revision has ALREADY been through a real
+  // rate refresh (via the real applyRateRefresh, not a hand-rolled stub),
+  // so `preRefreshCheckpoint` is a genuine, fully-formed embedded revision
+  // -- exactly what a real backup file contains. Each test below corrupts
+  // one specific part of that checkpoint and confirms the whole import is
+  // rejected before any write, per DATA_CONTRACT.md D11.
+  function projectWithRealCheckpoint(withRoom = false): Project {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    let revision = project.revisions[0];
+    if (withRoom) {
+      const room = {
+        id: 'room-1', name: 'Bedroom', lengthFt: '20', widthFt: '16', heightFt: '9', deductionEnabled: true, openingMode: 'quick' as const,
+        quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: ['surf-1'],
+      };
+      const surface = { id: 'surf-1', roomId: 'room-1', kind: 'wall' as const, enabled: true, measurementMode: 'roomDerived' as const, areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: '0.1', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
+      revision = { ...revision, rooms: [room], surfaces: [surface] };
+    }
+    const liveSnapshot = createSnapshot(makeSettings(), [makeVariant()], [], ids, 'rev-live');
+    const refreshed = applyRateRefresh(revision, liveSnapshot, [], ids);
+    return { ...project, revisions: [refreshed] };
+  }
+  function envelopeFor(project: Project) {
+    return exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [project], sequentialIdSource());
+  }
+  function corruptCheckpoint(project: Project, patch: (checkpoint: NonNullable<Project['revisions'][number]['preRefreshCheckpoint']>) => object): Project {
+    const revision = project.revisions[0];
+    const checkpoint = revision.preRefreshCheckpoint!;
+    return { ...project, revisions: [{ ...revision, preRefreshCheckpoint: { ...checkpoint, ...patch(checkpoint) } as typeof checkpoint }] };
+  }
+
+  it('a valid checkpoint round-trips through export/import validation and is accepted', () => {
+    const project = projectWithRealCheckpoint();
+    expect(project.revisions[0].preRefreshCheckpoint).toBeTruthy();
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(true);
+  });
+
+  it('rejects a checkpoint missing its embedded rate snapshot', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(), () => ({ activeRateSnapshot: undefined }));
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+
+  it('rejects a checkpoint missing its rooms/surfaces arrays entirely', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(), () => ({ rooms: undefined, surfaces: undefined }));
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+
+  it('rejects a checkpoint whose projectId does not match the containing project', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(), () => ({ projectId: 'some-other-project' }));
+    const result = validateBackupEnvelope(envelopeFor(project), 10_000);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues.some((i) => i.path.includes('preRefreshCheckpoint.projectId'))).toBe(true);
+  });
+
+  it('rejects a checkpoint whose id does not match its own revision\'s id', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(), () => ({ id: 'a-completely-different-revision-id' }));
+    const result = validateBackupEnvelope(envelopeFor(project), 10_000);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues.some((i) => i.path.endsWith('preRefreshCheckpoint.id'))).toBe(true);
+  });
+
+  it('the reviewer\'s own minimal repro -- a checkpoint reduced to just {id: rev.id} -- is rejected for missing structure, not silently accepted because the id happens to match', () => {
+    const project = projectWithRealCheckpoint();
+    const revision = project.revisions[0];
+    const withMinimalCheckpoint = { ...project, revisions: [{ ...revision, preRefreshCheckpoint: { id: revision.id } as typeof revision }] };
+    expect(validateBackupEnvelope(envelopeFor(withMinimalCheckpoint), 10_000).ok).toBe(false);
+  });
+
+  it('rejects a checkpoint with a dangling room->surface reference', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(true), (cp) => ({ rooms: cp.rooms.map((r) => ({ ...r, surfaceIds: ['a-surface-that-does-not-exist'] })) }));
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+
+  it('rejects a checkpoint with a dangling surface->room reference', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(true), (cp) => ({ surfaces: cp.surfaces.map((s) => ({ ...s, roomId: 'a-room-that-does-not-exist' })) }));
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+
+  it('rejects a checkpoint with an invalid decimal field on a room', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(true), (cp) => ({ rooms: cp.rooms.map((r) => ({ ...r, lengthFt: 'not-a-number' })) }));
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+
+  it('rejects a checkpoint with an invalid (negative) opening count', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(true), (cp) => ({ rooms: cp.rooms.map((r) => ({ ...r, quick: { ...r.quick, doorCount: -1 } })) }));
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+
+  it('rejects a checkpoint carrying its own further-nested checkpoint (bounded to one level)', () => {
+    const project = projectWithRealCheckpoint();
+    const checkpoint = project.revisions[0].preRefreshCheckpoint!;
+    const nested = corruptCheckpoint(project, () => ({ preRefreshCheckpoint: { ...checkpoint } }));
+    const result = validateBackupEnvelope(envelopeFor(nested), 10_000);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues.some((i) => /nested checkpoint/i.test(i.message))).toBe(true);
+  });
+
+  it('rejects a checkpoint whose embedded rate snapshot uses an unsupported schema', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(), (cp) => ({ activeRateSnapshot: { ...cp.activeRateSnapshot, businessSettings: undefined } }));
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+
+  it('a rejected checkpoint import carries no envelope at all -- there is nothing a caller could partially write', () => {
+    const project = corruptCheckpoint(projectWithRealCheckpoint(), () => ({ activeRateSnapshot: undefined }));
+    const result = validateBackupEnvelope(envelopeFor(project), 10_000);
+    expect(result.ok).toBe(false);
+    expect('envelope' in result).toBe(false);
+  });
+
+  it('a legitimately absent checkpoint (no refresh ever happened) is still fully supported and accepted', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    expect(project.revisions[0].preRefreshCheckpoint).toBeFalsy();
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [project], ids);
     expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
   });
 });
