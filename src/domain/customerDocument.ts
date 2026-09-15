@@ -1,4 +1,26 @@
-import type { EstimateRevision, CustomerDocumentSnapshot } from './entities';
+import type { EstimateRevision, Surface, CustomerDocumentSnapshot } from './entities';
+
+/**
+ * V6-01: describes ONE enabled surface's scope for the customer document --
+ * kind, the coat count actually used (an explicit per-surface override, or
+ * the draft's own snapshot default, matching how the calculation itself
+ * resolves it), and the quantity/unit tool-specs/08 requires ("scope
+ * descriptions with surfaces/coats"): door count for doors, linear feet for
+ * trim. Never leaks a cost, rate, or internal quantity beyond what a
+ * customer needs to recognize their own job.
+ */
+function describeSurfaceScope(surface: Surface, defaultCoats: number): string {
+  const coats = surface.coats ?? defaultCoats;
+  const coatsLabel = `${coats} coat${coats === 1 ? '' : 's'}`;
+  if (surface.kind === 'door') {
+    const count = surface.doorCount ?? 1;
+    return `${count} door${count === 1 ? '' : 's'} (${coatsLabel})`;
+  }
+  if (surface.kind === 'trim') {
+    return `trim${surface.trimLengthFt ? ` (${surface.trimLengthFt} ft)` : ''} (${coatsLabel})`;
+  }
+  return `${surface.kind} (${coatsLabel})`;
+}
 
 /**
  * tool-specs/08 + P01: an ALLOW-LIST projection, not a block-list. A new
@@ -12,11 +34,24 @@ export function buildCustomerDocument(
   revision: EstimateRevision,
   meta: { estimateNumber: string; estimateDate: string; projectAddress: string; revisionLabel: string }
 ): CustomerDocumentSnapshot {
-  const scopeLines = revision.rooms.map((room) => {
+  const defaultCoats = revision.activeRateSnapshot.businessSettings.defaultCoats;
+
+  const roomLines = revision.rooms.map((room) => {
     const surfaces = revision.surfaces.filter((s) => room.surfaceIds.includes(s.id) && s.enabled);
-    const kinds = surfaces.map((s) => s.kind);
-    return `${room.name || 'Room'}: ${kinds.join(', ') || 'no surfaces enabled'}`;
+    const parts = surfaces.map((s) => describeSurfaceScope(s, defaultCoats));
+    return `${room.name || 'Room'}: ${parts.join(', ') || 'no surfaces enabled'}`;
   });
+
+  // V6-01: a standalone surface (roomId === null — a door-only or trim-only
+  // job, per tool-specs/05's explicit support for jobs with no room at
+  // all) was never projected into the customer scope at all. The estimate
+  // could be priced and issued while its customer document silently
+  // described nothing.
+  const standaloneLines = revision.surfaces
+    .filter((s) => s.roomId === null && s.enabled)
+    .map((s) => describeSurfaceScope(s, defaultCoats));
+
+  const scopeLines = [...roomLines, ...standaloneLines];
 
   return {
     estimateNumber: meta.estimateNumber,
