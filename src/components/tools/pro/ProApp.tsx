@@ -5,8 +5,10 @@ import { parseDecimalField } from '../../../engine/parse';
 import { assembleServiceHealth } from '../../../domain/serviceHealthAssembly';
 import { statusBadge, money, parseCoatsInput } from '../shared';
 import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope } from '../../../domain/entities';
+import { ENGINE_VERSION } from '../../../domain/entities';
+import { freezeCalculatedOutputs, readFrozenCalculatedOutputs } from '../../../domain/calculationSnapshot';
 import { createSnapshot } from '../../../domain/snapshot';
-import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, upsertRevision, upsertActualReview } from '../../../domain/project';
+import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGate, updateRoom, removeRoom, upsertRevision, upsertActualReview, supersede } from '../../../domain/project';
 import type { ActualReview } from '../../../domain/entities';
 import { assembleProjectEstimate, type ProjectEstimateAssembly } from '../../../domain/estimateAssembly';
 import { previewRateRefresh, applyRateRefresh, type RateRefreshDiff, type VariantResolution } from '../../../domain/rateRefresh';
@@ -388,10 +390,28 @@ export default function ProApp() {
   async function issueEstimate() {
     if (!draftEdit || !activeProject || !summary || summary.calculationState !== 'complete') return;
     const proposedPrice = draftEdit.priceMode === 'custom' ? customPriceRaw : summary.effectivePrice?.toFixed(2) ?? null;
-    const ready: EstimateRevision = { ...draftEdit, calculationState: 'complete', proposedPrice, title: draftEdit.title || activeProject.title };
+    // independent-review R13: issuing froze the customer document but left
+    // rawCalculatedOutputs permanently null, so the actual-cost comparison
+    // silently fell back to a LIVE recomputation forever — never a real
+    // historical baseline. `summary` here is numerically identical to what
+    // re-running the assembly on `ready` would produce (issuing doesn't
+    // change any INPUT the engine reads), so freezing it directly is
+    // correct and avoids a redundant recomputation.
+    const ready: EstimateRevision = { ...draftEdit, calculationState: 'complete', proposedPrice, title: draftEdit.title || activeProject.title, rawCalculatedOutputs: freezeCalculatedOutputs(summary, ENGINE_VERSION) };
     const issueNumber = `E-${activeProject.id.slice(-6)}-${draftEdit.revisionNumber}`;
     const issued = issueRevision(ready, (r) => buildCustomerDocument(r, { estimateNumber: issueNumber, estimateDate: now().slice(0, 10), projectAddress: draftEdit.customerInfo.address, revisionLabel: `Rev ${draftEdit.revisionNumber}` }), ids);
-    const nextProject: Project = { ...upsertRevision(activeProject, issued), activeRevisionId: issued.id, updatedAt: now() };
+    // DATA_CONTRACT.md #5: "Only explicit issue supersedes the previous
+    // issued revision" — the issue workflow never actually called the
+    // (already correctly implemented and unit-tested) supersede() helper,
+    // so an OLDER issued revision was left at state:'issued' forever
+    // alongside the new one instead of being marked superseded.
+    const previouslyIssued = activeProject.revisions.find((r) => r.state === 'issued' && r.id !== issued.id);
+    const projectWithIssued = upsertRevision(activeProject, issued);
+    const nextProject: Project = {
+      ...(previouslyIssued ? upsertRevision(projectWithIssued, supersede(previouslyIssued, ids)) : projectWithIssued),
+      activeRevisionId: issued.id,
+      updatedAt: now(),
+    };
     try {
       const committedVersion = await saveProjectSafely(nextProject, draftBaselineVersion);
       setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? { ...nextProject, version: committedVersion } : p)));
@@ -519,12 +539,28 @@ export default function ProApp() {
     }
   }
 
+  // independent-review R13: explicit compatibility handling for an issued
+  // revision that predates rawCalculatedOutputs being frozen at all —
+  // `frozenOutputsMissing` lets the UI say so rather than silently
+  // presenting a live recomputation as if it were the original baseline.
+  const frozenOutputs = issuedRevision ? readFrozenCalculatedOutputs(issuedRevision.rawCalculatedOutputs) : null;
+  const frozenOutputsMissing = frozenOutputs?.status === 'missing';
+
   const actualResult = useMemo(() => {
     if (!issuedRevision || !issuedRevision.proposedPrice) return null;
     const toCategory = (c: { confirmed: boolean; value: Dec | null }): ActualCategory => ({ confirmed: c.confirmed, amount: c.value });
-    const storedJobCost = (issuedRevision.rawCalculatedOutputs as { jobCost?: string } | null)?.jobCost;
-    const issuedSummary = assembleProjectEstimate(issuedRevision, { priceMode: issuedRevision.priceMode, customPriceRaw: issuedRevision.proposedPrice ?? '' });
-    const baselineCost = storedJobCost ?? (issuedSummary.calculationState === 'complete' ? issuedSummary.jobCost!.toString() : '0');
+    const frozen = readFrozenCalculatedOutputs(issuedRevision.rawCalculatedOutputs);
+    let baselineCost: string;
+    if (frozen.status === 'frozen' && frozen.jobCost !== null) {
+      baselineCost = frozen.jobCost.toString();
+    } else {
+      // No usable frozen baseline (an old record from before this fix, or
+      // one that was somehow issued incomplete) — fall back to a live
+      // recompute, the same as before this fix, but now a NAMED,
+      // disclosed fallback rather than the only path that ever existed.
+      const issuedSummary = assembleProjectEstimate(issuedRevision, { priceMode: issuedRevision.priceMode, customPriceRaw: issuedRevision.proposedPrice ?? '' });
+      baselineCost = issuedSummary.calculationState === 'complete' ? issuedSummary.jobCost!.toString() : '0';
+    }
     return evaluateActualReview({
       materials: toCategory(derivedActuals.materials),
       labor: toCategory(derivedActuals.labor),
@@ -1150,6 +1186,11 @@ export default function ProApp() {
             {!issuedRevision && <p className="text-sm text-ink-soft">Open a project with an issued estimate first — actuals are recorded against an issued baseline.</p>}
             {issuedRevision && (
               <>
+                {frozenOutputsMissing && (
+                  <p className="mb-3 rounded-btn border border-warn-line bg-warn-soft p-2 text-xs text-warn">
+                    This estimate was issued before frozen cost baselines existed — the comparison below uses a live recalculation against today's engine, not the original frozen figures.
+                  </p>
+                )}
                 {(['materials', 'labor', 'otherExpenses', 'overhead'] as const).map((cat) => (
                   <div key={cat} className="mb-3">
                     <div className="flex items-center gap-3">
