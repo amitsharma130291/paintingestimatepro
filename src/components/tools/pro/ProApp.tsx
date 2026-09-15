@@ -95,6 +95,11 @@ export default function ProApp() {
     otherExpenses: { confirmed: false, amount: '' },
     overhead: { confirmed: false, amount: '' },
   });
+  // ACT-010 (DATA_CONTRACT.md): overhead has two explicit modes -- confirm
+  // the baseline issued revision's OWN allocated overhead unedited, or
+  // enter a real actual dollar figure. Defaults to baselineAllocation, the
+  // spec's labeled default ("Label baseline overhead as allocated").
+  const [overheadMode, setOverheadMode] = useState<'baselineAllocation' | 'actualFlat'>('baselineAllocation');
   const [importMessage, setImportMessage] = useState<string | null>(null);
   type PendingImport =
     | { mode: 'merge'; envelope: BackupEnvelope; plan: FullRestorePlan; resolutions: Record<string, ImportConflict['resolution']>; existingOtherMaterials: OtherMaterial[]; existingServiceDefinitions: ServiceDefinition[]; existingProjectVersions: Record<string, number> }
@@ -464,6 +469,19 @@ export default function ProApp() {
   const issuedRevision = activeProject?.revisions.find((r) => r.state === 'issued' && r.id === activeProject.activeRevisionId) ?? activeProject?.revisions.find((r) => r.state === 'issued') ?? null;
   const existingActualReview = activeProject?.actualReviews.find((ar) => ar.baselineIssuedRevisionId === issuedRevision?.id) ?? null;
 
+  // ACT-010: the baseline issued revision's OWN allocated overhead, used to
+  // populate/confirm the 'baselineAllocation' mode. Prefers the frozen
+  // snapshot (independent-review R13); falls back to a live recompute for
+  // an old issued revision from before outputs were frozen, exactly like
+  // actualResult's own baselineCost fallback below.
+  function baselineOverheadString(): string | null {
+    if (!issuedRevision) return null;
+    const frozen = readFrozenCalculatedOutputs(issuedRevision.rawCalculatedOutputs);
+    if (frozen.status === 'frozen' && frozen.overhead !== null) return frozen.overhead.toString();
+    const issuedSummary = assembleProjectEstimate(issuedRevision, { priceMode: issuedRevision.priceMode, customPriceRaw: issuedRevision.proposedPrice ?? '' });
+    return issuedSummary.calculationState === 'complete' && issuedSummary.overhead !== null ? issuedSummary.overhead.toString() : null;
+  }
+
   // ACT-013/014 fix: reload previously-saved actuals when switching to a
   // project/issued revision that already has one — without this, actuals
   // silently reset to blank on every reload (nothing was ever persisted).
@@ -475,8 +493,10 @@ export default function ProApp() {
         otherExpenses: { confirmed: existingActualReview.otherExpenses.confirmed, amount: existingActualReview.otherExpenses.amount ?? '' },
         overhead: { confirmed: existingActualReview.overhead.confirmed, amount: existingActualReview.overhead.amount ?? '' },
       });
+      setOverheadMode(existingActualReview.overhead.mode);
     } else {
       setActuals({ materials: { confirmed: false, amount: '' }, labor: { confirmed: false, amount: '' }, otherExpenses: { confirmed: false, amount: '' }, overhead: { confirmed: false, amount: '' } });
+      setOverheadMode('baselineAllocation');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issuedRevision?.id]);
@@ -497,14 +517,21 @@ export default function ProApp() {
     return parsed.kind === 'valid' ? { confirmed: true, value: parsed.value, invalid: false } : { confirmed: true, value: null, invalid: true };
   }
 
+  // ACT-010: in baselineAllocation mode, the value being confirmed is the
+  // baseline's own allocated overhead (read live from the issued revision),
+  // never the free-text box — there is nothing for the user to retype.
+  const overheadRawForDerivation =
+    overheadMode === 'baselineAllocation' ? { confirmed: actuals.overhead.confirmed, amount: baselineOverheadString() ?? '' } : actuals.overhead;
+
   const derivedActuals = useMemo(
     () => ({
       materials: deriveActualCategory(actuals.materials),
       labor: deriveActualCategory(actuals.labor),
       otherExpenses: deriveActualCategory(actuals.otherExpenses),
-      overhead: deriveActualCategory(actuals.overhead),
+      overhead: deriveActualCategory(overheadRawForDerivation),
     }),
-    [actuals]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [actuals, overheadMode, issuedRevision]
   );
   const anyActualCategoryInvalid = Object.values(derivedActuals).some((c) => c.invalid);
 
@@ -521,7 +548,7 @@ export default function ProApp() {
       materials: { confirmed: actuals.materials.confirmed, amount: derivedActuals.materials.value?.toString() ?? null },
       labor: { confirmed: actuals.labor.confirmed, amount: derivedActuals.labor.value?.toString() ?? null },
       otherExpenses: { confirmed: actuals.otherExpenses.confirmed, amount: derivedActuals.otherExpenses.value?.toString() ?? null },
-      overhead: { confirmed: actuals.overhead.confirmed, amount: derivedActuals.overhead.value?.toString() ?? null, mode: 'actualFlat' },
+      overhead: { confirmed: actuals.overhead.confirmed, amount: derivedActuals.overhead.value?.toString() ?? null, mode: overheadMode },
       updatedAt: now(),
     };
     const nextProject = upsertActualReview(activeProject, review);
@@ -1193,13 +1220,39 @@ export default function ProApp() {
                 )}
                 {(['materials', 'labor', 'otherExpenses', 'overhead'] as const).map((cat) => (
                   <div key={cat} className="mb-3">
+                    {cat === 'overhead' && (
+                      <div className="mb-1 flex items-center gap-4 text-xs text-ink-soft">
+                        <label className="flex items-center gap-1">
+                          <input type="radio" name="overheadMode" checked={overheadMode === 'baselineAllocation'} onChange={() => setOverheadMode('baselineAllocation')} />
+                          Use baseline allocation
+                        </label>
+                        <label className="flex items-center gap-1">
+                          <input type="radio" name="overheadMode" checked={overheadMode === 'actualFlat'} onChange={() => setOverheadMode('actualFlat')} />
+                          Enter actual amount
+                        </label>
+                      </div>
+                    )}
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-2 text-sm capitalize">
                         <input type="checkbox" checked={actuals[cat].confirmed} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], confirmed: e.target.checked } }))} />
                         {cat}
                       </label>
-                      <input className={`w-32 rounded-btn border px-2 py-1 tabular-nums ${derivedActuals[cat].invalid ? 'border-bad' : 'border-line'}`} value={actuals[cat].amount} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], amount: e.target.value } }))} placeholder="0.00" />
+                      {cat === 'overhead' ? (
+                        <input
+                          aria-label="Overhead amount"
+                          className={`w-32 rounded-btn border px-2 py-1 tabular-nums ${derivedActuals.overhead.invalid ? 'border-bad' : 'border-line'} ${overheadMode === 'baselineAllocation' ? 'bg-surface-soft' : ''}`}
+                          value={overheadMode === 'baselineAllocation' ? baselineOverheadString() ?? '' : actuals.overhead.amount}
+                          disabled={overheadMode === 'baselineAllocation'}
+                          onChange={(e) => setActuals((a) => ({ ...a, overhead: { ...a.overhead, amount: e.target.value } }))}
+                          placeholder="0.00"
+                        />
+                      ) : (
+                        <input className={`w-32 rounded-btn border px-2 py-1 tabular-nums ${derivedActuals[cat].invalid ? 'border-bad' : 'border-line'}`} value={actuals[cat].amount} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], amount: e.target.value } }))} placeholder="0.00" />
+                      )}
                     </div>
+                    {cat === 'overhead' && overheadMode === 'baselineAllocation' && (
+                      <p className="mt-1 text-xs text-ink-soft">Allocated overhead from the issued estimate, not a measured actual overhead figure.</p>
+                    )}
                     {derivedActuals[cat].invalid && <p className="mt-1 text-xs text-bad">Enter a plain non-negative number (e.g. 120.50), or leave blank.</p>}
                   </div>
                 ))}

@@ -47,7 +47,7 @@ export function freezeCalculatedOutputs(summary: ProjectEstimateAssembly, engine
 }
 
 export type ReadFrozenOutputsResult =
-  | { status: 'frozen'; jobCost: Dec | null; engineVersion: string }
+  | { status: 'frozen'; jobCost: Dec | null; overhead: Dec | null; engineVersion: string }
   | { status: 'missing' }; // an old record issued before this snapshot existed, or a malformed one — never silently treated as "frozen at zero"
 
 /**
@@ -72,5 +72,13 @@ export function readFrozenCalculatedOutputs(raw: unknown): ReadFrozenOutputsResu
       return { status: 'missing' };
     }
   }
-  return { status: 'frozen', jobCost, engineVersion: obj.engineVersion };
+  let overhead: Dec | null = null;
+  if (typeof obj.overhead === 'string') {
+    try {
+      overhead = new PEP(obj.overhead);
+    } catch {
+      return { status: 'missing' };
+    }
+  }
+  return { status: 'frozen', jobCost, overhead, engineVersion: obj.engineVersion };
 }

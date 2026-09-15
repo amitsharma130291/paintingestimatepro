@@ -26,6 +26,14 @@ describe('freezeCalculatedOutputs / readFrozenCalculatedOutputs', () => {
     expect(result.engineVersion).toBe('2.1.0');
   });
 
+  it('ACT-010: also round-trips the frozen overhead — the actual-cost review\'s "baseline allocation" mode needs this, not just jobCost', () => {
+    const frozen = freezeCalculatedOutputs(completeSummary(), '2.1.0');
+    const result = readFrozenCalculatedOutputs(frozen);
+    expect(result.status).toBe('frozen');
+    if (result.status !== 'frozen') return;
+    expect(result.overhead!.toString()).toBe('45');
+  });
+
   it('serializes every decimal as a plain string, never a live Decimal instance (DATA_CONTRACT: decimal scalars are text at rest)', () => {
     const frozen = freezeCalculatedOutputs(completeSummary(), '2.1.0');
     expect(typeof frozen.jobCost).toBe('string');
