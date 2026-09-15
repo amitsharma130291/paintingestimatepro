@@ -1945,7 +1945,7 @@ export default function ProApp() {
                   </div>
                 )}
 
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className="btn btn-secondary" onClick={cancelImport}>Cancel (nothing will change)</button>
                   <button type="button" className="btn btn-primary" onClick={confirmImport}>Confirm import</button>
                 </div>
@@ -1968,7 +1968,7 @@ export default function ProApp() {
                     ))}
                   </div>
                 )}
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className="btn btn-secondary" onClick={cancelImport}>Cancel (nothing will change)</button>
                   <button type="button" className="btn btn-primary" onClick={confirmImport}>Confirm import</button>
                 </div>
@@ -1986,7 +1986,7 @@ export default function ProApp() {
                     {pendingImport.backupDownloaded ? 'Backup downloaded ✓ (download again)' : 'Download a backup of current data first'}
                   </button>
                 </div>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className="btn btn-secondary" onClick={cancelImport}>Cancel (nothing will change)</button>
                   <button type="button" className="btn btn-primary" disabled={!pendingImport.backupDownloaded} onClick={confirmImport}>
                     Confirm — replace everything
