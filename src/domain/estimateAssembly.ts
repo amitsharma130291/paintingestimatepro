@@ -18,6 +18,7 @@ import { grossWallArea, ceilingArea, netWallArea, quickOpeningArea, detailedOpen
 import { aggregateProjectSurfaces, type ProjectSurface, type ProjectAggregateResult, type VariantPricing, type SurfaceGeometryInput } from '../engine/estimate';
 import { materialsTotal, otherMaterialCost, otherExpensesTotal, directCost, overheadAmount, estimatedJobCost, suppliesAllowance } from '../engine/cost';
 import { evaluatePrice } from '../engine/pricing';
+import { isDraftEngineVersionSupported, RECOGNIZED_ENGINE_VERSIONS } from './engineCompatibility';
 import type { PriceResult } from '../engine/types';
 import type { EstimateRevision, Room, Surface } from './entities';
 
@@ -184,6 +185,19 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   const settings = snapshot.businessSettings;
   const rooms = new Map(revision.rooms.map((r) => [r.id, r]));
   const variantIds = new Set(snapshot.paintVariants.map((v) => v.id));
+
+  // BACK-026: live recalculation runs TODAY's formulas against a stored
+  // snapshot -- only safe when this build actually recognizes that
+  // snapshot's own engineVersion. An unrecognized version (most
+  // realistically: captured by a newer build, now opened in an older
+  // one) is never silently recalculated as though it were current; this
+  // check does NOT apply to frozen/issued data (readFrozenCalculatedOutputs
+  // never calls it), which is always read-only regardless of version.
+  if (!isDraftEngineVersionSupported(revision)) {
+    return invalidResult([
+      `This draft was created with app engine version ${snapshot.engineVersion}, which this app version does not recognize (supported: ${RECOGNIZED_ENGINE_VERSIONS.join(', ')}). Recalculating it here could silently apply different formulas than the ones it was created with. Open this draft in the app version that created it, or contact support before continuing.`,
+    ]);
+  }
 
   // BOUND-047..061: project-level structural caps (CALCULATION_SPEC.md §1
   // "at most 500 rooms, 2,000 surfaces, 2,000 document lines per project").

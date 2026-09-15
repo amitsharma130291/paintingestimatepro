@@ -1234,3 +1234,46 @@ describe('DOC-010/BACK-019/BACK-025 (import side): the business logo is validate
     expect(copy.revisions[0].businessInfo.logo).toBe(logo);
   });
 });
+
+describe('BACK-026 (import side): a DRAFT with an unrecognized engine version is rejected; an ISSUED one is not', () => {
+  it('rejects a draft revision whose activeRateSnapshot declares an unrecognized engine version', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withFutureVersion = { ...project, revisions: [{ ...project.revisions[0], activeRateSnapshot: { ...project.revisions[0].activeRateSnapshot, engineVersion: '99.0.0' } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withFutureVersion], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues.some((i) => /engine version/i.test(i.message))).toBe(true);
+  });
+
+  it('accepts an ISSUED revision even with an unrecognized engine version -- frozen data is always read-only regardless', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const issuedRevision = {
+      ...project.revisions[0],
+      state: 'issued' as const,
+      customerDocumentSnapshot: makeIssuedDocument(),
+      activeRateSnapshot: { ...project.revisions[0].activeRateSnapshot, engineVersion: '99.0.0' },
+      rawCalculatedOutputs: { schemaVersion: 1, engineVersion: '99.0.0', jobCost: '100', materials: '50', laborCost: '30', directCost: '80', overhead: '20', effectivePrice: '150', profit: '50', marginRatio: '0.33' },
+    };
+    const withIssued = { ...project, revisions: [issuedRevision] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withIssued], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+
+  it('accepts a draft with the current, recognized engine version (the normal case)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [project], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+
+  it('an unrecognized-version draft on ONE revision atomically rejects the whole import', () => {
+    const ids = sequentialIdSource();
+    const good = makeProject('p1', ids);
+    const bad = makeProject('p2', ids);
+    const badWithFutureVersion = { ...bad, revisions: [{ ...bad.revisions[0], activeRateSnapshot: { ...bad.revisions[0].activeRateSnapshot, engineVersion: '99.0.0' } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [good, badWithFutureVersion], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+});

@@ -22,6 +22,7 @@ import { defaultIdSource } from '../../../domain/ids';
 import { readInteriorHandoff, clearInteriorHandoff, buildProjectFromInteriorHandoff, type InteriorHandoffPayload, type HandoffFieldNote } from '../../../domain/interiorHandoff';
 import { ConflictError } from '../../../storage/db';
 import { validateLogoBytes, MAX_LOGO_DIMENSION_PX } from '../../../domain/logo';
+import { reconcileDisplayedComponents } from '../../../engine/document';
 
 /** DOC-010: dimension limits require an actual browser image decode
  * (Image.onload), unlike the byte-level format/size checks in
@@ -1440,7 +1441,18 @@ export default function ProApp() {
                   {summary && summary.calculationState !== 'complete' && (
                     <p className="mt-2 text-sm text-bad">{summary.calculationState === 'invalid' ? 'One or more enabled surfaces have invalid inputs.' : 'Add at least one enabled, fully-specified surface.'} {summary.reasons.join(' ')}</p>
                   )}
-                  {summary && summary.calculationState === 'complete' && (
+                  {summary && summary.calculationState === 'complete' && (() => {
+                    // PRO-013: CALCULATION_SPEC §7's own reconciliation
+                    // primitive existed and was tested in isolation but was
+                    // never wired into the actual summary display -- Direct
+                    // cost and Overhead are each independently rounded for
+                    // display (money()), so their displayed sum can differ
+                    // from the displayed Job cost by a cent even though the
+                    // underlying raw Decimal arithmetic is exact. Surface
+                    // that as an explicit row rather than a screen that
+                    // silently disagrees with its own addition.
+                    const reconciled = reconcileDisplayedComponents([summary.directCost!, summary.overhead!], summary.jobCost!);
+                    return (
                     <>
                       {/* UX-004: announce recalculated totals to screen readers. */}
                       <dl className="mt-2 space-y-2 text-sm" aria-live="polite" aria-atomic="true">
@@ -1448,6 +1460,7 @@ export default function ProApp() {
                         <Row label="Labor" value={money(summary.laborCost)} />
                         <Row label="Direct cost" value={money(summary.directCost)} />
                         <Row label="Overhead" value={money(summary.overhead)} />
+                        {!reconciled.adjustment.isZero() && <Row label="Rounding adjustment" value={money(reconciled.adjustment)} />}
                         <Row label="Estimated job cost" value={money(summary.jobCost)} strong />
                       </dl>
 
@@ -1475,7 +1488,8 @@ export default function ProApp() {
                         </label>
                       )}
                     </>
-                  )}
+                    );
+                  })()}
 
                   {/* V6-05/CORE-028: saving a draft must never depend on
                       calculation completeness -- a work-in-progress room,
@@ -1706,6 +1720,16 @@ export default function ProApp() {
                 {frozenOutputsMissing && (
                   <p className="mb-3 rounded-btn border border-warn-line bg-warn-soft p-2 text-xs text-warn">
                     This estimate was issued before frozen cost baselines existed — the comparison below uses a live recalculation against today's engine, not the original frozen figures.
+                  </p>
+                )}
+                {/* BACK-026: the frozen baseline itself is ALWAYS trusted
+                    and displayed as-is regardless of which engine version
+                    produced it (it is never recalculated) -- this is
+                    purely informational, never a warning that blocks
+                    anything. */}
+                {frozenOutputs?.status === 'frozen' && frozenOutputs.engineVersion !== ENGINE_VERSION && (
+                  <p className="mb-3 rounded-btn border border-line bg-card p-2 text-xs text-ink-soft">
+                    Calculated with app engine version {frozenOutputs.engineVersion} (this app is {ENGINE_VERSION}) — these frozen figures are preserved exactly as issued and are never recalculated.
                   </p>
                 )}
                 {(['materials', 'labor', 'otherExpenses', 'overhead'] as const).map((cat) => (

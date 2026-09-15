@@ -19,6 +19,7 @@ import {
 } from '../engine/parse';
 import { readFrozenCalculatedOutputs } from './calculationSnapshot';
 import { parseLogoDataUri } from './logo';
+import { isRecognizedEngineVersion, RECOGNIZED_ENGINE_VERSIONS } from './engineCompatibility';
 
 const REVISION_STATES = new Set(['draft', 'issued', 'superseded']);
 const PRICE_MODES = new Set(['suggested', 'custom']);
@@ -658,7 +659,24 @@ function validateRevisionStructure(
   }
 
   if (!rev.activeRateSnapshot) issues.push({ path: `${revPath}.activeRateSnapshot`, message: 'Revision missing embedded rate snapshot.' });
-  else validateRateSnapshot(`${revPath}.activeRateSnapshot`, rev.activeRateSnapshot, issues);
+  else {
+    validateRateSnapshot(`${revPath}.activeRateSnapshot`, rev.activeRateSnapshot, issues);
+    // BACK-026: a DRAFT revision is recalculated LIVE against this
+    // snapshot's engineVersion using TODAY's formulas -- only safe when
+    // this build recognizes that version (see domain/engineCompatibility.ts
+    // for the full policy). An ISSUED revision is exempt: its outputs are
+    // frozen forever and never recalculated, so any engineVersion tag on
+    // its snapshot is purely historical and safe to import read-only
+    // regardless. Rejecting an unrecognized-version DRAFT here, before
+    // any write, prevents ever importing live-editable data this build
+    // could silently misinterpret.
+    if (rev.state === 'draft' && isPlainObject(rev.activeRateSnapshot) && typeof rev.activeRateSnapshot.engineVersion === 'string' && !isRecognizedEngineVersion(rev.activeRateSnapshot.engineVersion)) {
+      issues.push({
+        path: `${revPath}.activeRateSnapshot.engineVersion`,
+        message: `Unrecognized engine version "${rev.activeRateSnapshot.engineVersion}" on a draft revision (supported: ${RECOGNIZED_ENGINE_VERSIONS.join(', ')}). A draft is recalculated live and cannot be safely imported from an engine version this app does not recognize.`,
+      });
+    }
+  }
 
   // independent-review R06: an issued revision's frozen customer
   // document was never validated at all — `{}` passed. The live
