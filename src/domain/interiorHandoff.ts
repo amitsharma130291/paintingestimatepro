@@ -38,6 +38,14 @@ export interface InteriorHandoffPayload {
   // V5-09: optional, for backward compatibility with payloads written
   // before the free calculator had a prep/cleanup hours field (INT-014).
   prepHours?: string;
+  // INT-010: optional, for backward compatibility with payloads written
+  // before the free calculator had detailed measured openings — every
+  // payload before this field existed used quick counts only. When
+  // present and 'detailed', `openings` carries the exact measured
+  // entries and doorCount/windowCount above are ignored on the Pro side
+  // (matching Room.openingMode's own quick/detailed exclusivity).
+  openingMode?: 'quick' | 'detailed';
+  openings?: { type: 'door' | 'window'; widthFt: string; heightFt: string; count: string }[];
 }
 
 export function writeInteriorHandoff(payload: InteriorHandoffPayload): void {
@@ -140,6 +148,12 @@ export function buildProjectFromInteriorHandoff(payload: InteriorHandoffPayload,
     surfaceIds.push(ceilingSurfaceId);
   }
 
+  // INT-010: a detailed-mode handoff carries its measured openings
+  // through EXACTLY (same width/height/count text, no transformation --
+  // matching CALCULATION_SPEC's detailedOpeningArea, which both tools
+  // call), each stamped with a fresh Pro-side id. Quick mode still maps
+  // straight onto Room.quick as before.
+  const isDetailed = payload.openingMode === 'detailed' && payload.openings && payload.openings.length > 0;
   const room: Room = {
     id: roomId,
     name: 'Room (from free calculator)',
@@ -147,14 +161,16 @@ export function buildProjectFromInteriorHandoff(payload: InteriorHandoffPayload,
     widthFt: payload.widthFt || null,
     heightFt: payload.heightFt || null,
     deductionEnabled: payload.deductOpenings,
-    openingMode: 'quick',
+    openingMode: isDetailed ? 'detailed' : 'quick',
     quick: {
       doorCount: Number.parseInt(payload.doorCount, 10) || 0,
       windowCount: Number.parseInt(payload.windowCount, 10) || 0,
       doorAreaEach: '20',
       windowAreaEach: '15',
     },
-    openings: [],
+    openings: isDetailed
+      ? payload.openings!.map((o) => ({ id: ids.nextId(), type: o.type, widthFt: o.widthFt, heightFt: o.heightFt, count: Number.parseInt(o.count, 10) || 0 }))
+      : [],
     surfaceIds,
   };
 

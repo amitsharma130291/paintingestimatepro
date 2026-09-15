@@ -1,10 +1,28 @@
 import { useMemo, useState } from 'react';
 import { PEP, type Dec } from '../../engine/decimal';
-import { parseDecimalField, parseCountField } from '../../engine/parse';
-import { grossWallArea, ceilingArea, quickOpeningArea, netWallArea, clampForPreview } from '../../engine/geometry';
+import { parseDecimalField, parseCountField, MAX_OPENING_COUNT } from '../../engine/parse';
+import { grossWallArea, ceilingArea, quickOpeningArea, detailedOpeningArea, netWallArea, clampForPreview } from '../../engine/geometry';
 import { rawDemandGal, purchasedGallons } from '../../engine/paint';
 import { wallOrCeilingHours } from '../../engine/labor';
 import { writeInteriorHandoff } from '../../domain/interiorHandoff';
+
+/** INT-010: a measured opening entry, matching Pro's own OpeningEntry
+ * shape (src/domain/entities.ts) field-for-field so the handoff below is
+ * a direct, lossless copy rather than a reinterpretation. A local counter
+ * is enough for stable ids here — this tool has no IdSource/persistence
+ * layer of its own. */
+interface FreeOpeningEntry {
+  id: string;
+  type: 'door' | 'window';
+  widthFt: string;
+  heightFt: string;
+  count: string;
+}
+let nextOpeningId = 0;
+function newOpeningEntry(type: 'door' | 'window'): FreeOpeningEntry {
+  nextOpeningId += 1;
+  return { id: `opening-${nextOpeningId}`, type, widthFt: '', heightFt: '', count: '1' };
+}
 
 /** Free single-room interior calculator (tool-specs/03). Walls + optional
  * ceiling, one shared paint variant, quick openings only — the documented
@@ -29,6 +47,12 @@ export default function InteriorCalculator() {
   const [includeWalls, setIncludeWalls] = useState(DEFAULTS.includeWalls);
   const [includeCeiling, setIncludeCeiling] = useState(DEFAULTS.includeCeiling);
   const [deductOpenings, setDeductOpenings] = useState(DEFAULTS.deductOpenings);
+  // INT-010: quick (count x flat area-each) or detailed (measured
+  // width/height/count per opening) -- mutually exclusive deduction
+  // sources, matching Pro's own Room.openingMode. Detailed entries fully
+  // supersede the quick counts; switching modes never mixes the two.
+  const [openingMode, setOpeningMode] = useState<'quick' | 'detailed'>('quick');
+  const [openings, setOpenings] = useState<FreeOpeningEntry[]>([]);
   const [doorCount, setDoorCount] = useState(DEFAULTS.doorCount);
   const [windowCount, setWindowCount] = useState(DEFAULTS.windowCount);
   const [coats, setCoats] = useState(DEFAULTS.coats);
@@ -48,6 +72,8 @@ export default function InteriorCalculator() {
     setIncludeWalls(true);
     setIncludeCeiling(false);
     setDeductOpenings(true);
+    setOpeningMode('quick');
+    setOpenings([]);
     setDoorCount(FIXTURE_SAMPLE.doorCount);
     setWindowCount(FIXTURE_SAMPLE.windowCount);
     setCoats(FIXTURE_SAMPLE.coats);
@@ -60,8 +86,18 @@ export default function InteriorCalculator() {
     const pLength = parseDecimalField(length);
     const pWidth = parseDecimalField(width);
     const pHeight = parseDecimalField(height);
-    const pDoors = parseCountField(doorCount, { min: 0 });
-    const pWindows = parseCountField(windowCount, { min: 0 });
+    // INT-010: quick and detailed are mutually exclusive deduction
+    // sources. Only the ACTIVE mode's fields are parsed/validated at
+    // all -- an inactive mode's inputs (e.g. leftover quick counts while
+    // in detailed mode) never block calculation or contribute area,
+    // matching the same "inactive fields don't block the active mode"
+    // principle already established for Pro (V6-06).
+    const activeMode = includeWalls && deductOpenings ? openingMode : null;
+    const pDoors = activeMode === 'quick' ? parseCountField(doorCount, { min: 0, max: MAX_OPENING_COUNT }) : { kind: 'valid' as const, value: 0 };
+    const pWindows = activeMode === 'quick' ? parseCountField(windowCount, { min: 0, max: MAX_OPENING_COUNT }) : { kind: 'valid' as const, value: 0 };
+    const parsedOpenings = activeMode === 'detailed'
+      ? openings.map((o) => ({ id: o.id, type: o.type, widthFt: parseDecimalField(o.widthFt), heightFt: parseDecimalField(o.heightFt), count: parseCountField(o.count, { min: 0, max: MAX_OPENING_COUNT }) }))
+      : [];
     const pCoats = parseCountField(coats, { min: 1, max: 5 });
     const pCoverage = parseDecimalField(coverage);
     const pWaste = parseDecimalField(wastePercent);
@@ -80,8 +116,16 @@ export default function InteriorCalculator() {
     if (pLength.kind === 'invalid' || (pLength.kind === 'valid' && pLength.value.lessThanOrEqualTo(0))) errors.push('Room length must be a positive number.');
     if (pWidth.kind === 'invalid' || (pWidth.kind === 'valid' && pWidth.value.lessThanOrEqualTo(0))) errors.push('Room width must be a positive number.');
     if (pHeight.kind !== 'valid' || pHeight.value.lessThanOrEqualTo(0)) errors.push('Wall height must be a positive number.');
-    if (includeWalls && deductOpenings && pDoors.kind === 'invalid') errors.push(`Doors: ${pDoors.message}`);
-    if (includeWalls && deductOpenings && pWindows.kind === 'invalid') errors.push(`Windows: ${pWindows.message}`);
+    if (activeMode === 'quick' && pDoors.kind === 'invalid') errors.push(`Doors: ${pDoors.message}`);
+    if (activeMode === 'quick' && pWindows.kind === 'invalid') errors.push(`Windows: ${pWindows.message}`);
+    if (activeMode === 'detailed') {
+      if (openings.length === 0) errors.push('Add at least one measured opening, or switch back to quick mode.');
+      for (const o of parsedOpenings) {
+        if (o.widthFt.kind !== 'valid' || o.widthFt.value.lessThanOrEqualTo(0)) errors.push(`${o.type === 'door' ? 'Door' : 'Window'} width must be a positive number.`);
+        if (o.heightFt.kind !== 'valid' || o.heightFt.value.lessThanOrEqualTo(0)) errors.push(`${o.type === 'door' ? 'Door' : 'Window'} height must be a positive number.`);
+        if (o.count.kind === 'invalid') errors.push(`${o.type === 'door' ? 'Door' : 'Window'} count: ${o.count.message}`);
+      }
+    }
     if (pCoats.kind !== 'valid') errors.push('Coats must be a whole number from 1 to 5.');
     if (pCoverage.kind !== 'valid' || pCoverage.value.lessThanOrEqualTo(0)) errors.push('Coverage must be a positive number.');
     if (pWaste.kind !== 'valid') errors.push('Waste % must be a number.');
@@ -122,15 +166,26 @@ export default function InteriorCalculator() {
       pWaste.kind !== 'valid' ||
       pPrice.kind !== 'valid' ||
       pCoats.kind !== 'valid' ||
-      (includeWalls && deductOpenings && (pDoors.kind !== 'valid' || pWindows.kind !== 'valid'))
+      (activeMode === 'quick' && (pDoors.kind !== 'valid' || pWindows.kind !== 'valid')) ||
+      (activeMode === 'detailed' && parsedOpenings.some((o) => o.widthFt.kind !== 'valid' || o.heightFt.kind !== 'valid' || o.count.kind !== 'valid'))
     ) {
       return { errors, missing } as const;
     }
 
     const gross = includeWalls ? grossWallArea(pLength.value, pWidth.value, pHeight.value) : new PEP(0);
-    const activeDeduction = includeWalls && deductOpenings;
+    const activeDeduction = activeMode !== null;
     const deduction =
-      activeDeduction && pDoors.kind === 'valid' && pWindows.kind === 'valid' ? quickOpeningArea(pDoors.value, new PEP(20), pWindows.value, new PEP(15)) : new PEP(0);
+      activeMode === 'quick' && pDoors.kind === 'valid' && pWindows.kind === 'valid'
+        ? quickOpeningArea(pDoors.value, new PEP(20), pWindows.value, new PEP(15))
+        : activeMode === 'detailed'
+          ? detailedOpeningArea(
+              parsedOpenings.map((o) => ({
+                widthFt: (o.widthFt as { kind: 'valid'; value: Dec }).value,
+                heightFt: (o.heightFt as { kind: 'valid'; value: Dec }).value,
+                count: (o.count as { kind: 'valid'; value: number }).value,
+              }))
+            )
+          : new PEP(0);
     const net = includeWalls ? netWallArea(gross, deduction, activeDeduction) : { valid: true as const, area: new PEP(0) };
 
     if (!net.valid) {
@@ -167,7 +222,7 @@ export default function InteriorCalculator() {
       laborCost,
       total: laborCost ? paintCost.plus(laborCost) : paintCost,
     } as const;
-  }, [length, width, height, includeWalls, includeCeiling, deductOpenings, doorCount, windowCount, coats, coverage, wastePercent, pricePerGal, calculateLabor, hourlyRate, wallThroughput, ceilingThroughput, prepHours]);
+  }, [length, width, height, includeWalls, includeCeiling, deductOpenings, openingMode, openings, doorCount, windowCount, coats, coverage, wastePercent, pricePerGal, calculateLabor, hourlyRate, wallThroughput, ceilingThroughput, prepHours]);
 
   return (
     <div className="card p-6 sm:p-7">
@@ -196,9 +251,58 @@ export default function InteriorCalculator() {
                 <input type="checkbox" checked={deductOpenings} onChange={(e) => setDeductOpenings(e.target.checked)} /> Deduct doors/windows
               </label>
               {deductOpenings && (
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Doors (20 ft² each)" value={doorCount} onChange={setDoorCount} />
-                  <Field label="Windows (15 ft² each)" value={windowCount} onChange={setWindowCount} />
+                <div className="space-y-2">
+                  <label className="block text-sm">
+                    <span className="font-medium text-ink-soft">Opening entry</span>
+                    <select
+                      className="mt-1 w-full rounded-btn border border-line bg-card px-2 py-2 text-sm"
+                      value={openingMode}
+                      onChange={(e) => setOpeningMode(e.target.value as 'quick' | 'detailed')}
+                    >
+                      <option value="quick">Quick (count x flat area each)</option>
+                      <option value="detailed">Detailed (measured width x height)</option>
+                    </select>
+                  </label>
+                  {openingMode === 'quick' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Doors (20 ft² each)" value={doorCount} onChange={setDoorCount} />
+                      <Field label="Windows (15 ft² each)" value={windowCount} onChange={setWindowCount} />
+                    </div>
+                  )}
+                  {openingMode === 'detailed' && (
+                    <div className="space-y-2">
+                      {openings.map((o) => (
+                        <div key={o.id} className="grid grid-cols-1 items-end gap-2 rounded-btn border border-line p-2 sm:grid-cols-[auto_1fr_1fr_auto_auto]">
+                          <label className="block text-sm">
+                            <span className="font-medium text-ink-soft">Type</span>
+                            <select
+                              className="mt-1 rounded-btn border border-line bg-card px-2 py-2 text-sm"
+                              value={o.type}
+                              onChange={(e) => setOpenings((os) => os.map((x) => (x.id === o.id ? { ...x, type: e.target.value as 'door' | 'window' } : x)))}
+                            >
+                              <option value="door">Door</option>
+                              <option value="window">Window</option>
+                            </select>
+                          </label>
+                          <Field label="Width (ft)" value={o.widthFt} onChange={(v) => setOpenings((os) => os.map((x) => (x.id === o.id ? { ...x, widthFt: v } : x)))} />
+                          <Field label="Height (ft)" value={o.heightFt} onChange={(v) => setOpenings((os) => os.map((x) => (x.id === o.id ? { ...x, heightFt: v } : x)))} />
+                          <Field label="Count" value={o.count} onChange={(v) => setOpenings((os) => os.map((x) => (x.id === o.id ? { ...x, count: v } : x)))} />
+                          <button type="button" className="text-link text-xs text-bad" onClick={() => setOpenings((os) => os.filter((x) => x.id !== o.id))}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex gap-2">
+                        <button type="button" className="btn btn-secondary" onClick={() => setOpenings((os) => [...os, newOpeningEntry('door')])}>
+                          + Add door
+                        </button>
+                        <button type="button" className="btn btn-secondary" onClick={() => setOpenings((os) => [...os, newOpeningEntry('window')])}>
+                          + Add window
+                        </button>
+                      </div>
+                      {openings.length === 0 && <p className="text-xs text-ink-soft">Add at least one measured opening.</p>}
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -258,7 +362,12 @@ export default function InteriorCalculator() {
                 type="button"
                 className="btn btn-secondary mt-2"
                 onClick={() => {
-                  writeInteriorHandoff({ lengthFt: length, widthFt: width, heightFt: height, includeWalls, includeCeiling, deductOpenings, doorCount, windowCount, coats, coverageFt2PerGal: coverage, pricePerGal: pricePerGal, wasteRatioPercent: wastePercent, prepHours: calculateLabor ? prepHours : undefined });
+                  writeInteriorHandoff({
+                    lengthFt: length, widthFt: width, heightFt: height, includeWalls, includeCeiling, deductOpenings, doorCount, windowCount, coats,
+                    coverageFt2PerGal: coverage, pricePerGal: pricePerGal, wasteRatioPercent: wastePercent, prepHours: calculateLabor ? prepHours : undefined,
+                    openingMode: deductOpenings ? openingMode : undefined,
+                    openings: deductOpenings && openingMode === 'detailed' ? openings.map(({ type, widthFt, heightFt, count }) => ({ type, widthFt, heightFt, count })) : undefined,
+                  });
                   window.open('/app?handoff=interior', '_blank');
                 }}
               >

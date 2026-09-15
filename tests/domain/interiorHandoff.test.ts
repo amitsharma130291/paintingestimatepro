@@ -143,4 +143,49 @@ describe('buildProjectFromInteriorHandoff', () => {
       expect(blankResult.revision.additionalLabor).toHaveLength(0);
     });
   });
+
+  describe('INT-010: a detailed-mode handoff carries measured openings through exactly, not the quick counts', () => {
+    it('sets openingMode:"detailed" and copies each opening entry verbatim with a fresh id', () => {
+      const ids = sequentialIdSource();
+      const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');
+      const payload: InteriorHandoffPayload = { ...fixturePayload, openingMode: 'detailed', openings: [{ type: 'door', widthFt: '3', heightFt: '6.67', count: '1' }] };
+      const result = buildProjectFromInteriorHandoff(payload, snapshot, ids);
+
+      expect(result.room.openingMode).toBe('detailed');
+      expect(result.room.openings).toHaveLength(1);
+      expect(result.room.openings[0]).toMatchObject({ type: 'door', widthFt: '3', heightFt: '6.67', count: 1 });
+      expect(result.room.openings[0].id).toBeTruthy();
+    });
+
+    it('the transferred detailed opening produces EXACTLY the same net area through the real Pro assembly as the free tool itself computed', () => {
+      const ids = sequentialIdSource();
+      const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');
+      const payload: InteriorHandoffPayload = { ...fixturePayload, deductOpenings: true, openingMode: 'detailed', openings: [{ type: 'door', widthFt: '3', heightFt: '6.67', count: '1' }] };
+      const result = buildProjectFromInteriorHandoff(payload, snapshot, ids);
+      const revisionWithVariant = { ...result.revision, activeRateSnapshot: { ...result.revision.activeRateSnapshot, paintVariants: [result.variant] } };
+      const out = assembleProjectEstimate(revisionWithVariant, { priceMode: 'suggested', customPriceRaw: '' });
+
+      expect(out.calculationState).toBe('complete');
+      // gross = 2*(20+16)*9 = 648; deduction = 3*6.67*1 = 20.01 EXACTLY; net = 627.99;
+      // raw = 627.99*2*1.1/350 = 3.947365714... -> ceil 4 gal * $42 = $168.
+      expect(out.aggregate!.purchases[0].purchasedGal).toBe(4);
+      expect(out.aggregate!.purchases[0].cost.toString()).toBe('168');
+    });
+
+    it('a payload with openingMode omitted (pre-INT-010) still builds quick mode, for backward compatibility', () => {
+      const ids = sequentialIdSource();
+      const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');
+      const result = buildProjectFromInteriorHandoff(fixturePayload, snapshot, ids);
+      expect(result.room.openingMode).toBe('quick');
+      expect(result.room.openings).toHaveLength(0);
+    });
+
+    it('openingMode:"detailed" with an empty openings array falls back to quick mode rather than an unusable empty detailed room', () => {
+      const ids = sequentialIdSource();
+      const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');
+      const payload: InteriorHandoffPayload = { ...fixturePayload, openingMode: 'detailed', openings: [] };
+      const result = buildProjectFromInteriorHandoff(payload, snapshot, ids);
+      expect(result.room.openingMode).toBe('quick');
+    });
+  });
 });
