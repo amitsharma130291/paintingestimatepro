@@ -94,4 +94,31 @@ describe('ACT: actual-cost review', () => {
     expect(r.marginRatio).not.toBeNull(); // must NOT be null just because profit is negative
     expect(r.marginRatio!.isNegative()).toBe(true);
   });
+
+  it('CORE-006: an omitted actual-cost category (unconfirmed, amount null) stays null -- never treated as an explicit zero', () => {
+    // Contrast with the free job-cost calculator's NEW-estimate rule
+    // (jobCostCalculatorLogic.test.ts CORE-006), where an omitted optional
+    // direct-expense field defaults to an explicit 0 and never blocks. The
+    // actual-cost category has the opposite default: omission means
+    // "not yet confirmed," not "confirmed at zero."
+    const omitted = evaluateActualReview({
+      materials: { confirmed: true, amount: d('700') },
+      labor: { confirmed: true, amount: d('1200') },
+      otherExpenses: { confirmed: false, amount: null }, // omitted, never touched
+      overhead: { confirmed: true, amount: d('150') },
+      ...baseline,
+    });
+    expect(omitted.state).toBe('in_progress'); // NOT final -- omission is not silently zero
+    expect(omitted.actualCost).toBeNull();
+
+    const explicitZero = evaluateActualReview({
+      materials: { confirmed: true, amount: d('700') },
+      labor: { confirmed: true, amount: d('1200') },
+      otherExpenses: { confirmed: true, amount: d('0') }, // explicitly confirmed at zero
+      overhead: { confirmed: true, amount: d('150') },
+      ...baseline,
+    });
+    expect(explicitZero.state).toBe('final'); // an explicit confirmed zero DOES finalize
+    expect(explicitZero.actualCost!.toNumber()).toBe(2050);
+  });
 });

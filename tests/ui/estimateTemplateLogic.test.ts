@@ -199,6 +199,19 @@ describe('evaluateLines (unchanged behavior, still covered here for completeness
   });
 });
 
+describe('CORE-022: a manually entered unitSellingPrice of 12.005 (three fractional digits) is a valid row, not blocked at parse time', () => {
+  it('evaluateLines accepts "12.005" as the row\'s unitPrice and includes it in validLines unrounded', () => {
+    const ids = sequentialIdSource();
+    const draft = newDraft(ids);
+    draft.lines[0].description = 'Touch-up';
+    draft.lines[0].unitPrice = '12.005';
+    const { incompleteRowIds, validLines } = evaluateLines(draft.lines);
+    expect(incompleteRowIds).toHaveLength(0);
+    expect(validLines).toHaveLength(1);
+    expect(validLines[0].unitSellingPrice.toString()).toBe('12.005'); // full precision retained; rounding happens only at the ledger/document-total level
+  });
+});
+
 describe('Exact rounding: two $12.005 lines reconcile to $24.02, tax on the rounded subtotal', () => {
   it('matches the spec example exactly', () => {
     const totals = computeDocumentTotals(

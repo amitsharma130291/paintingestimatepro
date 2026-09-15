@@ -166,3 +166,16 @@ describe('V5-07/CORE-021 (related path): an entered price enforces at most two f
     expect(result.state).toBe('complete');
   });
 });
+
+describe('CORE-006: an omitted optional direct-expense field in a NEW estimate defaults to explicit zero, never blocking', () => {
+  it('a blank travelAmount with everything else valid reaches complete with $0 travel/other-expenses contribution', () => {
+    const result = evaluateJobCost(baseInputs({ materialsAmount: '100', laborAmount: '0', travelAmount: '' }));
+    expect(result.state).toBe('complete');
+    if (result.state === 'complete') expect(result.otherExpenses.isZero()).toBe(true);
+  });
+
+  it('an untouched (blank description AND amount) other-expense line is silently ignored, not a missing-field block', () => {
+    const result = evaluateJobCost(baseInputs({ materialsAmount: '100', laborAmount: '0', otherExpenseLines: [newOtherExpenseLine('untouched')] }));
+    expect(result.state).toBe('complete');
+  });
+});
