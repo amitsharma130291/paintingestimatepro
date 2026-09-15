@@ -1,5 +1,62 @@
 # Tool Bug Fix Log — v5, v6, and v7 sessions
 
+## v7.2 session: real UI backup/restore workflow surfaces two genuine export/import round-trip failures, an invisible-logo evidence defect, a missing Notes/Terms UI, and a mobile overflow
+
+Triggered by an independent review that correctly rejected v7.1's PDF-
+evidence logo (a fully transparent 32x32 fixture -- an image object
+existed, nothing visible ever rendered) and required the backup/restore
+workflow to be driven through the actual UI (real download capture, real
+`<input type=file>` setting via CDP `DOM.setFileInputFiles`) instead of
+console-level domain-function calls. Doing so surfaced real defects that
+the console-level v7.1 testing had not:
+
+1. **`createDraftFromIssued` leaked a stale `preRefreshCheckpoint`
+   (BACK-027).** Editing an issued revision that had itself been rate-
+   refreshed before being issued produced a new draft whose checkpoint
+   still pointed at the just-superseded revision's id -- an entirely
+   ordinary sequence (refresh, issue, edit again), not a hand-crafted
+   edge case. `validateBackupEnvelope` correctly rejected it, so that
+   project's own backup could never be re-imported. Fixed: a fresh draft
+   always starts with `preRefreshCheckpoint: null`.
+2. **Baseline-allocation overhead persisted at raw internal precision,
+   not money precision (BACK-028).** An ordinary non-round production
+   rate (e.g. 137 sqft/hr/coat) makes the internal overhead Dec a 40+
+   fractional-digit repeating decimal; it was displayed and persisted via
+   a plain `.toString()`, never rounded like every other dollar figure.
+   `validateBackupEnvelope` rejects more than 10 fractional digits, so a
+   real user's own export failed to re-import. Fixed: rounded to money
+   precision (`halfUp`, 2 decimals).
+3. **Restore/import preview button row overflows at mobile width
+   (UX-014).** Found via a real 390x844 Chromium workflow: the Cancel/
+   Confirm button rows for all three restore modes used a non-wrapping
+   flex row (scrollWidth 472px vs a 390px viewport). Fixed with
+   `flex-wrap`, the same established pattern as UX-001.
+4. **No UI path to set Notes/Terms at all (DOC-013).** Found while
+   producing a genuinely production-clean customer PDF (item 2's own
+   "long notes and terms" requirement): the data model and the customer-
+   document preview both supported `notes`/`terms`, but the Pro editor
+   had no input for either -- a painter could never actually add them.
+   Added a "Notes and terms" card (two textareas), wired like every
+   other field.
+5. **v7.1's PDF-evidence logo fixture was invisible, and the fixture-
+   generation/inspection tooling never caught it (DOC-014).** Replaced
+   with the real approved brand asset and added
+   `tests/domain/logoFixtureIntegrity.test.ts`, which pixel-decodes the
+   real fixture with `sharp` and includes a regression-proof block
+   confirming the same checks correctly reject a synthetic reproduction
+   of the exact v7.1 defect. Also closed a genuine latent gap found while
+   writing that coverage: the app had a maximum logo dimension but no
+   minimum, so a 1x1 or 4x4 "logo" was silently accepted --
+   `MIN_LOGO_DIMENSION_PX` (16px) is now enforced alongside the existing
+   maximum.
+
+A full real-browser Pro workflow (creation through backup export/import-
+as-copy, including genuine file download capture and file-input setting
+via CDP, not console-level function calls) was re-run end to end at both
+1440x900 and 390x844 after each fix, confirming all of the above
+genuinely resolved rather than merely silencing a symptom. See
+`REAL_BROWSER_V72_EVIDENCE.md` for the full trace.
+
 ## v7 session, follow-up pass: DECISIONS.md #9 aggregate-output limits (AGG-001..006) + dependency advisories
 
 A follow-up review correctly rejected the 357/357 "complete" state below:
