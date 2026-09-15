@@ -4,15 +4,16 @@ import { sequentialIdSource } from '../../src/domain/ids';
 import { validateBackupEnvelope, planRestoreMerge, planFullRestoreMerge, planImportAsCopies, applyFullRestoreResolutions, exportBackup } from '../../src/domain/backup';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision } from '../../src/domain/project';
-import { applyRateRefresh } from '../../src/domain/rateRefresh';
+import { applyRateRefresh, undoRateRefresh } from '../../src/domain/rateRefresh';
 import type { BusinessSettings, PaintVariant, Project, CustomerDocumentSnapshot } from '../../src/domain/entities';
 
-function makeSettings(): BusinessSettings {
+function makeSettings(overrides: Partial<BusinessSettings> = {}): BusinessSettings {
   const now = '2026-01-01T00:00:00.000Z';
   return {
     id: 'settings-1', loadedHourlyRate: '32', overheadRatio: '0.15', targetMarginRatio: '0.35', defaultCoats: 2, defaultWasteRatio: '0.10',
     wallThroughput: '150', ceilingThroughput: '120', trimThroughput: '40', doorHoursPerSidePerCoat: '0.75', defaultTravelAmount: '0',
     defaultSuppliesAllowance: { mode: 'none', amount: '0', ratio: '0' }, sampleAssumptionsConfirmed: true, createdAt: now, updatedAt: now,
+    ...overrides,
   };
 }
 function makeVariant(): PaintVariant {
@@ -858,6 +859,101 @@ describe('V6-02: preRefreshCheckpoint is validated as rigorously as a normal rev
     const project = makeProject('p1', ids);
     expect(project.revisions[0].preRefreshCheckpoint).toBeFalsy();
     const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [project], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+});
+
+describe('V6-03: import-as-copy remaps preRefreshCheckpoint\'s internal identities along with the revision', () => {
+  function projectWithRefreshedRevision(ids: ReturnType<typeof sequentialIdSource>): Project {
+    const project = makeProject('p1', ids);
+    const room = {
+      id: 'room-1', name: 'Bedroom', lengthFt: '20', widthFt: '16', heightFt: '9', deductionEnabled: true, openingMode: 'quick' as const,
+      quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: ['surf-1'],
+    };
+    const surface = { id: 'surf-1', roomId: 'room-1', kind: 'wall' as const, enabled: true, measurementMode: 'roomDerived' as const, areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: '0.1', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
+    const revisionWithRoom = { ...project.revisions[0], rooms: [room], surfaces: [surface] };
+    const liveSnapshot = createSnapshot(makeSettings(), [makeVariant()], [], ids, 'rev-live');
+    const refreshed = applyRateRefresh(revisionWithRoom, liveSnapshot, [], ids);
+    return { ...project, revisions: [refreshed] };
+  }
+
+  it('a normal import-as-copy gives the checkpoint the SAME identity as the copied active revision, not the original', () => {
+    const ids = sequentialIdSource();
+    const source = projectWithRefreshedRevision(ids);
+    const originalRevisionId = source.revisions[0].id;
+    const originalCheckpointRoomId = source.revisions[0].preRefreshCheckpoint!.rooms[0].id;
+
+    const copy = planImportAsCopies([source], 'export-1', new Set(), ids).projects[0];
+    const copiedRevision = copy.revisions[0];
+    const checkpoint = copiedRevision.preRefreshCheckpoint!;
+
+    expect(checkpoint.id).toBe(copiedRevision.id);
+    expect(checkpoint.projectId).toBe(copy.id);
+    expect(checkpoint.id).not.toBe(originalRevisionId); // a fresh id, not the source's
+    expect(checkpoint.rooms[0].id).not.toBe(originalCheckpointRoomId); // the checkpoint's OWN nested ids are remapped too
+    expect(checkpoint.rooms[0].surfaceIds).toEqual([checkpoint.surfaces[0].id]); // cross-reference stays internally consistent after remap
+    expect(checkpoint.surfaces[0].paintVariantId).toBe('paint-1'); // catalog reference untouched by remap
+
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [copy], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+
+  it('Undo on the copy restores the copy\'s own identity, never the original project/revision', () => {
+    const ids = sequentialIdSource();
+    const source = projectWithRefreshedRevision(ids);
+    const copy = planImportAsCopies([source], 'export-1', new Set(), ids).projects[0];
+    const active = copy.revisions[0];
+
+    const undone = undoRateRefresh(active)!;
+    expect(undone.projectId).toBe(copy.id);
+    expect(undone.id).toBe(active.id);
+    expect(undone.projectId).not.toBe(source.id);
+  });
+
+  it('exporting the copy after Undo passes full backup validation', () => {
+    const ids = sequentialIdSource();
+    const source = projectWithRefreshedRevision(ids);
+    const copy = planImportAsCopies([source], 'export-1', new Set(), ids).projects[0];
+    const undone = undoRateRefresh(copy.revisions[0])!;
+    const afterUndo: Project = { ...copy, revisions: [undone] };
+
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [afterUndo], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+
+  it('forcing a SECOND copy of the same source gives each copy\'s checkpoint its own distinct identity (no collision between the two copies)', () => {
+    const ids = sequentialIdSource();
+    const source = projectWithRefreshedRevision(ids);
+    const alreadyImported = new Set<string>(); // first copy is "new" (not yet recorded as imported)
+    const firstCopy = planImportAsCopies([source], 'export-1', alreadyImported, ids).projects[0];
+    const secondCopy = planImportAsCopies([source], 'export-1', alreadyImported, ids, true).projects[0]; // forced second copy of the same export
+
+    const firstCheckpoint = firstCopy.revisions[0].preRefreshCheckpoint!;
+    const secondCheckpoint = secondCopy.revisions[0].preRefreshCheckpoint!;
+    expect(firstCheckpoint.id).not.toBe(secondCheckpoint.id);
+    expect(firstCheckpoint.projectId).not.toBe(secondCheckpoint.projectId);
+    expect(firstCheckpoint.rooms[0].id).not.toBe(secondCheckpoint.rooms[0].id);
+
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [firstCopy, secondCopy], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+
+  it('a repeated refresh/Undo cycle on the copy keeps only the most recent checkpoint, always matching the copy\'s own identity', () => {
+    const ids = sequentialIdSource();
+    const source = projectWithRefreshedRevision(ids);
+    const copy = planImportAsCopies([source], 'export-1', new Set(), ids).projects[0];
+    let active = copy.revisions[0];
+
+    // Undo the refresh the copy already had, then refresh AGAIN on the copy itself.
+    active = undoRateRefresh(active)!;
+    const secondLiveSnapshot = createSnapshot(makeSettings({ loadedHourlyRate: '40' }), [makeVariant()], [], ids, 'rev-live-2');
+    active = applyRateRefresh(active, secondLiveSnapshot, [], ids);
+
+    expect(active.preRefreshCheckpoint!.id).toBe(active.id);
+    expect(active.preRefreshCheckpoint!.projectId).toBe(copy.id);
+    expect(active.preRefreshCheckpoint!.preRefreshCheckpoint).toBeFalsy(); // no accumulated chain
+
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [{ ...copy, revisions: [active] }], ids);
     expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
   });
 });
