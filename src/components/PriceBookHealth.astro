@@ -1,12 +1,14 @@
 ---
-import { STATUS_PREVIEW, TARGET_MARGIN, PRICE_BOOK_TO_PRICING_LINK } from "../data/site";
-
-const PRICE_ROWS = [
-  { service: "Walls", price: "$1.80 / ft²", margin: "42.2%", status: "Above target", flag: false },
-  { service: "Ceilings", price: "$1.50 / ft²", margin: "28.0%", status: "Review pricing", flag: true },
-  { service: "Trim", price: "$1.25 / linear ft", margin: "36.8%", status: "Above target", flag: false },
-  { service: "Doors", price: "$85 / door", margin: "21.2%", status: "Review pricing", flag: true },
-] as const;
+import {
+  STATUS_PREVIEW,
+  TARGET_MARGIN,
+  PRICE_BOOK_TO_PRICING_LINK,
+  PRICE_BOOK_SAMPLE_ROWS as PRICE_ROWS,
+  PRICE_BOOK_SAMPLE_INTRO,
+  PRICE_BOOK_SAMPLE_CALLOUT_HEADING,
+  PRICE_BOOK_SAMPLE_CALLOUT_BODY,
+  PRICE_BOOK_SAMPLE_FOOTNOTE,
+} from "../data/site";
 ---
 
 <section id="price-book-health" class="section-pad scroll-mt-16">
@@ -16,9 +18,7 @@ const PRICE_ROWS = [
         See which rates deserve a second look.
       </h2>
       <p class="mt-4 text-lg text-ink-soft">
-        A single target margin. Different results across your services.
-        The planned Price Book Health view helps you identify where to
-        review your prices and cost assumptions.
+        {PRICE_BOOK_SAMPLE_INTRO}
       </p>
     </div>
 
@@ -101,17 +101,14 @@ const PRICE_ROWS = [
       </div>
 
       <div class="mt-6 rounded-[calc(var(--radius-card)-8px)] border border-warn-line bg-warn-soft/60 p-4 sm:p-5">
-        <p class="text-sm font-semibold text-ink">Two rates to review before your next quote.</p>
+        <p class="text-sm font-semibold text-ink">{PRICE_BOOK_SAMPLE_CALLOUT_HEADING}</p>
         <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">
-          In this example, ceilings and doors fall below the target.
-          Review their underlying costs and prices before reusing those
-          rates.
+          {PRICE_BOOK_SAMPLE_CALLOUT_BODY}
         </p>
       </div>
 
       <p class="mt-5 text-xs leading-relaxed text-ink-soft">
-        Margin is estimated profit divided by price. Actual results depend
-        on your inputs and job conditions.
+        {PRICE_BOOK_SAMPLE_FOOTNOTE}
       </p>
     </div>
 

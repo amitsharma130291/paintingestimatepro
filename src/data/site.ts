@@ -51,3 +51,30 @@ export const PRICE = {
 };
 
 export const TARGET_MARGIN = "35%";
+
+// UX-012: the homepage's Price Book Health section is a hand-authored,
+// clearly-labeled SAMPLE table, never a captured screenshot and never a
+// claim that these are the live tool's actual default numbers. Pulled out
+// here (rather than left inline in PriceBookHealth.astro) so the sample
+// data and its "review pricing" flags have real automated test coverage:
+// tests/browser/priceBookHealthSampleLabeling.test.ts independently
+// recomputes each row's flag from its own margin vs. TARGET_MARGIN and
+// confirms it matches, instead of that consistency being verified only by
+// a human reading the numbers.
+export const PRICE_BOOK_SAMPLE_ROWS = [
+  { service: "Walls", price: "$1.80 / ft²", margin: "42.2%", status: "Above target", flag: false },
+  { service: "Ceilings", price: "$1.50 / ft²", margin: "28.0%", status: "Review pricing", flag: true },
+  { service: "Trim", price: "$1.25 / linear ft", margin: "36.8%", status: "Above target", flag: false },
+  { service: "Doors", price: "$85 / door", margin: "21.2%", status: "Review pricing", flag: true },
+] as const;
+
+export const PRICE_BOOK_SAMPLE_INTRO =
+  "A single target margin. Different results across your services. The planned Price Book Health view helps you identify where to review your prices and cost assumptions.";
+
+export const PRICE_BOOK_SAMPLE_CALLOUT_HEADING = "Two rates to review before your next quote.";
+
+export const PRICE_BOOK_SAMPLE_CALLOUT_BODY =
+  "In this example, ceilings and doors fall below the target. Review their underlying costs and prices before reusing those rates.";
+
+export const PRICE_BOOK_SAMPLE_FOOTNOTE =
+  "Margin is estimated profit divided by price. Actual results depend on your inputs and job conditions.";
