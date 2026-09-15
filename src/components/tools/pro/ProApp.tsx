@@ -430,6 +430,13 @@ export default function ProApp() {
 
   async function saveDraft() {
     if (!draftEdit || !activeProject) return;
+    // UX-008: `draftEdit` is captured here at call time. If the user keeps
+    // typing while this async save is still in flight, a later edit bumps
+    // `updatedAt` again (every mutateDraft call does). Recording that
+    // captured value now lets the resolved save below detect whether it is
+    // still looking at the SAME edit it started with -- if not, the user's
+    // newer keystrokes must never be clobbered by this now-stale result.
+    const capturedUpdatedAt = draftEdit.updatedAt;
     const revisionToSave: EstimateRevision = {
       ...draftEdit,
       calculationState: summary?.calculationState ?? 'incomplete',
@@ -439,7 +446,7 @@ export default function ProApp() {
     try {
       const committedVersion = await saveProjectSafely(nextProject, draftBaselineVersion);
       setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? { ...nextProject, version: committedVersion } : p)));
-      setDraftEdit(revisionToSave);
+      setDraftEdit((current) => (current && current.id === revisionToSave.id && current.updatedAt === capturedUpdatedAt ? revisionToSave : current));
       setDraftBaselineVersion(committedVersion);
       // V5-08: preRefreshCheckpoint is a normal field on revisionToSave
       // (carried over from draftEdit via the spread above) -- saving must
@@ -568,6 +575,9 @@ export default function ProApp() {
 
   async function issueEstimate() {
     if (!draftEdit || !activeProject || !summary || summary.calculationState !== 'complete') return;
+    // UX-008: same staleness guard as saveDraft -- see its comment.
+    const capturedDraftId = draftEdit.id;
+    const capturedUpdatedAt = draftEdit.updatedAt;
     const proposedPrice = draftEdit.priceMode === 'custom' ? customPriceRaw : summary.effectivePrice?.toFixed(2) ?? null;
     // independent-review R13: issuing froze the customer document but left
     // rawCalculatedOutputs permanently null, so the actual-cost comparison
@@ -594,7 +604,7 @@ export default function ProApp() {
     try {
       const committedVersion = await saveProjectSafely(nextProject, draftBaselineVersion);
       setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? { ...nextProject, version: committedVersion } : p)));
-      setDraftEdit(issued);
+      setDraftEdit((current) => (current && current.id === capturedDraftId && current.updatedAt === capturedUpdatedAt ? issued : current));
       setDraftBaselineVersion(committedVersion);
       setSaveMessage('Estimate issued and saved.');
     } catch (err) {
@@ -1080,7 +1090,19 @@ export default function ProApp() {
           </button>
         ))}
       </div>
-      {saveMessage && <p className="mt-3 text-xs text-ink-soft print:hidden">{saveMessage}</p>}
+      {saveMessage && (
+        <div className="mt-3 print:hidden">
+          <p className="text-xs text-ink-soft">{saveMessage}</p>
+          {/* UX-010: a save failure (private browsing, storage disabled, quota
+              exceeded) must never end with just an honest error and nothing
+              actionable -- point the user at the one thing that actually
+              protects unsaved work: exporting a backup now, while the data
+              still exists in this tab's memory. */}
+          {saveMessage.toLowerCase().includes('failed') && (
+            <p className="mt-1 text-xs text-warn">Your data may not be saved in this browser. Go to the Backup tab and use "Export backup (.json)" now to avoid losing this session's changes.</p>
+          )}
+        </div>
+      )}
       {pendingHandoff && (
         <div className="mt-3 rounded-btn border border-line bg-line-soft p-4 text-sm print:hidden">
           <p className="font-semibold">Bring in the room from your free calculator result?</p>
