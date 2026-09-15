@@ -13,6 +13,9 @@ import {
   MAX_ROOMS_PER_PROJECT,
   MAX_SURFACES_PER_PROJECT,
   MAX_DOCUMENT_LINES_PER_PROJECT,
+  MAX_AGGREGATE_MONETARY,
+  MAX_AGGREGATE_HOURS,
+  MAX_AGGREGATE_GALLONS,
 } from '../engine/parse';
 import { grossWallArea, ceilingArea, netWallArea, quickOpeningArea, detailedOpeningArea } from '../engine/geometry';
 import { aggregateProjectSurfaces, type ProjectSurface, type ProjectAggregateResult, type VariantPricing, type SurfaceGeometryInput } from '../engine/estimate';
@@ -33,6 +36,13 @@ import type { EstimateRevision, Room, Surface } from './entities';
 export interface ProjectEstimateAssembly {
   calculationState: 'complete' | 'incomplete' | 'invalid';
   reasons: string[];
+  /** AGG-001..006 / DECISIONS.md #9: true when this 'invalid' result is
+   * specifically because a COMPUTED aggregate (paint demand, labor hours,
+   * materials/labor/direct/overhead/job cost, or a suggested price)
+   * exceeded its supported range, as distinct from an ordinary malformed/
+   * missing-field invalid result. Always false on 'complete' or
+   * 'incomplete' results, and on any other kind of 'invalid' result. */
+  outOfSupportedRange: boolean;
   /** CALCULATION_SPEC.md §1: "Waste >0.5 and overhead >0.5 produce
    * nonblocking review warnings." Only ever populated alongside a
    * 'complete' result -- an incomplete/invalid result has no computed
@@ -50,11 +60,22 @@ export interface ProjectEstimateAssembly {
 }
 
 function incompleteResult(reasons: string[]): ProjectEstimateAssembly {
-  return { calculationState: 'incomplete', reasons, warnings: [], aggregate: null, materials: null, laborCost: null, directCost: null, overhead: null, jobCost: null, price: null, suggestedPrice: null, effectivePrice: null };
+  return { calculationState: 'incomplete', reasons, outOfSupportedRange: false, warnings: [], aggregate: null, materials: null, laborCost: null, directCost: null, overhead: null, jobCost: null, price: null, suggestedPrice: null, effectivePrice: null };
 }
 
 function invalidResult(reasons: string[]): ProjectEstimateAssembly {
-  return { calculationState: 'invalid', reasons, warnings: [], aggregate: null, materials: null, laborCost: null, directCost: null, overhead: null, jobCost: null, price: null, suggestedPrice: null, effectivePrice: null };
+  return { calculationState: 'invalid', reasons, outOfSupportedRange: false, warnings: [], aggregate: null, materials: null, laborCost: null, directCost: null, overhead: null, jobCost: null, price: null, suggestedPrice: null, effectivePrice: null };
+}
+
+/** AGG-001..006 / DECISIONS.md #9: a COMPUTED aggregate (never a single
+ * entered field -- those already fail via invalidResult through the
+ * ordinary per-field `max` checks) exceeded its supported range. Reports
+ * a clear, specific reason naming the ceiling, and NEVER exposes a
+ * partial/plausible number alongside it (aggregate/materials/etc. all
+ * stay null, exactly like any other invalid result) -- there is no
+ * "clamp to the max and continue" branch anywhere in this function. */
+function outOfRangeResult(reasons: string[]): ProjectEstimateAssembly {
+  return { calculationState: 'invalid', reasons, outOfSupportedRange: true, warnings: [], aggregate: null, materials: null, laborCost: null, directCost: null, overhead: null, jobCost: null, price: null, suggestedPrice: null, effectivePrice: null };
 }
 
 /** Room-derived geometry for a wall or ceiling surface whose measurementMode
@@ -247,6 +268,24 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   const { valid, result } = aggregateProjectSurfaces(resolvedEnabled, variantPricing);
   if (!valid || !result) return invalidResult(['Surface aggregation failed unexpectedly.']);
 
+  // AGG-001/002: every individual field feeding paint demand and labor
+  // hours already has its OWN ceiling (area, coats, waste, throughput),
+  // but summing up to 2,000 surfaces of otherwise-valid values -- or even
+  // one surface at the extreme combination of its own individually-valid
+  // bounds -- can still produce a raw demand or hour total that is finite
+  // but not practical to display, store, or purchase against. Checked
+  // BEFORE materials/labor cost derive from these same numbers, so a
+  // downstream monetary check never has to un-multiply an already-huge
+  // quantity to explain what actually went out of range.
+  for (const p of result.purchases) {
+    if (p.rawGal.greaterThan(MAX_AGGREGATE_GALLONS) || p.purchasedGal > MAX_AGGREGATE_GALLONS.toNumber()) {
+      return outOfRangeResult([`This project's total paint demand for one of your paint colors exceeds the supported range (max ${MAX_AGGREGATE_GALLONS.toString()} gallons). Split this into smaller projects or double-check your area/coverage inputs.`]);
+    }
+  }
+  if (result.laborHours.greaterThan(MAX_AGGREGATE_HOURS)) {
+    return outOfRangeResult([`This project's total labor hours exceed the supported range (max ${MAX_AGGREGATE_HOURS.toString()} hours). Split this into smaller projects or double-check your area/throughput inputs.`]);
+  }
+
   // A blank/malformed line here is a genuine, reachable UI state — a newly
   // added other-material/additional-labor/expense line starts empty before
   // the customer finishes typing every field, and `new PEP('')`/`new
@@ -292,6 +331,13 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
     result.materialsCost
   );
   const materials = materialsTotal(result.materialsCost, otherMaterials, allowance);
+  // AGG-003: a valid area/coverage/coats combination times an
+  // individually-unbounded catalog price (or many itemized material
+  // lines, each within MAX_MONETARY_INPUT on its own) can still sum to a
+  // materials total beyond what is practical to display, store, or quote.
+  if (materials.greaterThan(MAX_AGGREGATE_MONETARY)) {
+    return outOfRangeResult([`This project's total materials cost exceeds the supported range (max $${MAX_AGGREGATE_MONETARY.toString()}). Split this into smaller projects or double-check your paint prices.`]);
+  }
 
   let additionalLaborCost = new PEP(0);
   for (const l of revision.additionalLabor) {
@@ -302,6 +348,12 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
     additionalLaborCost = additionalLaborCost.plus(hoursField.value.times(rateField.value));
   }
   const laborCost = result.laborCost.plus(additionalLaborCost);
+  // AGG-003: hours within the AGG-002 hours ceiling, at an individually
+  // valid (<=MAX_RATE) loaded rate, can still multiply to a labor cost
+  // beyond the supported monetary range.
+  if (laborCost.greaterThan(MAX_AGGREGATE_MONETARY)) {
+    return outOfRangeResult([`This project's total labor cost exceeds the supported range (max $${MAX_AGGREGATE_MONETARY.toString()}). Split this into smaller projects or double-check your hourly rates.`]);
+  }
 
   const otherExpenseAmounts: Dec[] = [];
   for (const l of revision.otherExpenses) {
@@ -322,6 +374,15 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   }
   const oh = overheadAmount(dc, overheadRatioField.value);
   const jobCost = estimatedJobCost(dc, oh);
+  // AGG-003: direct cost / overhead / job cost are each derived from
+  // already-capped components (materials, labor cost, other expenses each
+  // individually <= MAX_MONETARY_INPUT), but their SUM -- especially with
+  // an unusually high overhead ratio (COST-019's own nonblocking-warning
+  // territory) -- can still cross the aggregate ceiling even when every
+  // contributing component stayed within its own.
+  if (dc.greaterThan(MAX_AGGREGATE_MONETARY) || oh.greaterThan(MAX_AGGREGATE_MONETARY) || jobCost.greaterThan(MAX_AGGREGATE_MONETARY)) {
+    return outOfRangeResult([`This project's total estimated job cost exceeds the supported range (max $${MAX_AGGREGATE_MONETARY.toString()}). Split this into smaller projects or double-check your cost/overhead inputs.`]);
+  }
 
   const targetField = parseDecimalField(settings.targetMarginRatio);
   if (targetField.kind !== 'valid') return invalidResult(['Target margin is invalid.']);
@@ -341,12 +402,28 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   // ten-fraction-digit decimal and was accepted as a complete, issueable
   // price -- display rounding could then round it to a DIFFERENT cent
   // value than the one actually stored as the quote.
-  const customPriceField = opts.priceMode === 'custom' ? parseDecimalField(opts.customPriceRaw, { allowNegative: false, maxFractionDigits: 2 }) : { kind: 'missing' as const };
+  // AGG-003: a custom price is a single entered field, so it gets the
+  // SAME per-field `max` treatment as every other money field (BOUND-039
+  // style) rather than the outOfRangeResult() aggregate path -- an
+  // out-of-range custom price is an ordinary invalid input, not a
+  // computed aggregate exceeding its bound.
+  const customPriceField = opts.priceMode === 'custom' ? parseDecimalField(opts.customPriceRaw, { allowNegative: false, maxFractionDigits: 2, max: MAX_AGGREGATE_MONETARY }) : { kind: 'missing' as const };
   if (opts.priceMode === 'custom' && customPriceField.kind === 'invalid') return invalidResult(['Custom price is invalid.']);
   const priceInput = opts.priceMode === 'custom' && customPriceField.kind === 'valid' ? customPriceField.value : null;
 
   const priced = evaluatePrice({ cost: jobCost, price: priceInput, targetMarginRatio: targetField.value });
   const effectivePrice = opts.priceMode === 'suggested' ? priced.minimumTargetPrice : priceInput;
+  // AGG-003 / DECISIONS.md #9: jobCost is now capped above, but
+  // requiredPriceRaw() (inside evaluatePrice) divides it by (1-target),
+  // which can STILL exceed MAX_REQUIRED_PRICE at an extreme (but
+  // individually valid, <1) target margin. Before this fix, suggested
+  // mode fell through to a "complete" result with effectivePrice/price
+  // silently null -- exactly the disguised-invalid state DECISIONS.md #9
+  // forbids ("must not... show a plausible issueable price" implicitly
+  // also means "must not show a COMPLETE state with no price at all").
+  if (opts.priceMode === 'suggested' && effectivePrice === null) {
+    return outOfRangeResult([`This project's required price at your target margin exceeds the supported range (max $${MAX_AGGREGATE_MONETARY.toString()}). Lower the target margin, reduce project scope, or enter a custom price instead.`]);
+  }
   // Regression (found live in the browser): suggested mode used to report
   // `priced` — the evaluation at priceInput=null ("unpriced", profit=null)
   // — even though a real effectivePrice (the suggested price) existed.
@@ -356,6 +433,7 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   return {
     calculationState: 'complete',
     reasons: [],
+    outOfSupportedRange: false,
     warnings,
     aggregate: result,
     materials,

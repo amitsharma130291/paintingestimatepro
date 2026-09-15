@@ -1,4 +1,5 @@
 import { PEP, type Dec } from './decimal';
+import { MAX_AGGREGATE_MONETARY } from './parse';
 
 /**
  * DATA_CONTRACT.md "Actual review" + CHANGELOG v2.1: margin is gated on
@@ -24,7 +25,13 @@ export interface ActualReviewInput {
 }
 
 export interface ActualReviewResult {
-  state: 'in_progress' | 'final';
+  /** AGG-005 / DECISIONS.md #9: 'out_of_supported_range' when all four
+   * categories are confirmed (each individually within its own field
+   * bound) but their SUM exceeds the supported aggregate ceiling --
+   * distinct from 'in_progress' (not all categories confirmed yet) and
+   * never silently reported as 'final' with a huge-but-technically-
+   * correct total. */
+  state: 'in_progress' | 'final' | 'out_of_supported_range';
   confirmedCategories: number;
   recordedCostSoFar: Dec; // sum of confirmed categories only
   actualCost: Dec | null; // only set when state === 'final'
@@ -49,6 +56,21 @@ export function evaluateActualReview(input: ActualReviewInput): ActualReviewResu
   if (confirmedCategories < 4) {
     return {
       state: 'in_progress',
+      confirmedCategories,
+      recordedCostSoFar,
+      actualCost: null,
+      profitAgainstOriginalQuote: null,
+      marginRatio: null,
+      totalVariance: null,
+    };
+  }
+
+  // AGG-005: each category's own amount already passed its individual
+  // field bound upstream (ProApp.tsx's deriveActualCategory), but four
+  // categories each within MAX_AGGREGATE_MONETARY can still sum past it.
+  if (recordedCostSoFar.greaterThan(MAX_AGGREGATE_MONETARY)) {
+    return {
+      state: 'out_of_supported_range',
       confirmedCategories,
       recordedCostSoFar,
       actualCost: null,

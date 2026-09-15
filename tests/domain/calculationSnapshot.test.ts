@@ -8,7 +8,7 @@ import type { ProjectEstimateAssembly } from '../../src/domain/estimateAssembly'
 
 function completeSummary(overrides: Partial<ProjectEstimateAssembly> = {}): ProjectEstimateAssembly {
   return {
-    calculationState: 'complete', reasons: [], warnings: [], aggregate: null,
+    calculationState: 'complete', reasons: [], outOfSupportedRange: false, warnings: [], aggregate: null,
     materials: new PEP('100'), laborCost: new PEP('200'), directCost: new PEP('300'), overhead: new PEP('45'), jobCost: new PEP('345'),
     price: { profit: new PEP('55'), marginRatio: new PEP('0.1375'), status: 'at_target', approxPrice: new PEP('400'), minimumTargetPrice: new PEP('400.01') },
     suggestedPrice: new PEP('400'), effectivePrice: new PEP('400'),

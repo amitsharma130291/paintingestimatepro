@@ -94,13 +94,29 @@ describe('BOUND-018..021: roomDimensionFt is >0 and <=100,000 ft', () => {
 });
 
 describe('BOUND-022..025: manualAreaFt2 is >0 and <=1,000,000,000 ft²', () => {
+  // AGG-003 (DECISIONS.md #9) added an aggregate materials-cost ceiling on
+  // top of this pre-existing field-level area ceiling -- at the area field's
+  // OWN ceiling with a normal catalog price, the resulting materials cost
+  // now genuinely exceeds that separate aggregate cap (correctly; that is
+  // exactly the "even when individual rows pass limits" scenario AGG-003
+  // exists to catch). An essentially-free catalog price isolates the FIELD
+  // boundary this describe block is actually about from the aggregate one.
+  const ids = sequentialIdSource();
+  const cheapSnap = createSnapshot(settings(), [{ ...variant(), pricePerGal: '0.0001' }], [], ids, 'rev-1');
+  function cheapRevision(): EstimateRevision {
+    return createDraftRevision('project-1', cheapSnap, ids);
+  }
   it.each([
     ['just above zero (0.001)', '0.001', 'complete'],
     ['at the ceiling (1000000000)', '1000000000', 'complete'],
     ['zero', '0', 'invalid'],
     ['just above the ceiling (1000000000.001)', '1000000000.001', 'invalid'],
   ] as const)('surface areaFt2=%s -> %s', (_label, value, expected) => {
-    const revision = { ...baseRevision(), surfaces: [manualWall({ areaFt2: value })] };
+    // throughput=MAX_RATE (in addition to the near-free paint price) also
+    // keeps total labor hours under AGG-002's separate aggregate-hours
+    // ceiling at the area field's own ceiling, isolating just the area
+    // field boundary this describe block is about.
+    const revision = { ...cheapRevision(), surfaces: [manualWall({ areaFt2: value, throughput: '1000000' })] };
     expect(assemble(revision).calculationState).toBe(expected);
   });
 });
@@ -130,13 +146,26 @@ describe('BOUND-035..038: additionalLabor hours is [0,1,000,000]', () => {
 });
 
 describe('BOUND-039..042: a money amount is [0,1,000,000,000] (probed via otherExpenses.amount)', () => {
+  // AGG-003 (DECISIONS.md #9): at this field's OWN ceiling, even
+  // manualWall()'s small default cost pushes the AGGREGATE direct cost
+  // fractionally past the separate aggregate cap (correctly). A zero-length
+  // trim surface (a valid, zero-cost surface -- see BOUND-026) isolates the
+  // FIELD boundary this describe block is actually about.
+  const zeroCostSurface = () => trimSurface({ trimLengthFt: '0' });
   it.each([
     ['zero', '0', 'complete'],
     ['at the ceiling (1000000000)', '1000000000', 'complete'],
     ['just below the floor (-0.01)', '-0.01', 'invalid'],
     ['just above the ceiling (1000000000.01)', '1000000000.01', 'invalid'],
   ] as const)('otherExpenses amount=%s -> %s', (_label, value, expected) => {
-    const revision = { ...baseRevision(), surfaces: [manualWall()], otherExpenses: [{ id: 'e1', description: 'Travel', amount: value }] };
+    // overheadRatio=0 keeps job cost (direct cost + overhead) from
+    // exceeding AGG-003's aggregate cost ceiling once overhead is added on
+    // top of an otherExpenses value at its own field ceiling; targetMarginRatio=0
+    // additionally keeps the SUGGESTED price's own pre-existing
+    // MAX_REQUIRED_PRICE ceiling (jobCost/(1-target)) from tripping at a
+    // jobCost already sitting exactly at $1,000,000,000 -- both isolate
+    // just the otherExpenses field boundary this describe block is about.
+    const revision = { ...baseRevision({ overheadRatio: '0', targetMarginRatio: '0' }), surfaces: [zeroCostSurface()], otherExpenses: [{ id: 'e1', description: 'Travel', amount: value }] };
     expect(assemble(revision).calculationState).toBe(expected);
   });
 

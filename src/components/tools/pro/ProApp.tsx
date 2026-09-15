@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PEP, type Dec } from '../../../engine/decimal';
 import { evaluateActualReview, type ActualCategory } from '../../../engine/actuals';
-import { parseDecimalField } from '../../../engine/parse';
+import { parseDecimalField, MAX_AGGREGATE_MONETARY, MAX_AGGREGATE_HOURS, MAX_RATE } from '../../../engine/parse';
 import { assembleServiceHealth, type ServiceHealthAssemblyResult } from '../../../domain/serviceHealthAssembly';
 import { statusBadge, money, parseCoatsInput, parseOpeningCountInput } from '../shared';
 import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope, AdditionalLaborLine, OtherMaterialLine, ExpenseLine } from '../../../domain/entities';
@@ -748,7 +748,11 @@ export default function ProApp() {
   function deriveActualCategory(raw: { confirmed: boolean; amount: string }): { confirmed: boolean; value: Dec | null; invalid: boolean } {
     if (!raw.confirmed) return { confirmed: false, value: null, invalid: false };
     if (raw.amount.trim() === '') return { confirmed: true, value: null, invalid: false }; // confirmed but not yet entered — a real partial state, never zero
-    const parsed = parseDecimalField(raw.amount); // rejects negative by default — a cost cannot be negative
+    // AGG-005: rejects negative by default (a cost cannot be negative) AND
+    // caps at the same aggregate ceiling checked on the SUM in
+    // evaluateActualReview -- a single absurd entry is rejected here at
+    // the field level, same as every other money field in this app.
+    const parsed = parseDecimalField(raw.amount, { max: MAX_AGGREGATE_MONETARY });
     return parsed.kind === 'valid' ? { confirmed: true, value: parsed.value, invalid: false } : { confirmed: true, value: null, invalid: true };
   }
 
@@ -776,8 +780,8 @@ export default function ProApp() {
     if (laborMode === 'direct') return deriveActualCategory(actuals.labor);
     if (!actuals.labor.confirmed) return { confirmed: false, value: null, invalid: false };
     if (laborHours.trim() === '' || laborRate.trim() === '') return { confirmed: true, value: null, invalid: false };
-    const hoursField = parseDecimalField(laborHours);
-    const rateField = parseDecimalField(laborRate);
+    const hoursField = parseDecimalField(laborHours, { max: MAX_AGGREGATE_HOURS });
+    const rateField = parseDecimalField(laborRate, { max: MAX_RATE });
     if (hoursField.kind !== 'valid' || rateField.kind !== 'valid') return { confirmed: true, value: null, invalid: true };
     return { confirmed: true, value: hoursField.value.times(rateField.value), invalid: false };
   }
@@ -797,13 +801,18 @@ export default function ProApp() {
   async function saveActuals() {
     if (!activeProject || !issuedRevision) return;
     // Genuinely complete = confirmed AND a valid, non-null amount (explicit
-    // zero counts — ACT-02) — never just "the checkbox is ticked."
+    // zero counts — ACT-02) — never just "the checkbox is ticked." AGG-005:
+    // also never "final" when the four categories individually validate but
+    // their SUM exceeds the supported aggregate range -- the persisted
+    // record must agree with evaluateActualReview's own live computation,
+    // never claim 'final' while the on-screen result is blocked.
     const genuinelyCompleteCount = Object.values(derivedActuals).filter((c) => c.confirmed && c.value !== null).length;
+    const isFinal = genuinelyCompleteCount === 4 && actualResult?.state === 'final';
     const review: ActualReview = {
       id: existingActualReview?.id ?? ids.nextId(),
       projectId: activeProject.id,
       baselineIssuedRevisionId: issuedRevision.id,
-      state: genuinelyCompleteCount === 4 ? 'final' : 'inProgress',
+      state: isFinal ? 'final' : 'inProgress',
       materials: { confirmed: actuals.materials.confirmed, amount: derivedActuals.materials.value?.toString() ?? null },
       labor: { confirmed: actuals.labor.confirmed, amount: derivedActuals.labor.value?.toString() ?? null },
       otherExpenses: { confirmed: actuals.otherExpenses.confirmed, amount: derivedActuals.otherExpenses.value?.toString() ?? null },
@@ -1831,6 +1840,12 @@ export default function ProApp() {
                   <dl className="mt-4 space-y-2 text-sm">
                     {actualResult.state === 'in_progress' ? (
                       <p className="text-warn">In progress — {actualResult.confirmedCategories}/4 categories confirmed. Final profit/margin is withheld until all four are confirmed.</p>
+                    ) : actualResult.state === 'out_of_supported_range' ? (
+                      // AGG-005: every category is confirmed, but the SUM
+                      // exceeds the supported range -- never render a
+                      // "final" total, never null-format into a misleading
+                      // "—" among otherwise-normal rows.
+                      <p role="alert" className="text-bad">This job's total actual cost exceeds the supported range (max ${MAX_AGGREGATE_MONETARY.toString()}). Double-check your entered amounts.</p>
                     ) : (
                       <>
                         <Row label="Actual cost" value={money(actualResult.actualCost)} />

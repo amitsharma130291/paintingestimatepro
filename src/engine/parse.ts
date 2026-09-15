@@ -168,3 +168,35 @@ export const MAX_DOCUMENT_LINES_PER_PROJECT = 2000;
 export function isPositiveDivisor(value: Dec): boolean {
   return value.greaterThanOrEqualTo(MIN_POSITIVE_DIVISOR);
 }
+
+/** AGG-001..006 — DECISIONS.md #9: "Calculated aggregate limits: inputs
+ * have bounds; required selling price has a $1bn cap. Define how
+ * aggregates beyond practical display/storage limits are reported, even
+ * when individual rows pass limits. No overflow/NaN or silent saturation
+ * is acceptable." Every field-level bound above (MAX_AREA_FT2, MAX_RATE,
+ * MAX_HOURS, MAX_MONETARY_INPUT, ...) already caps ONE entered value —
+ * but summing up to 500 rooms / 2,000 surfaces of otherwise-individually-
+ * valid values can still produce a computed AGGREGATE (paint demand,
+ * material cost, labor hours, direct cost, overhead, job cost, a
+ * suggested/custom price, an actual-cost total) that is technically
+ * finite but practically nonsensical to display, store, print, or price
+ * against. These constants are the explicit ceiling on those COMPUTED
+ * outputs, checked at the aggregation chokepoints
+ * (`assembleProjectEstimate`, `evaluateActualReview`) — never at a single
+ * input field, which is what the constants above already cover.
+ *
+ * Deliberately reuses the SAME $1,000,000,000 figure DECISIONS.md #9
+ * itself names for "required selling price," rather than inventing a
+ * different number for materials/labor/direct-cost/overhead/job-cost/
+ * profit/actual-cost totals — one consistent, documented ceiling for
+ * every monetary aggregate in the product, matching MAX_MONETARY_INPUT
+ * and MAX_REQUIRED_PRICE exactly (not a coincidence: all three name the
+ * same practical "nine documented zeros" ceiling for a dollar figure
+ * anywhere in this app, whether it is a single entered field or a
+ * computed sum). MAX_AGGREGATE_HOURS and MAX_AGGREGATE_GALLONS mirror the
+ * same "reuse the existing per-field ceiling for the project-wide total"
+ * approach for their own units.
+ */
+export const MAX_AGGREGATE_MONETARY = MAX_MONETARY_INPUT;
+export const MAX_AGGREGATE_HOURS = MAX_HOURS;
+export const MAX_AGGREGATE_GALLONS = new PEP('1000000000');
