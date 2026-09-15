@@ -210,6 +210,86 @@ describe('Per-surface override vs. snapshot default fallback (DECISIONS.md #3)',
   });
 });
 
+describe('Project-costing line items never crash on blank/malformed values (found while building the missing cost-entry UI)', () => {
+  function doorRevision(overrides: Partial<EstimateRevision> = {}): EstimateRevision {
+    const door: Surface = {
+      id: 'door-1', roomId: null, kind: 'door', enabled: true, measurementMode: 'manual',
+      areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: 3, widthFt: '2.5', heightFt: '6.67', paintedSides: 2,
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+    };
+    return { ...baseRevision(), rooms: [], surfaces: [door], ...overrides };
+  }
+
+  it('a freshly-added additionalLabor line with blank hours/rate reports incomplete, never throws', () => {
+    const revision = doorRevision({ additionalLabor: [{ id: 'l1', description: 'Prep', hours: '', loadedHourlyRate: '' }] });
+    let out: ReturnType<typeof assembleProjectEstimate> | undefined;
+    expect(() => { out = assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' }); }).not.toThrow();
+    expect(out!.calculationState).toBe('incomplete');
+  });
+
+  it('an additionalLabor line with malformed hours ("abc") reports invalid, never throws', () => {
+    const revision = doorRevision({ additionalLabor: [{ id: 'l1', description: 'Prep', hours: 'abc', loadedHourlyRate: '32' }] });
+    expect(() => assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' })).not.toThrow();
+    expect(assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('invalid');
+  });
+
+  it('a complete additionalLabor line correctly adds hours*rate to laborCost', () => {
+    const withLine = doorRevision({ additionalLabor: [{ id: 'l1', description: 'Prep', hours: '2', loadedHourlyRate: '32' }] });
+    const withoutLine = doorRevision();
+    const a = assembleProjectEstimate(withLine, { priceMode: 'suggested', customPriceRaw: '' });
+    const b = assembleProjectEstimate(withoutLine, { priceMode: 'suggested', customPriceRaw: '' });
+    expect(a.laborCost!.minus(b.laborCost!).toString()).toBe('64'); // 2*32
+  });
+
+  it('a freshly-added otherMaterialLines entry with blank quantity/unitCost reports incomplete, never throws', () => {
+    const revision = doorRevision({ otherMaterialLines: [{ id: 'm1', description: 'Caulk', sourceMaterialId: null, unit: 'tube', quantity: '', unitCost: '' }] });
+    expect(() => assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' })).not.toThrow();
+    expect(assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('incomplete');
+  });
+
+  it('a complete otherMaterialLines entry correctly adds quantity*unitCost to materials', () => {
+    const withLine = doorRevision({ otherMaterialLines: [{ id: 'm1', description: 'Caulk', sourceMaterialId: null, unit: 'tube', quantity: '3', unitCost: '6.50' }] });
+    const withoutLine = doorRevision();
+    const a = assembleProjectEstimate(withLine, { priceMode: 'suggested', customPriceRaw: '' });
+    const b = assembleProjectEstimate(withoutLine, { priceMode: 'suggested', customPriceRaw: '' });
+    expect(a.materials!.minus(b.materials!).toString()).toBe('19.5'); // 3*6.50
+  });
+
+  it('a freshly-added otherExpenses entry with a blank amount reports incomplete, never throws', () => {
+    const revision = doorRevision({ otherExpenses: [{ id: 'e1', description: 'Travel', amount: '' }] });
+    expect(() => assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' })).not.toThrow();
+    expect(assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('incomplete');
+  });
+
+  it('a complete otherExpenses entry correctly adds its amount to directCost', () => {
+    const withLine = doorRevision({ otherExpenses: [{ id: 'e1', description: 'Travel', amount: '40' }] });
+    const withoutLine = doorRevision();
+    const a = assembleProjectEstimate(withLine, { priceMode: 'suggested', customPriceRaw: '' });
+    const b = assembleProjectEstimate(withoutLine, { priceMode: 'suggested', customPriceRaw: '' });
+    expect(a.directCost!.minus(b.directCost!).toString()).toBe('40');
+  });
+
+  it('a blank suppliesAllowance amount/ratio reports incomplete, never throws', () => {
+    const revision = doorRevision({ suppliesAllowance: { mode: 'flat', amount: '', ratio: '0' } });
+    expect(() => assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' })).not.toThrow();
+    expect(assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('incomplete');
+  });
+
+  it('a malformed suppliesAllowance amount reports invalid, never throws', () => {
+    const revision = doorRevision({ suppliesAllowance: { mode: 'flat', amount: 'abc', ratio: '0' } });
+    expect(() => assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' })).not.toThrow();
+    expect(assembleProjectEstimate(revision, { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('invalid');
+  });
+
+  it('a valid flat supplies allowance correctly adds to materials', () => {
+    const withAllowance = doorRevision({ suppliesAllowance: { mode: 'flat', amount: '25', ratio: '0' } });
+    const withoutAllowance = doorRevision();
+    const a = assembleProjectEstimate(withAllowance, { priceMode: 'suggested', customPriceRaw: '' });
+    const b = assembleProjectEstimate(withoutAllowance, { priceMode: 'suggested', customPriceRaw: '' });
+    expect(a.materials!.minus(b.materials!).toString()).toBe('25');
+  });
+});
+
 describe('V5-07/CORE-021: a custom selling total enforces at most two fractional digits', () => {
   function priced(customPriceRaw: string) {
     const door: Surface = {

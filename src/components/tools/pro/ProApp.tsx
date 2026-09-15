@@ -4,7 +4,7 @@ import { evaluateActualReview, type ActualCategory } from '../../../engine/actua
 import { parseDecimalField } from '../../../engine/parse';
 import { assembleServiceHealth } from '../../../domain/serviceHealthAssembly';
 import { statusBadge, money, parseCoatsInput } from '../shared';
-import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope } from '../../../domain/entities';
+import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope, AdditionalLaborLine, OtherMaterialLine, ExpenseLine } from '../../../domain/entities';
 import { ENGINE_VERSION } from '../../../domain/entities';
 import { freezeCalculatedOutputs, readFrozenCalculatedOutputs } from '../../../domain/calculationSnapshot';
 import { createSnapshot } from '../../../domain/snapshot';
@@ -289,6 +289,50 @@ export default function ProApp() {
     if (!draftEdit || snapshotVariants.length === 0) return;
     const s = blankSurface(kind, null, 'manual', snapshotVariants[0].id);
     mutateDraft((r) => ({ ...r, surfaces: [...r.surfaces, s], updatedAt: ids.now() }));
+  }
+
+  // ---- Additional project costs: prep/additional labor, itemized other
+  // materials, supplies allowance, and other direct expenses (including
+  // travel). Independent review: "The main Pro project editor does not
+  // expose the approved additional-labor lines, itemized other materials,
+  // supplies allowance, or direct-expense/travel entry... a painter cannot
+  // fully itemize the specified preparation time, caulk/materials,
+  // supplies, travel, and direct expenses in a new paid estimate through
+  // the supplied interface." assembleProjectEstimate already fully
+  // consumes these fields (materialsTotal/otherExpensesTotal/
+  // additionalLaborCost) -- only the editing UI was missing. ----
+  function addAdditionalLabor() {
+    mutateDraft((r) => ({ ...r, additionalLabor: [...r.additionalLabor, { id: ids.nextId(), description: '', hours: '', loadedHourlyRate: r.activeRateSnapshot.businessSettings.loadedHourlyRate ?? '' }], updatedAt: ids.now() }));
+  }
+  function patchAdditionalLabor(id: string, patch: Partial<AdditionalLaborLine>) {
+    mutateDraft((r) => ({ ...r, additionalLabor: r.additionalLabor.map((l) => (l.id === id ? { ...l, ...patch } : l)), updatedAt: ids.now() }));
+  }
+  function removeAdditionalLabor(id: string) {
+    mutateDraft((r) => ({ ...r, additionalLabor: r.additionalLabor.filter((l) => l.id !== id), updatedAt: ids.now() }));
+  }
+
+  function addOtherMaterialLine() {
+    mutateDraft((r) => ({ ...r, otherMaterialLines: [...r.otherMaterialLines, { id: ids.nextId(), description: '', sourceMaterialId: null, unit: '', quantity: '', unitCost: '' }], updatedAt: ids.now() }));
+  }
+  function patchOtherMaterialLine(id: string, patch: Partial<OtherMaterialLine>) {
+    mutateDraft((r) => ({ ...r, otherMaterialLines: r.otherMaterialLines.map((l) => (l.id === id ? { ...l, ...patch } : l)), updatedAt: ids.now() }));
+  }
+  function removeOtherMaterialLine(id: string) {
+    mutateDraft((r) => ({ ...r, otherMaterialLines: r.otherMaterialLines.filter((l) => l.id !== id), updatedAt: ids.now() }));
+  }
+
+  function patchSuppliesAllowance(patch: Partial<EstimateRevision['suppliesAllowance']>) {
+    mutateDraft((r) => ({ ...r, suppliesAllowance: { ...r.suppliesAllowance, ...patch }, updatedAt: ids.now() }));
+  }
+
+  function addOtherExpense() {
+    mutateDraft((r) => ({ ...r, otherExpenses: [...r.otherExpenses, { id: ids.nextId(), description: '', amount: '' }], updatedAt: ids.now() }));
+  }
+  function patchOtherExpense(id: string, patch: Partial<ExpenseLine>) {
+    mutateDraft((r) => ({ ...r, otherExpenses: r.otherExpenses.map((l) => (l.id === id ? { ...l, ...patch } : l)), updatedAt: ids.now() }));
+  }
+  function removeOtherExpense(id: string) {
+    mutateDraft((r) => ({ ...r, otherExpenses: r.otherExpenses.filter((l) => l.id !== id), updatedAt: ids.now() }));
   }
 
   async function saveDraft() {
@@ -1064,6 +1108,92 @@ export default function ProApp() {
                       <StandaloneSurfaceEditor key={s.id} surface={s} catalog={snapshotVariants} onPatch={(patch) => patchSurface(s.id, patch)} onRemove={() => removeSurface(s.id)} />
                     ))}
                     {draftEdit.surfaces.filter((s) => s.roomId === null).length === 0 && <p className="text-sm text-ink-soft">No standalone trim or door surfaces added.</p>}
+                  </div>
+                </div>
+
+                <div className="card space-y-6 p-6">
+                  <h3 className="font-semibold">Additional costs</h3>
+                  <p className="-mt-4 text-xs text-ink-soft">
+                    These are PROJECT ESTIMATING inputs — what this job will cost you to complete. They are separate from Price Book Health's per-unit
+                    service assumptions and from the Actual review tab's post-job recorded costs; entering a cost here never edits either of those.
+                  </p>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold">Additional labor (prep, cleanup, touch-up)</h4>
+                      <button type="button" className="btn btn-secondary" onClick={addAdditionalLabor}>+ Add task</button>
+                    </div>
+                    <p className="mt-1 text-xs text-ink-soft">Named tasks with their own hours and loaded rate — on top of each surface's application labor, so nothing is double-counted with production hours.</p>
+                    <div className="mt-2 space-y-2">
+                      {draftEdit.additionalLabor.map((l) => (
+                        <div key={l.id} className="grid grid-cols-1 items-end gap-2 rounded-btn border border-line p-2 sm:grid-cols-[1fr_auto_auto_auto]">
+                          <TextField label="Description" value={l.description} onChange={(v) => patchAdditionalLabor(l.id, { description: v })} />
+                          <NumField label="Hours" value={l.hours} onChange={(v) => patchAdditionalLabor(l.id, { hours: v })} className="w-24" />
+                          <NumField label="$/hour" value={l.loadedHourlyRate} onChange={(v) => patchAdditionalLabor(l.id, { loadedHourlyRate: v })} className="w-24" />
+                          <button type="button" className="text-link text-xs text-bad" onClick={() => removeAdditionalLabor(l.id)}>Remove</button>
+                        </div>
+                      ))}
+                      {draftEdit.additionalLabor.length === 0 && <p className="text-sm text-ink-soft">No additional labor tasks added.</p>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold">Other materials</h4>
+                      <button type="button" className="btn btn-secondary" onClick={addOtherMaterialLine}>+ Add material</button>
+                    </div>
+                    <p className="mt-1 text-xs text-ink-soft">Itemized, non-paint materials (caulk, tape, drop cloths, etc.) by quantity and unit cost.</p>
+                    <div className="mt-2 space-y-2">
+                      {draftEdit.otherMaterialLines.map((l) => (
+                        <div key={l.id} className="grid grid-cols-1 items-end gap-2 rounded-btn border border-line p-2 sm:grid-cols-[1fr_auto_auto_auto_auto]">
+                          <TextField label="Description" value={l.description} onChange={(v) => patchOtherMaterialLine(l.id, { description: v })} />
+                          <TextField label="Unit" value={l.unit} onChange={(v) => patchOtherMaterialLine(l.id, { unit: v })} />
+                          <NumField label="Quantity" value={l.quantity} onChange={(v) => patchOtherMaterialLine(l.id, { quantity: v })} className="w-24" />
+                          <NumField label="Unit cost ($)" value={l.unitCost} onChange={(v) => patchOtherMaterialLine(l.id, { unitCost: v })} className="w-28" />
+                          <button type="button" className="text-link text-xs text-bad" onClick={() => removeOtherMaterialLine(l.id)}>Remove</button>
+                        </div>
+                      ))}
+                      {draftEdit.otherMaterialLines.length === 0 && <p className="text-sm text-ink-soft">No other materials added.</p>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold">Supplies allowance</h4>
+                    <p className="mt-1 text-xs text-ink-soft">One mode only — not a second untracked percentage on top of itemized materials above.</p>
+                    <div className="mt-2 flex flex-wrap items-end gap-3">
+                      <label className="block text-sm">
+                        <span className="font-medium text-ink-soft">Mode</span>
+                        <select className="mt-1 rounded-btn border border-line px-2 py-1" value={draftEdit.suppliesAllowance.mode} onChange={(e) => patchSuppliesAllowance({ mode: e.target.value as 'none' | 'flat' | 'paintPercent' })}>
+                          <option value="none">None</option>
+                          <option value="flat">Flat amount</option>
+                          <option value="paintPercent">% of paint cost</option>
+                        </select>
+                      </label>
+                      {draftEdit.suppliesAllowance.mode === 'flat' && (
+                        <NumField label="Amount ($)" value={draftEdit.suppliesAllowance.amount} onChange={(v) => patchSuppliesAllowance({ amount: v })} className="w-32" />
+                      )}
+                      {draftEdit.suppliesAllowance.mode === 'paintPercent' && (
+                        <NumField label="% of paint cost" value={draftEdit.suppliesAllowance.ratio ? (Number(draftEdit.suppliesAllowance.ratio) * 100).toString() : ''} onChange={(v) => patchSuppliesAllowance({ ratio: v.trim() === '' ? '' : (Number(v) / 100).toString() })} className="w-32" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold">Other direct expenses (including travel)</h4>
+                      <button type="button" className="btn btn-secondary" onClick={addOtherExpense}>+ Add expense</button>
+                    </div>
+                    <p className="mt-1 text-xs text-ink-soft">A configured business default travel amount, if any, appears here as its own line on a brand-new draft — editing or removing it here never re-applies it automatically on save.</p>
+                    <div className="mt-2 space-y-2">
+                      {draftEdit.otherExpenses.map((l) => (
+                        <div key={l.id} className="grid grid-cols-1 items-end gap-2 rounded-btn border border-line p-2 sm:grid-cols-[1fr_auto_auto]">
+                          <TextField label="Description" value={l.description} onChange={(v) => patchOtherExpense(l.id, { description: v })} />
+                          <NumField label="Amount ($)" value={l.amount} onChange={(v) => patchOtherExpense(l.id, { amount: v })} className="w-28" />
+                          <button type="button" className="text-link text-xs text-bad" onClick={() => removeOtherExpense(l.id)}>Remove</button>
+                        </div>
+                      ))}
+                      {draftEdit.otherExpenses.length === 0 && <p className="text-sm text-ink-soft">No other direct expenses added.</p>}
+                    </div>
                   </div>
                 </div>
 

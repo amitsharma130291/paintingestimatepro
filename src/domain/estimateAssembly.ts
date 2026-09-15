@@ -173,19 +173,54 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   const { valid, result } = aggregateProjectSurfaces(resolvedEnabled, variantPricing);
   if (!valid || !result) return invalidResult(['Surface aggregation failed unexpectedly.']);
 
-  const otherMaterials = otherMaterialCost(revision.otherMaterialLines.map((l) => ({ quantity: new PEP(l.quantity), unitCost: new PEP(l.unitCost) })));
+  // A blank/malformed line here is a genuine, reachable UI state — a newly
+  // added other-material/additional-labor/expense line starts empty before
+  // the customer finishes typing every field, and `new PEP('')`/`new
+  // PEP('abc')` THROWS rather than returning a structured result. Every
+  // raw string from these project-costing lines is validated the same way
+  // every other user-entered field in this assembly already is: missing
+  // blocks as incomplete, malformed blocks as invalid, before it ever
+  // reaches a Decimal constructor.
+  const otherMaterialQuantities: Dec[] = [];
+  const otherMaterialUnitCosts: Dec[] = [];
+  for (const l of revision.otherMaterialLines) {
+    const q = parseDecimalField(l.quantity);
+    const uc = parseDecimalField(l.unitCost);
+    if (q.kind === 'missing' || uc.kind === 'missing') return incompleteResult([`Other material "${l.description || l.id}" is missing a quantity or unit cost.`]);
+    if (q.kind === 'invalid' || uc.kind === 'invalid') return invalidResult([`Other material "${l.description || l.id}" has an invalid quantity or unit cost.`]);
+    otherMaterialQuantities.push(q.value);
+    otherMaterialUnitCosts.push(uc.value);
+  }
+  const otherMaterials = otherMaterialCost(otherMaterialQuantities.map((quantity, i) => ({ quantity, unitCost: otherMaterialUnitCosts[i] })));
+
+  const allowanceAmountField = parseDecimalField(revision.suppliesAllowance.amount);
+  const allowanceRatioField = parseDecimalField(revision.suppliesAllowance.ratio);
+  if (allowanceAmountField.kind === 'missing' || allowanceRatioField.kind === 'missing') return incompleteResult(['Supplies allowance amount/ratio is missing.']);
+  if (allowanceAmountField.kind === 'invalid' || allowanceRatioField.kind === 'invalid') return invalidResult(['Supplies allowance amount/ratio is invalid.']);
   const allowance = suppliesAllowance(
-    {
-      mode: revision.suppliesAllowance.mode,
-      flatAmount: new PEP(revision.suppliesAllowance.amount),
-      paintPercentRatio: new PEP(revision.suppliesAllowance.ratio),
-    },
+    { mode: revision.suppliesAllowance.mode, flatAmount: allowanceAmountField.value, paintPercentRatio: allowanceRatioField.value },
     result.materialsCost
   );
   const materials = materialsTotal(result.materialsCost, otherMaterials, allowance);
-  const additionalLaborCost = revision.additionalLabor.reduce((sum, l) => sum.plus(new PEP(l.hours).times(new PEP(l.loadedHourlyRate))), new PEP(0));
+
+  let additionalLaborCost = new PEP(0);
+  for (const l of revision.additionalLabor) {
+    const hoursField = parseDecimalField(l.hours);
+    const rateField = parseDecimalField(l.loadedHourlyRate);
+    if (hoursField.kind === 'missing' || rateField.kind === 'missing') return incompleteResult([`Additional labor "${l.description || l.id}" is missing hours or a loaded rate.`]);
+    if (hoursField.kind === 'invalid' || rateField.kind === 'invalid') return invalidResult([`Additional labor "${l.description || l.id}" has invalid hours or rate.`]);
+    additionalLaborCost = additionalLaborCost.plus(hoursField.value.times(rateField.value));
+  }
   const laborCost = result.laborCost.plus(additionalLaborCost);
-  const otherExpenses = otherExpensesTotal(revision.otherExpenses.map((l) => ({ amount: new PEP(l.amount) })));
+
+  const otherExpenseAmounts: Dec[] = [];
+  for (const l of revision.otherExpenses) {
+    const amountField = parseDecimalField(l.amount);
+    if (amountField.kind === 'missing') return incompleteResult([`Expense "${l.description || l.id}" is missing an amount.`]);
+    if (amountField.kind === 'invalid') return invalidResult([`Expense "${l.description || l.id}" has an invalid amount.`]);
+    otherExpenseAmounts.push(amountField.value);
+  }
+  const otherExpenses = otherExpensesTotal(otherExpenseAmounts.map((amount) => ({ amount })));
   const dc = directCost(materials, laborCost, otherExpenses);
   const overheadRatioField = parseDecimalField(settings.overheadRatio);
   if (overheadRatioField.kind !== 'valid') return invalidResult(['Overhead ratio is invalid.']);
