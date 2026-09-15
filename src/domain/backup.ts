@@ -2,6 +2,7 @@ import type { BackupEnvelope, Project, BusinessSettings, PaintVariant, OtherMate
 import { SCHEMA_VERSION, ENGINE_VERSION } from './entities';
 import type { IdSource } from './ids';
 import { parseDecimalField, isPositiveDivisor } from '../engine/parse';
+import { readFrozenCalculatedOutputs } from './calculationSnapshot';
 
 const REVISION_STATES = new Set(['draft', 'issued', 'superseded']);
 const PRICE_MODES = new Set(['suggested', 'custom']);
@@ -612,6 +613,21 @@ export function validateBackupEnvelope(raw: unknown, rawByteLength: number): { o
           issues.push({ path: `${revPath}.customerDocumentSnapshot`, message: 'An issued revision must have a frozen customer document snapshot.' });
         } else if (rev.customerDocumentSnapshot !== null && rev.customerDocumentSnapshot !== undefined) {
           validateCustomerDocumentSnapshot(`${revPath}.customerDocumentSnapshot`, rev.customerDocumentSnapshot, issues);
+        }
+
+        // V5-06 (related path): the import validator never checked
+        // rawCalculatedOutputs at all -- a malformed or NaN/Infinity-laden
+        // frozen-outputs structure would be committed on import and only
+        // caught (if at all) whenever something later happened to call
+        // readFrozenCalculatedOutputs on it. `null`/absent is the normal
+        // state for a draft AND for an issued revision predating R13's
+        // freeze mechanism (readFrozenCalculatedOutputs's own "missing"
+        // compatibility path already handles that at read time) -- so this
+        // only rejects a PRESENT-but-corrupted value, never requires one.
+        if (rev.rawCalculatedOutputs !== null && rev.rawCalculatedOutputs !== undefined) {
+          if (readFrozenCalculatedOutputs(rev.rawCalculatedOutputs).status !== 'frozen') {
+            issues.push({ path: `${revPath}.rawCalculatedOutputs`, message: 'Frozen calculated outputs are malformed, use an unsupported schema version, or contain a non-finite/negative-where-disallowed value.' });
+          }
         }
 
         // Surfaces are validated before rooms so rooms can cross-reference

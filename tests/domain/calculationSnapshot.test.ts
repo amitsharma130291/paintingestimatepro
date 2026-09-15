@@ -67,4 +67,47 @@ describe('freezeCalculatedOutputs / readFrozenCalculatedOutputs', () => {
     expect(readFrozenCalculatedOutputs('garbage')).toEqual({ status: 'missing' });
     expect(readFrozenCalculatedOutputs(42)).toEqual({ status: 'missing' });
   });
+
+  describe('V5-06: NaN/Infinity are rejected, never accepted as a trusted historical cost', () => {
+    function validRecord(overrides: Record<string, unknown> = {}) {
+      return {
+        schemaVersion: 1, engineVersion: '2.1.0', jobCost: '345', materials: '100', laborCost: '200',
+        directCost: '300', overhead: '45', effectivePrice: '400', profit: '55', marginRatio: '0.1375',
+        ...overrides,
+      };
+    }
+
+    it('rejects jobCost:"NaN" even though `new PEP("NaN")` does not throw', () => {
+      expect(readFrozenCalculatedOutputs(validRecord({ jobCost: 'NaN' })).status).toBe('missing');
+    });
+
+    it('rejects "Infinity" and "-Infinity" for any cost field', () => {
+      expect(readFrozenCalculatedOutputs(validRecord({ jobCost: 'Infinity' })).status).toBe('missing');
+      expect(readFrozenCalculatedOutputs(validRecord({ directCost: '-Infinity' })).status).toBe('missing');
+    });
+
+    it('rejects a negative cost field (materials, laborCost, directCost, overhead, effectivePrice, jobCost)', () => {
+      for (const field of ['jobCost', 'materials', 'laborCost', 'directCost', 'overhead', 'effectivePrice']) {
+        expect(readFrozenCalculatedOutputs(validRecord({ [field]: '-1' })).status).toBe('missing');
+      }
+    });
+
+    it('accepts a negative profit and a negative marginRatio — a real loss is valid, not corruption', () => {
+      const result = readFrozenCalculatedOutputs(validRecord({ profit: '-55', marginRatio: '-0.1375' }));
+      expect(result.status).toBe('frozen');
+    });
+
+    it('rejects NaN/Infinity even in profit/marginRatio, which otherwise allow negative values', () => {
+      expect(readFrozenCalculatedOutputs(validRecord({ profit: 'NaN' })).status).toBe('missing');
+      expect(readFrozenCalculatedOutputs(validRecord({ marginRatio: 'Infinity' })).status).toBe('missing');
+    });
+
+    it('rejects a non-string numeric field (a raw JS number, never a canonical decimal string)', () => {
+      expect(readFrozenCalculatedOutputs(validRecord({ jobCost: 345 })).status).toBe('missing');
+    });
+
+    it('still accepts a genuinely well-formed record with an explicit zero jobCost', () => {
+      expect(readFrozenCalculatedOutputs(validRecord({ jobCost: '0' })).status).toBe('frozen');
+    });
+  });
 });

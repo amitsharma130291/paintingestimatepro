@@ -114,6 +114,36 @@ describe('BACK-015: an actual-review baseline pointing at a missing revision is 
   });
 });
 
+describe('V5-06 (related path): import validation of rawCalculatedOutputs, previously never checked at all', () => {
+  it('rejects an imported revision whose rawCalculatedOutputs contains a NaN jobCost', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const issuedRevision = { ...project.revisions[0], state: 'issued' as const, customerDocumentSnapshot: makeIssuedDocument(), rawCalculatedOutputs: { schemaVersion: 1, engineVersion: '2.1.0', jobCost: 'NaN', materials: '0', laborCost: '0', directCost: '0', overhead: '0', effectivePrice: '0', profit: '0', marginRatio: '0' } };
+    const withBadOutputs: Project = { ...project, revisions: [issuedRevision] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withBadOutputs], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
+
+  it('accepts a null rawCalculatedOutputs (a draft, or an issued revision predating the freeze mechanism)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const issuedRevision = { ...project.revisions[0], state: 'issued' as const, customerDocumentSnapshot: makeIssuedDocument(), rawCalculatedOutputs: null };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [{ ...project, revisions: [issuedRevision] }], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(true);
+  });
+
+  it('accepts a well-formed rawCalculatedOutputs, including a negative profit/margin (a real loss)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const issuedRevision = { ...project.revisions[0], state: 'issued' as const, customerDocumentSnapshot: makeIssuedDocument(), rawCalculatedOutputs: { schemaVersion: 1, engineVersion: '2.1.0', jobCost: '500', materials: '200', laborCost: '250', directCost: '450', overhead: '50', effectivePrice: '400', profit: '-100', marginRatio: '-0.25' } };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [{ ...project, revisions: [issuedRevision] }], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(true);
+  });
+});
+
 describe('BACK-020: unknown enums, negative costs, and non-decimal scalars in imported financial data are rejected, never silently coerced', () => {
   it('rejects a paint variant with a negative price', () => {
     const ids = sequentialIdSource();

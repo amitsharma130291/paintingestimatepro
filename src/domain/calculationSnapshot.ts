@@ -59,26 +59,47 @@ export type ReadFrozenOutputsResult =
  * record). A version this build doesn't recognize is ALSO reported as
  * missing rather than guessed at.
  */
+// V5-06: `new PEP('NaN')` / `new PEP('Infinity')` do NOT throw — decimal.js
+// happily constructs a non-finite Decimal from that text, so the old
+// try/catch-only guard let a corrupted or maliciously-imported "NaN"/
+// "Infinity" string sail through as a trusted historical cost. A cost/
+// price/labor/materials/overhead/effective-price field must be a finite,
+// non-negative decimal; profit and marginRatio may legitimately be
+// negative (a real loss) but must still be finite.
+function parseFrozenScalar(raw: unknown, opts: { allowNegative: boolean }): { ok: true; value: Dec | null } | { ok: false } {
+  if (raw === null) return { ok: true, value: null };
+  if (typeof raw !== 'string') return { ok: false };
+  let value: Dec;
+  try {
+    value = new PEP(raw);
+  } catch {
+    return { ok: false };
+  }
+  if (!value.isFinite()) return { ok: false };
+  if (!opts.allowNegative && value.isNegative()) return { ok: false };
+  return { ok: true, value };
+}
+
 export function readFrozenCalculatedOutputs(raw: unknown): ReadFrozenOutputsResult {
   if (raw === null || raw === undefined || typeof raw !== 'object') return { status: 'missing' };
   const obj = raw as Partial<FrozenCalculatedOutputs>;
   if (obj.schemaVersion !== SNAPSHOT_SCHEMA_VERSION) return { status: 'missing' };
   if (typeof obj.engineVersion !== 'string') return { status: 'missing' };
-  let jobCost: Dec | null = null;
-  if (typeof obj.jobCost === 'string') {
-    try {
-      jobCost = new PEP(obj.jobCost);
-    } catch {
-      return { status: 'missing' };
-    }
+
+  const jobCost = parseFrozenScalar(obj.jobCost, { allowNegative: false });
+  const materials = parseFrozenScalar(obj.materials, { allowNegative: false });
+  const laborCost = parseFrozenScalar(obj.laborCost, { allowNegative: false });
+  const directCost = parseFrozenScalar(obj.directCost, { allowNegative: false });
+  const overhead = parseFrozenScalar(obj.overhead, { allowNegative: false });
+  const effectivePrice = parseFrozenScalar(obj.effectivePrice, { allowNegative: false });
+  const profit = parseFrozenScalar(obj.profit, { allowNegative: true }); // a real loss is a valid negative profit
+  const marginRatio = parseFrozenScalar(obj.marginRatio, { allowNegative: true }); // a real loss is a valid negative margin
+  // Every field must parse cleanly — a corrupted materials/laborCost/profit
+  // string is just as untrustworthy as a corrupted jobCost, even though
+  // only jobCost/overhead are returned to today's callers.
+  if (!jobCost.ok || !materials.ok || !laborCost.ok || !directCost.ok || !overhead.ok || !effectivePrice.ok || !profit.ok || !marginRatio.ok) {
+    return { status: 'missing' };
   }
-  let overhead: Dec | null = null;
-  if (typeof obj.overhead === 'string') {
-    try {
-      overhead = new PEP(obj.overhead);
-    } catch {
-      return { status: 'missing' };
-    }
-  }
-  return { status: 'frozen', jobCost, overhead, engineVersion: obj.engineVersion };
+
+  return { status: 'frozen', jobCost: jobCost.value, overhead: overhead.value, engineVersion: obj.engineVersion };
 }
