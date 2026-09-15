@@ -4,6 +4,8 @@ import { describe, it, expect } from 'vitest';
 import { sequentialIdSource } from '../../src/domain/ids';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision, issueRevision, createDraftFromIssued, supersede, duplicateProject, upsertRevision, upsertActualReview } from '../../src/domain/project';
+import { applyRateRefresh } from '../../src/domain/rateRefresh';
+import { validateBackupEnvelope, exportBackup } from '../../src/domain/backup';
 import type { ActualReview } from '../../src/domain/entities';
 import { buildCustomerDocument, assertOnlyAllowedFields } from '../../src/domain/customerDocument';
 import type { BusinessSettings, PaintVariant, Project, EstimateRevision } from '../../src/domain/entities';
@@ -115,6 +117,58 @@ describe('LIFE-D02: issuing freezes a revision; editing after issue creates a NE
     const supersededOriginal = supersede(issued, ids);
     expect(supersededOriginal.state).toBe('superseded'); // only now, explicitly
     expect(reissued.state).toBe('issued');
+  });
+
+  // v7.2 correction: a real UI backup-export/restore workflow surfaced
+  // this -- editing an issued revision that had itself been rate-refreshed
+  // before being issued produced a new draft whose preRefreshCheckpoint
+  // still pointed at the OLD (pre-edit) revision's id, since
+  // createDraftFromIssued spread every field from `issued` (including
+  // preRefreshCheckpoint) and only overwrote `id`. validateBackupEnvelope
+  // correctly rejects this ("preRefreshCheckpoint.id must match its own
+  // revision's id"), meaning a real user's own export/import round-trip
+  // failed for entirely ordinary data (refresh an estimate, issue it,
+  // edit it again -- not a hand-crafted edge case).
+  it('creating a new draft from an issued revision that itself had a preRefreshCheckpoint starts with NO checkpoint of its own (a fresh draft has no undo-refresh history yet)', () => {
+    const ids = sequentialIdSource();
+    const snapshot = createSnapshot(makeSettings('32'), [makeVariant('42')], [], ids, 'rev-1');
+    let draft = createDraftRevision('project-1', snapshot, ids);
+    draft = { ...draft, title: 'Job', proposedPrice: '100', calculationState: 'complete' };
+
+    // Refresh the draft before issuing it -- this is what actually
+    // populates preRefreshCheckpoint (a full clone of the draft, sharing
+    // its id) on the revision that later gets issued.
+    const liveSnapshot = createSnapshot(makeSettings('40'), [makeVariant('42')], [], ids, 'rev-2');
+    const refreshedDraft = applyRateRefresh(draft, liveSnapshot, [], ids);
+    expect(refreshedDraft.preRefreshCheckpoint).not.toBeNull();
+    expect(refreshedDraft.preRefreshCheckpoint!.id).toBe(refreshedDraft.id); // self-consistent at refresh time
+
+    const issued = issueRevision(refreshedDraft, (r) => buildCustomerDocument(r, { estimateNumber: 'E-1', estimateDate: '2026-01-02', projectAddress: '', revisionLabel: 'Rev 1' }), ids);
+    expect(issued.preRefreshCheckpoint!.id).toBe(issued.id); // still self-consistent once issued
+
+    // Now "Edit" the issued revision -- a brand-new draft, with its own new id.
+    const newDraft = createDraftFromIssued(issued, ids);
+    expect(newDraft.id).not.toBe(issued.id);
+
+    // The bug: newDraft.preRefreshCheckpoint, if carried over unchanged,
+    // still has .id === issued.id (the OLD revision), which no longer
+    // matches newDraft.id -- exactly the inconsistency
+    // validateBackupEnvelope rejects.
+    if (newDraft.preRefreshCheckpoint) {
+      expect(newDraft.preRefreshCheckpoint.id).toBe(newDraft.id);
+    }
+
+    // The real, end-to-end requirement: a project containing this exact
+    // sequence of operations must produce a backup that validates and
+    // round-trips, since this is entirely ordinary usage.
+    const project: Project = {
+      id: 'project-1', title: 'Job', revisions: [supersede(issued, ids), newDraft], activeRevisionId: newDraft.id,
+      actualReviews: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: ids.now(), version: 1,
+    };
+    const envelope = exportBackup('install-1', makeSettings('40'), [makeVariant('42')], [], [], [project], ids);
+    const json = JSON.stringify(envelope);
+    const validation = validateBackupEnvelope(envelope, json.length);
+    expect(validation.ok, JSON.stringify(!validation.ok && validation.issues)).toBe(true);
   });
 });
 

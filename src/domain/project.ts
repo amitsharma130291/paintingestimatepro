@@ -115,6 +115,16 @@ export function createDraftFromIssued(issued: EstimateRevision, ids: IdSource): 
     customerDocumentSnapshot: null,
     createdAt: now,
     updatedAt: now,
+    // v7.2: `issued` may itself carry a preRefreshCheckpoint from before
+    // IT was issued (a self-clone sharing `issued`'s own id). Carrying
+    // that over unchanged would leave this brand-new draft's checkpoint
+    // pointing at a DIFFERENT revision's id (the one just superseded),
+    // which validateBackupEnvelope correctly rejects as inconsistent. A
+    // fresh draft has no undo-refresh history of its own yet -- "Undo
+    // refresh" only becomes available once THIS draft performs its own
+    // refresh (see rateRefresh.ts's applyRateRefresh, which always sets
+    // its own self-consistent checkpoint).
+    preRefreshCheckpoint: null,
   };
 }
 

@@ -152,7 +152,7 @@ describe('V5-11: a repeating-decimal baseline overhead (an ordinary, non-round p
 
   it('the baseline overhead field is non-empty, and Save actuals is enabled once confirmed', async () => {
     const frozenOverhead = await issueAKitchenEstimateAndOpenActuals();
-    expect(frozenOverhead.split('.')[1]?.length ?? 0).toBeGreaterThan(10); // confirms this scenario genuinely exercises the >10-digit case
+    expect(frozenOverhead.split('.')[1]?.length ?? 0).toBeGreaterThan(10); // confirms this scenario genuinely exercises the >10-digit case (the FROZEN estimate output, an internal record -- see below for what actually gets displayed/persisted for actuals)
     fireEvent.click(screen.getByRole('checkbox', { name: 'overhead' }));
     expect(screen.getByRole('button', { name: 'Save actuals' })).toHaveProperty('disabled', false);
   });
@@ -166,5 +166,46 @@ describe('V5-11: a repeating-decimal baseline overhead (an ordinary, non-round p
     expect(saved.overhead.mode).toBe('baselineAllocation');
     expect(saved.overhead.confirmed).toBe(true);
     expect(saved.state).toBe('inProgress'); // only overhead confirmed so far
+  });
+
+  // v7.2 correction: a real backup export/import failure surfaced this --
+  // the >10-fractional-digit baseline value above was previously displayed
+  // AND persisted at its full internal precision (a plain
+  // Dec.toString(), never rounded to money precision like every other
+  // dollar figure in this app). validateBackupEnvelope's own "more than 10
+  // digits after the decimal point" rule then rejected a REAL user's own
+  // exported backup on re-import -- an export/import round-trip failure
+  // for entirely ordinary data (an everyday, non-round production rate),
+  // not a hand-crafted edge case.
+  it('the baseline overhead is shown and persisted rounded to money precision (2 decimals), not at raw internal precision', async () => {
+    await issueAKitchenEstimateAndOpenActuals();
+    const overheadAmountField = screen.getByLabelText(/overhead amount/i) as HTMLInputElement;
+    const shown = overheadAmountField.value;
+    expect(shown.split('.')[1]?.length ?? 0).toBeLessThanOrEqual(2);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'overhead' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save actuals' }));
+    await waitFor(async () => expect((await readProjects())[0].actualReviews).toHaveLength(1));
+    const saved = (await readProjects())[0].actualReviews[0];
+    expect(saved.overhead.amount!.split('.')[1]?.length ?? 0).toBeLessThanOrEqual(2);
+    expect(saved.overhead.amount).toBe(shown);
+
+    // The actual production requirement this exists for: the persisted
+    // value must satisfy the backup format's own validator, so a real
+    // user's own export always re-imports successfully.
+    const { validateBackupEnvelope, exportBackup } = await import('../../src/domain/backup');
+    const { sequentialIdSource } = await import('../../src/domain/ids');
+    const db = await openAppDb();
+    try {
+      const settings = (await db.getAll(STORES.businessSettings))[0];
+      const variants = await db.getAll(STORES.paintVariants);
+      const projects = await db.getAll(STORES.projects);
+      const envelope = exportBackup('test-install', settings, variants, [], [], projects, sequentialIdSource());
+      const json = JSON.stringify(envelope);
+      const validation = validateBackupEnvelope(envelope, json.length);
+      expect(validation.ok, JSON.stringify(!validation.ok && validation.issues)).toBe(true);
+    } finally {
+      db.close();
+    }
   });
 });

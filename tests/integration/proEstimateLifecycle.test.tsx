@@ -99,18 +99,30 @@ describe('Complete Pro estimate lifecycle (one continuous session)', () => {
       expect(rev2.rooms.map((r) => r.name)).toEqual(['Kitchen', 'Bedroom']);
     });
 
-    // 6. Preview and confirm a rate refresh on the new draft.
+    // 6. Preview and confirm a rate refresh on the new draft. Confirming
+    // only updates in-memory state (the UI's own message says "review...
+    // then save") -- an explicit Save is required before the DB reflects
+    // it, exactly like a real user would do. (v7.2: this previously
+    // checked the DB immediately after Confirm, with no intervening save
+    // -- a vacuous pass, since `undefined` also satisfies `.not.toBeNull()`;
+    // no save had actually happened yet either way. Fixed to genuinely
+    // exercise persistence, and to require the checkpoint to be
+    // self-consistent with rev2's own id per the v7.2 createDraftFromIssued fix.)
     fireEvent.click(screen.getByRole('button', { name: 'Check for rate updates' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm refresh' })).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Confirm refresh' }));
+    expect(screen.getByText(/Rates were refreshed on this draft/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(async () => {
       const rev2 = (await readProjects())[0].revisions.find((r) => r.revisionNumber === 2)!;
       expect(rev2.preRefreshCheckpoint).not.toBeNull();
+      expect(rev2.preRefreshCheckpoint!.id).toBe(rev2.id); // self-consistent, not a stale reference to a different revision
     });
-    expect(screen.getByText(/Rates were refreshed on this draft/)).toBeTruthy();
 
-    // 7. Undo the refresh -- the checkpoint is consumed, restoring the pre-refresh snapshot.
+    // 7. Undo the refresh -- the checkpoint is consumed, restoring the
+    // pre-refresh snapshot -- then save so the DB reflects it.
     fireEvent.click(screen.getByRole('button', { name: 'Undo refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(async () => {
       const rev2 = (await readProjects())[0].revisions.find((r) => r.revisionNumber === 2)!;
       expect(rev2.preRefreshCheckpoint).toBeFalsy(); // undo restores the pre-refresh snapshot, which itself carried no checkpoint

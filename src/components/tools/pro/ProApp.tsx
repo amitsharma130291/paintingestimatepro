@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { PEP, type Dec } from '../../../engine/decimal';
+import { PEP, halfUp, type Dec } from '../../../engine/decimal';
 import { evaluateActualReview, type ActualCategory } from '../../../engine/actuals';
 import { parseDecimalField, MAX_AGGREGATE_MONETARY, MAX_AGGREGATE_HOURS, MAX_RATE } from '../../../engine/parse';
 import { assembleServiceHealth, type ServiceHealthAssemblyResult } from '../../../domain/serviceHealthAssembly';
@@ -698,12 +698,24 @@ export default function ProApp() {
   // 10-fractional-digit TEXT-ENTRY grammar in parseDecimalField. That
   // limit exists to catch a human mistyping a number, not to second-guess
   // the app's own arithmetic.
+  // v7.2: a repeating-decimal production rate (an entirely ordinary,
+  // non-round throughput -- see V5-11's tests) makes the raw internal
+  // overhead a Dec with 40+ fractional digits. That raw value used to be
+  // both displayed AND persisted as-is (a plain .toString(), never
+  // rounded like every other dollar figure in this app) -- which a real
+  // user's own backup export/re-import then failed, since
+  // validateBackupEnvelope rejects more than 10 fractional digits.
+  // Rounded to money precision (2 decimals, same as every other actual-
+  // cost category, which are all user-typed and already capped at 2
+  // fractional digits) so this baseline is confirmable, displayable, and
+  // round-trips through export/import exactly like the other three
+  // categories.
   function baselineOverheadValue(): Dec | null {
     if (!issuedRevision) return null;
     const frozen = readFrozenCalculatedOutputs(issuedRevision.rawCalculatedOutputs);
-    if (frozen.status === 'frozen' && frozen.overhead !== null) return frozen.overhead;
+    if (frozen.status === 'frozen' && frozen.overhead !== null) return halfUp(frozen.overhead, 2);
     const issuedSummary = assembleProjectEstimate(issuedRevision, { priceMode: issuedRevision.priceMode, customPriceRaw: issuedRevision.proposedPrice ?? '' });
-    return issuedSummary.calculationState === 'complete' ? issuedSummary.overhead : null;
+    return issuedSummary.calculationState === 'complete' ? halfUp(issuedSummary.overhead!, 2) : null;
   }
   function baselineOverheadString(): string | null {
     return baselineOverheadValue()?.toString() ?? null;
