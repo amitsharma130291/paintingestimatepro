@@ -121,4 +121,34 @@ describe('ACT: actual-cost review', () => {
     expect(explicitZero.state).toBe('final'); // an explicit confirmed zero DOES finalize
     expect(explicitZero.actualCost!.toNumber()).toBe(2050);
   });
+
+  it('ACT-001: zero categories confirmed (a freshly opened review) is in_progress with confirmedCategories=0 and every final figure null', () => {
+    const r = evaluateActualReview({
+      materials: { confirmed: false, amount: null },
+      labor: { confirmed: false, amount: null },
+      otherExpenses: { confirmed: false, amount: null },
+      overhead: { confirmed: false, amount: null },
+      ...baseline,
+    });
+    expect(r.state).toBe('in_progress');
+    expect(r.confirmedCategories).toBe(0);
+    expect(r.recordedCostSoFar.isZero()).toBe(true);
+    expect(r.actualCost).toBeNull();
+    expect(r.profitAgainstOriginalQuote).toBeNull();
+    expect(r.marginRatio).toBeNull();
+    expect(r.totalVariance).toBeNull();
+  });
+
+  it('ACT-004: all four amounts supplied but one left unconfirmed still blocks finalization -- confirmed is what counts, not the presence of an amount', () => {
+    const r = evaluateActualReview({
+      materials: { confirmed: true, amount: d('700') },
+      labor: { confirmed: true, amount: d('1200') },
+      otherExpenses: { confirmed: true, amount: d('150') },
+      overhead: { confirmed: false, amount: d('135') }, // an amount IS present, but confirmed=false
+      ...baseline,
+    });
+    expect(r.state).toBe('in_progress'); // never finalizes just because every field happens to be filled
+    expect(r.confirmedCategories).toBe(3); // the unconfirmed category, despite having an amount, does not count
+    expect(r.actualCost).toBeNull();
+  });
 });
