@@ -49,8 +49,13 @@ async function seed(extra: { projects?: Project[] } = {}) {
   await writeAll(db, [
     { store: STORES.businessSettings, records: [settings()] },
     { store: STORES.paintVariants, records: [variant()] },
-    { store: STORES.projects, records: extra.projects ?? [] },
   ]);
+  // Projects go through the real version-checked write, not a raw
+  // writeAll — a raw put's hardcoded `version: 1` is disconnected from
+  // the actual global version counter (independent-review R04's fix) and
+  // can coincidentally collide with it, masking a real concurrent-edit
+  // conflict in tests that simulate "another tab" writing afterward.
+  for (const p of extra.projects ?? []) await writeProjectWithVersionCheck(db, p, null);
   db.close();
 }
 

@@ -63,10 +63,14 @@ export async function saveImportedBackup(data: {
   }
 }
 
-/** Commits a confirmed "replace all" import — every store wiped and
- * replaced with the imported file's own content atomically (item 7). No
- * per-project version check: the explicit confirmation + required
- * pre-import backup are this mode's safety net, per DATA_CONTRACT.md. */
+/** Commits a confirmed "replace all" import — every store (including the
+ * business-settings singleton) wiped and replaced with the imported
+ * file's own content atomically (item 7). No per-project version CHECK
+ * (the explicit confirmation + required pre-import backup are this
+ * mode's safety net, per DATA_CONTRACT.md), but every imported project's
+ * version is still re-stamped from the shared global counter and
+ * returned here so the caller can update its own in-memory baseline
+ * (independent-review R04). */
 export async function saveReplaceAllBackup(data: {
   businessSettings: BusinessSettings;
   paintVariants: PaintVariant[];
@@ -74,10 +78,10 @@ export async function saveReplaceAllBackup(data: {
   serviceDefinitions: ServiceDefinition[];
   projects: Project[];
   provenance: ImportProvenanceRecord[];
-}): Promise<void> {
+}): Promise<{ committedProjectVersions: Map<string, number> }> {
   const db = await openAppDb();
   try {
-    await writeReplaceAllBackup(db, data);
+    return await writeReplaceAllBackup(db, data);
   } finally {
     db.close();
   }

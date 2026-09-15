@@ -607,7 +607,7 @@ export default function ProApp() {
       if (!pendingImport.backupDownloaded) return; // guarded by the disabled Confirm button too
       const { envelope } = pendingImport;
       try {
-        await saveReplaceAllBackup({
+        const { committedProjectVersions } = await saveReplaceAllBackup({
           businessSettings: envelope.businessSettings,
           paintVariants: envelope.paintVariants,
           otherMaterials: envelope.otherMaterials,
@@ -615,9 +615,22 @@ export default function ProApp() {
           projects: envelope.projects,
           provenance: envelope.importProvenance,
         });
+        // Use the ACTUALLY committed versions (independent-review R04),
+        // never the envelope's own — otherwise this same tab's very next
+        // save would use a stale baseline and incorrectly conflict
+        // against the data it just wrote itself.
         setSettings(envelope.businessSettings);
         setCatalog(envelope.paintVariants);
-        setProjects(envelope.projects);
+        setProjects(envelope.projects.map((p) => ({ ...p, version: committedProjectVersions.get(p.id) ?? p.version })));
+        // Any currently-open project editor may reference a project that
+        // no longer exists (or exists with entirely different content and
+        // a stale version baseline) after a full replace — close it
+        // rather than risk a stale editor silently overwriting restored
+        // work on its next save.
+        setActiveProjectId(null);
+        setDraftEdit(null);
+        setDraftBaselineVersion(null);
+        setConflict(null);
         setPendingImport(null);
         setImportMessage(`Everything replaced: ${envelope.projects.length} project(s) restored from the imported file.`);
       } catch {

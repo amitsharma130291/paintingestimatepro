@@ -1,4 +1,4 @@
-import { openDB, type IDBPDatabase } from 'idb';
+import { openDB, type IDBPDatabase, type IDBPTransaction } from 'idb';
 import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, ImportProvenanceRecord } from '../domain/entities';
 
 /**
@@ -12,10 +12,17 @@ import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, 
  */
 
 const DB_NAME = 'painting-estimate-pro';
-// v2 adds the importProvenance store (item 6/7) — the idempotent
-// `contains()` guards below mean an existing v1 database only gains the
-// one new store on upgrade, and a fresh install gets all of them.
-const DB_VERSION = 2;
+// v3 adds the meta store (independent-review R04) — a single global,
+// monotonically increasing version counter shared by EVERY project write
+// (normal saves, merge imports, AND replace-all), so a version number can
+// never repeat across the database's whole history. Without this, a
+// per-project counter that restarts at 1 after a replace-all creates a
+// real ABA hazard: a stale tab holding "version 1" of the OLD project can
+// coincidentally match a freshly-imported DIFFERENT project that also
+// happens to be at version 1, and its write would wrongly succeed. The
+// idempotent `contains()` guards mean an existing v1/v2 database only
+// gains the one new store on upgrade.
+const DB_VERSION = 3;
 
 export const STORES = {
   businessSettings: 'businessSettings',
@@ -24,7 +31,10 @@ export const STORES = {
   serviceDefinitions: 'serviceDefinitions',
   projects: 'projects',
   importProvenance: 'importProvenance',
+  meta: 'meta',
 } as const;
+
+const VERSION_COUNTER_KEY = 'projectVersionCounter';
 
 export async function openAppDb(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
@@ -39,8 +49,23 @@ export async function openAppDb(): Promise<IDBPDatabase> {
       // sourceProjectId) key; "already imported this export" lookups read
       // the whole (small, infrequent) store and filter in JS.
       if (!db.objectStoreNames.contains(STORES.importProvenance)) db.createObjectStore(STORES.importProvenance, { keyPath: 'copiedProjectId' });
+      if (!db.objectStoreNames.contains(STORES.meta)) db.createObjectStore(STORES.meta, { keyPath: 'id' });
     },
   });
+}
+
+/** Reads-increments-writes the single global project-version counter
+ * WITHIN the caller's own transaction (the transaction must include
+ * `STORES.meta`) and returns the freshly-reserved version number. Every
+ * project write in this module goes through this — never a per-project
+ * `(current?.version ?? 0) + 1`, which is exactly the scheme that let a
+ * post-replace-all version number collide with a pre-replace one. */
+async function nextGlobalProjectVersion(tx: IDBPTransaction<unknown, string[], 'readwrite'>): Promise<number> {
+  const metaOs = tx.objectStore(STORES.meta);
+  const current = (await metaOs.get(VERSION_COUNTER_KEY)) as { id: string; value: number } | undefined;
+  const next = (current?.value ?? 0) + 1;
+  await metaOs.put({ id: VERSION_COUNTER_KEY, value: next });
+  return next;
 }
 
 export class SaveFailedError extends Error {
@@ -103,13 +128,15 @@ export class ConflictError extends Error {
  * "the currently-stored version must equal exactly this" — if the record
  * is missing entirely (e.g. deleted by another tab) that is ALSO a
  * conflict, not treated as license to recreate it. On success the write
- * always commits the record with `version` set to `(current?.version ?? 0) + 1`,
- * ignoring whatever `project.version` the caller happened to pass in, so
- * the version sequence can never be forged or skipped from outside this
- * function. Returns the version actually committed.
+ * always commits the record with `version` drawn from the single GLOBAL
+ * counter (`nextGlobalProjectVersion` — see its own doc comment for why a
+ * per-project counter is unsafe across a replace-all), ignoring whatever
+ * `project.version` the caller happened to pass in, so the version
+ * sequence can never be forged, skipped, or coincidentally repeated from
+ * outside this function. Returns the version actually committed.
  */
 export async function writeProjectWithVersionCheck(db: IDBPDatabase, project: Project, expectedVersion: number | null): Promise<number> {
-  const tx = db.transaction(STORES.projects, 'readwrite');
+  const tx = db.transaction([STORES.projects, STORES.meta], 'readwrite');
   const settled = tx.done.catch((err) => err as unknown);
   try {
     const os = tx.objectStore(STORES.projects);
@@ -125,7 +152,7 @@ export async function writeProjectWithVersionCheck(db: IDBPDatabase, project: Pr
       throw new ConflictError(`This project was changed elsewhere (now at version ${current.version}). Reload or save as a copy instead of overwriting.`, current);
     }
 
-    const nextVersion = (current?.version ?? 0) + 1;
+    const nextVersion = await nextGlobalProjectVersion(tx);
     await os.put({ ...project, version: nextVersion });
     await tx.done;
     return nextVersion;
@@ -173,7 +200,7 @@ export async function writeImportedBackup(
     provenance?: ImportProvenanceRecord[];
   }
 ): Promise<{ committedProjectVersions: Map<string, number> }> {
-  const storeNames: string[] = [STORES.projects];
+  const storeNames: string[] = [STORES.projects, STORES.meta];
   if (writes.businessSettings) storeNames.push(STORES.businessSettings);
   if (writes.paintVariants) storeNames.push(STORES.paintVariants);
   if (writes.otherMaterials) storeNames.push(STORES.otherMaterials);
@@ -197,7 +224,7 @@ export async function writeImportedBackup(
       if (expectedVersion !== null && current && current.version !== expectedVersion) {
         throw new ConflictError(`"${project.title}" was changed elsewhere since you previewed this import (now at version ${current.version}). Refresh the import preview and try again.`, current);
       }
-      const nextVersion = (current?.version ?? 0) + 1;
+      const nextVersion = await nextGlobalProjectVersion(tx);
       await projectsOs.put({ ...project, version: nextVersion });
       committedProjectVersions.set(project.id, nextVersion);
     }
@@ -225,14 +252,26 @@ export async function writeImportedBackup(
 /**
  * "Replace all" import mode (DATA_CONTRACT.md: "explicit confirmation,
  * downloadable pre-import backup, atomic replacement after full
- * validation"). Every store is cleared and replaced with the imported
- * file's own content — including `provenance`, which should be the
- * IMPORTED file's own `importProvenance` (this installation's history is
- * being fully superseded, not merged) — in one transaction, so a failure
- * partway through never leaves a half-wiped, half-imported store. Deliberately
- * has no per-project version check: replacing everything is the whole
- * point of this mode, guarded instead by the caller's required explicit
- * confirmation and pre-import backup, not by a per-record conflict check.
+ * validation"). Every store — including `businessSettings`, a singleton
+ * that a stray `.put()` alone would leave duplicated rather than replaced
+ * (independent-review R04) — is cleared and replaced with the imported
+ * file's own content in one transaction, so a failure partway through
+ * never leaves a half-wiped, half-imported store.
+ *
+ * Every imported project's version is re-stamped from the single global
+ * counter (never the version number the backup file itself specified) —
+ * independent-review R04: a per-record version that resets after a
+ * replace creates a real ABA hazard, where a stale tab's pre-replace
+ * "version 1" token can coincidentally match a freshly-imported
+ * DIFFERENT project that also claims to be version 1, letting the stale
+ * write wrongly succeed and silently overwrite the just-restored data.
+ * Drawing from the same global sequence every other project write uses
+ * guarantees the post-replace version was never seen before, so any
+ * pre-replace token is guaranteed to miss. Returns the versions actually
+ * committed so the caller can update its own in-memory baseline —
+ * otherwise the SAME tab's very next save after a replace-all would use
+ * the stale envelope version and incorrectly conflict against its own
+ * just-written data.
  */
 export async function writeReplaceAllBackup(
   db: IDBPDatabase,
@@ -244,11 +283,12 @@ export async function writeReplaceAllBackup(
     projects: Project[];
     provenance: ImportProvenanceRecord[];
   }
-): Promise<void> {
-  const storeNames = [STORES.businessSettings, STORES.paintVariants, STORES.otherMaterials, STORES.serviceDefinitions, STORES.projects, STORES.importProvenance];
+): Promise<{ committedProjectVersions: Map<string, number> }> {
+  const storeNames = [STORES.businessSettings, STORES.paintVariants, STORES.otherMaterials, STORES.serviceDefinitions, STORES.projects, STORES.importProvenance, STORES.meta];
   const tx = db.transaction(storeNames, 'readwrite');
   const settled = tx.done.catch((err) => err as unknown);
   try {
+    await tx.objectStore(STORES.businessSettings).clear();
     await tx.objectStore(STORES.paintVariants).clear();
     await tx.objectStore(STORES.otherMaterials).clear();
     await tx.objectStore(STORES.serviceDefinitions).clear();
@@ -258,9 +298,15 @@ export async function writeReplaceAllBackup(
     for (const v of data.paintVariants) await tx.objectStore(STORES.paintVariants).put(v);
     for (const m of data.otherMaterials) await tx.objectStore(STORES.otherMaterials).put(m);
     for (const s of data.serviceDefinitions) await tx.objectStore(STORES.serviceDefinitions).put(s);
-    for (const p of data.projects) await tx.objectStore(STORES.projects).put(p);
+    const committedProjectVersions = new Map<string, number>();
+    for (const p of data.projects) {
+      const version = await nextGlobalProjectVersion(tx);
+      await tx.objectStore(STORES.projects).put({ ...p, version });
+      committedProjectVersions.set(p.id, version);
+    }
     for (const rec of data.provenance) await tx.objectStore(STORES.importProvenance).put(rec);
     await tx.done;
+    return { committedProjectVersions };
   } catch (err) {
     try {
       tx.abort();
