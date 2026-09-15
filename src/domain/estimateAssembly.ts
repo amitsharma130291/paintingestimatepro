@@ -204,7 +204,13 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
     return invalidResult(['Target margin must be a percentage from 0% up to (but not including) 100%.']);
   }
 
-  const customPriceField = opts.priceMode === 'custom' ? parseDecimalField(opts.customPriceRaw, { allowNegative: false }) : { kind: 'missing' as const };
+  // V5-07/CORE-021: CALCULATION_SPEC.md §6: "User-entered proposedPrice uses
+  // at most two decimal places; reject extra decimals until corrected."
+  // Without maxFractionDigits:2, a raw-entered "12.005" parsed as a valid
+  // ten-fraction-digit decimal and was accepted as a complete, issueable
+  // price -- display rounding could then round it to a DIFFERENT cent
+  // value than the one actually stored as the quote.
+  const customPriceField = opts.priceMode === 'custom' ? parseDecimalField(opts.customPriceRaw, { allowNegative: false, maxFractionDigits: 2 }) : { kind: 'missing' as const };
   if (opts.priceMode === 'custom' && customPriceField.kind === 'invalid') return invalidResult(['Custom price is invalid.']);
   const priceInput = opts.priceMode === 'custom' && customPriceField.kind === 'valid' ? customPriceField.value : null;
 

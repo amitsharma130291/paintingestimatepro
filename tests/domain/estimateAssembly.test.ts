@@ -209,3 +209,31 @@ describe('Per-surface override vs. snapshot default fallback (DECISIONS.md #3)',
     expect(out.aggregate!.laborHours.equals(new PEP(800).dividedBy(150))).toBe(false);
   });
 });
+
+describe('V5-07/CORE-021: a custom selling total enforces at most two fractional digits', () => {
+  function priced(customPriceRaw: string) {
+    const door: Surface = {
+      id: 'door-1', roomId: null, kind: 'door', enabled: true, measurementMode: 'manual',
+      areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: 3, widthFt: '2.5', heightFt: '6.67', paintedSides: 2,
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+    };
+    const revision = { ...baseRevision(), rooms: [], surfaces: [door] };
+    return assembleProjectEstimate(revision, { priceMode: 'custom', customPriceRaw });
+  }
+
+  it('rejects three fractional digits (12.005)', () => {
+    expect(priced('12.005').calculationState).toBe('invalid');
+  });
+
+  it('accepts exactly two fractional digits (12.01)', () => {
+    expect(priced('12.01').calculationState).toBe('complete');
+  });
+
+  it('accepts a whole-dollar amount with no decimal point', () => {
+    expect(priced('500').calculationState).toBe('complete');
+  });
+
+  it('rejects four fractional digits (500.0001)', () => {
+    expect(priced('500.0001').calculationState).toBe('invalid');
+  });
+});

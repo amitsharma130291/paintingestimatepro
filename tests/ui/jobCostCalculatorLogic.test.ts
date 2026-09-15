@@ -154,3 +154,15 @@ describe('Pricing: unpriced vs zero-price vs below-cost, forwarded from the shar
     }
   });
 });
+
+describe('V5-07/CORE-021 (related path): an entered price enforces at most two fractional digits, same rule as Pro', () => {
+  it('rejects three fractional digits (12.005)', () => {
+    const result = evaluateJobCost(baseInputs({ materialsAmount: '100', laborAmount: '0', pricingMode: 'enterPrice', enteredPrice: '12.005' }));
+    expect(result.state).toBe('invalid');
+  });
+
+  it('accepts exactly two fractional digits (12.01)', () => {
+    const result = evaluateJobCost(baseInputs({ materialsAmount: '100', laborAmount: '0', pricingMode: 'enterPrice', enteredPrice: '12.01' }));
+    expect(result.state).toBe('complete');
+  });
+});

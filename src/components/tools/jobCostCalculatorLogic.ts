@@ -148,7 +148,10 @@ export function evaluateJobCost(inputs: JobCostInputs): JobCostResult {
 
   let priceInput: Dec | null = null;
   if (inputs.pricingMode === 'enterPrice' && inputs.enteredPrice.trim() !== '') {
-    const pEntered = parseDecimalField(inputs.enteredPrice);
+    // V5-07/CORE-021 (related path): the same selling-total precision rule
+    // applies here as in the Pro estimate summary — a raw-entered price
+    // uses at most two fractional digits.
+    const pEntered = parseDecimalField(inputs.enteredPrice, { maxFractionDigits: 2 });
     if (pEntered.kind === 'invalid') return { state: 'invalid', errors: [`Price: ${pEntered.message}`] };
     if (pEntered.kind === 'valid') priceInput = pEntered.value;
   }
