@@ -20,7 +20,7 @@ import {
 import { defaultIdSource } from '../../../domain/ids';
 import { readInteriorHandoff, clearInteriorHandoff, buildProjectFromInteriorHandoff, type InteriorHandoffPayload, type HandoffFieldNote } from '../../../domain/interiorHandoff';
 import { ConflictError } from '../../../storage/db';
-import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveImportedBackup, saveReplaceAllBackup, saveServiceDefinition, deleteServiceDefinition } from './proStore';
+import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveImportedBackup, saveReplaceAllBackup, saveServiceDefinition, deleteServiceDefinition, deleteProject } from './proStore';
 
 const ids = defaultIdSource;
 const now = () => new Date().toISOString();
@@ -77,6 +77,9 @@ export default function ProApp() {
   const [serviceDefinitions, setServiceDefinitions] = useState<ServiceDefinition[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  // LIFE-014: which project (if any) is showing its inline "are you sure"
+  // delete confirmation -- an explicit second step, never a single click.
+  const [confirmDeleteProjectId, setConfirmDeleteProjectId] = useState<string | null>(null);
   const [draftEdit, setDraftEdit] = useState<EstimateRevision | null>(null);
   const [draftBaselineVersion, setDraftBaselineVersion] = useState<number | null>(null);
   const [customPriceRaw, setCustomPriceRaw] = useState('');
@@ -209,6 +212,22 @@ export default function ProApp() {
     setCustomPriceRaw('');
     setZeroPriceConfirmed(false);
     setRefreshPreview(null);
+  }
+
+  // LIFE-014: irreversible, so this is called ONLY after the inline
+  // confirmDeleteProjectId prompt has been explicitly confirmed -- never
+  // from the list row's own click handler directly. Deleting removes
+  // exactly this one project's own record (which embeds its own revisions
+  // and actualReviews) via a single-document IndexedDB delete; every
+  // other project is untouched by construction.
+  function removeProject(projectId: string) {
+    setProjects((ps) => ps.filter((p) => p.id !== projectId));
+    if (activeProjectId === projectId) {
+      setActiveProjectId(null);
+      setDraftEdit(null);
+    }
+    setConfirmDeleteProjectId(null);
+    deleteProject(projectId).catch(() => setSaveMessage('Removed locally, but deleting from storage failed.'));
   }
 
   function openProject(projectId: string) {
@@ -1039,14 +1058,42 @@ export default function ProApp() {
             <div className="mt-4 space-y-2">
               {projects.map((p) => {
                 const rev = p.revisions.find((r) => r.id === p.activeRevisionId) ?? p.revisions[p.revisions.length - 1];
+                const hasHistory = p.revisions.length > 1 || p.actualReviews.length > 0;
                 return (
-                  <button key={p.id} type="button" onClick={() => openProject(p.id)} className="block w-full rounded-btn border border-line p-3 text-left hover:border-primary">
-                    <span className="font-semibold">{p.title}</span>
-                    <span className="ml-2 text-xs text-ink-soft">{rev.state} · rev {rev.revisionNumber}</span>
-                  </button>
+                  <div key={p.id} className="rounded-btn border border-line p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <button type="button" onClick={() => openProject(p.id)} className="block flex-1 text-left hover:text-primary">
+                        <span className="font-semibold">{p.title}</span>
+                        <span className="ml-2 text-xs text-ink-soft">{rev.state} · rev {rev.revisionNumber}</span>
+                      </button>
+                      <button type="button" className="text-link text-xs text-bad" onClick={() => setConfirmDeleteProjectId(p.id)}>Delete</button>
+                    </div>
+                    {/* LIFE-014: a clear, explicit second step before an
+                        irreversible delete -- never a single click, and a
+                        stronger warning when the project already has
+                        revision or actual-cost history to lose. */}
+                    {confirmDeleteProjectId === p.id && (
+                      <div className="mt-2 rounded-btn border border-bad-line bg-bad-soft p-3 text-sm">
+                        <p>
+                          Permanently delete "{p.title}"{hasHistory ? ', including all of its revisions and actual-cost history' : ''}? This cannot be undone.
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                          <button type="button" className="btn btn-secondary" onClick={() => setConfirmDeleteProjectId(null)}>Cancel</button>
+                          <button type="button" className="btn btn-primary" onClick={() => removeProject(p.id)}>Yes, delete permanently</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
-              {projects.length === 0 && <p className="text-sm text-ink-soft">No projects yet.</p>}
+              {projects.length === 0 && (
+                <div className="text-sm text-ink-soft">
+                  <p>No projects yet.</p>
+                  {/* UX-011: this app's data lives only in this browser's
+                      local storage -- clearing site data loses it. */}
+                  <p className="mt-1">Your projects are stored only in this browser. Clearing your browser's site data will permanently erase them — use "Export backup (.json)" under the Backup tab regularly, and keep the file somewhere safe, so you can restore everything if that ever happens.</p>
+                </div>
+              )}
             </div>
           </div>
         )}

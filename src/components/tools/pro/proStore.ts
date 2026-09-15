@@ -63,6 +63,23 @@ export async function deleteServiceDefinition(id: string): Promise<void> {
   }
 }
 
+/** LIFE-014: a Project record embeds its own revisions and actualReviews
+ * (entities.ts) rather than spreading them across separate stores, so a
+ * single `deleteOne` on the projects store is already an atomic,
+ * project-scoped deletion -- it can never partially remove a project's
+ * own history, and it can never touch any OTHER project's records. The
+ * "clear destructive confirmation" half of the hardening gate lives in
+ * the caller (ProApp.tsx), which must not call this without first getting
+ * an explicit, unambiguous confirm from the user. */
+export async function deleteProject(id: string): Promise<void> {
+  const db = await openAppDb();
+  try {
+    await deleteOne(db, STORES.projects, id);
+  } finally {
+    db.close();
+  }
+}
+
 /** Commits a confirmed restore-merge or import-as-copies backup import —
  * every touched record type atomically in one transaction, with each
  * project's write version-checked against its current stored state
