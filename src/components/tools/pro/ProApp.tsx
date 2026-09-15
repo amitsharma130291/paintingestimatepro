@@ -537,12 +537,18 @@ export default function ProApp() {
 
   // ---- Backup ----
   async function handleExport() {
-    // Never export hardcoded empty placeholders for a record type that
-    // might actually hold user data — read the live persisted snapshot for
-    // otherMaterials/serviceDefinitions/importProvenance rather than
-    // passing `[]` literals (item 5/6).
+    // independent-review R12: this used to export the REACT-STATE
+    // settings/catalog/projects (a stale in-memory snapshot from whenever
+    // this tab last loaded or synced) while only otherMaterials/
+    // serviceDefinitions/importProvenance came from a fresh read — so a
+    // project committed by ANOTHER tab after this one loaded was silently
+    // absent from the export. Replace-all uses this same export function
+    // for its required pre-import safety backup, so that recovery file
+    // could be incomplete too. Every collection now comes from ONE fresh,
+    // consistent storage read, taken right before building the file.
     const snapshot = await loadSnapshot();
-    const envelope = exportBackup('install-local', settings, catalog, snapshot.otherMaterials, snapshot.serviceDefinitions, projects, ids, snapshot.importProvenance);
+    const currentSettings = snapshot.businessSettings[0] ?? settings; // a fresh install may not have persisted settings yet
+    const envelope = exportBackup('install-local', currentSettings, snapshot.paintVariants, snapshot.otherMaterials, snapshot.serviceDefinitions, snapshot.projects, ids, snapshot.importProvenance);
     const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
