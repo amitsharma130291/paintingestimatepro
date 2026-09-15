@@ -13,6 +13,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import ProApp from '../../src/components/tools/pro/ProApp';
 import { openAppDb, STORES } from '../../src/storage/db';
+import { exportBackup, planImportAsCopies } from '../../src/domain/backup';
+import { sequentialIdSource } from '../../src/domain/ids';
+import type { EstimateRevision } from '../../src/domain/entities';
+import { realLogoFile, loadRealLogoDataUri, REAL_LOGO_WIDTH_PX, REAL_LOGO_HEIGHT_PX } from '../fixtures/logoFixture';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -122,6 +126,26 @@ describe('DOC-010: business logo upload, preview, replace, and remove', () => {
     expect(screen.queryAllByRole('img', { name: /logo/i })).toHaveLength(0);
   });
 
+  it('rejects an image below the minimum dimension -- too small to render as a visible business logo -- even though the bytes are a valid PNG', async () => {
+    mockImageDecode({ width: 4, height: 4 });
+    await mountNewProject();
+    const input = screen.getByLabelText('Business logo (PNG, JPEG, or WebP; max 1 MiB)') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [pngFile(200)] } });
+
+    expect(await screen.findByText(/4x4px/i)).toBeTruthy();
+    expect(screen.queryAllByRole('img', { name: /logo/i })).toHaveLength(0);
+  });
+
+  it('accepts an image exactly at the minimum supported dimension', async () => {
+    mockImageDecode({ width: 16, height: 16 });
+    await mountNewProject();
+    const input = screen.getByLabelText('Business logo (PNG, JPEG, or WebP; max 1 MiB)') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [pngFile(200)] } });
+
+    const images = await screen.findAllByRole('img', { name: /logo/i });
+    expect(images.length).toBeGreaterThanOrEqual(1);
+  });
+
   it('handles a decode failure (valid magic bytes, but the browser cannot actually render it) without crashing or storing anything', async () => {
     mockImageDecode('fail');
     await mountNewProject();
@@ -190,5 +214,77 @@ describe('DOC-010: business logo upload, preview, replace, and remove', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
     fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
     await waitFor(() => expect(screen.queryAllByRole('img', { name: /logo/i }).length).toBeGreaterThan(0));
+  });
+});
+
+describe('v7.2: the REAL approved logo asset survives the full lifecycle byte-for-byte', () => {
+  const REAL_LOGO_DATA_URI = loadRealLogoDataUri();
+
+  it('upload -> save -> reopen -> issue -> customer document all carry the exact same real logo bytes', async () => {
+    mockImageDecode({ width: REAL_LOGO_WIDTH_PX, height: REAL_LOGO_HEIGHT_PX });
+    await mountNewProject();
+    fireEvent.change(await screen.findByLabelText('Project title'), { target: { value: 'Real logo lifecycle job' } });
+    fireEvent.change(screen.getByLabelText('Your business name'), { target: { value: 'Sharma Painting Co.' } });
+    fireEvent.change(screen.getByLabelText('Business logo (PNG, JPEG, or WebP; max 1 MiB)'), { target: { files: [realLogoFile()] } });
+
+    const uploadedImages = await screen.findAllByRole('img', { name: /logo/i });
+    expect(uploadedImages[0].getAttribute('src')).toBe(REAL_LOGO_DATA_URI); // byte-for-byte, not just "some data URI"
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add room' }));
+    for (const [label, value] of [['Length (ft)', '10'], ['Width (ft)', '10'], ['Height (ft)', '8']] as const) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    }
+    await screen.findByText('$126.00');
+    fireEvent.click(screen.getByRole('button', { name: 'Suggested price' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(screen.getByText('Draft saved.')).toBeTruthy());
+
+    // Reopen: a fresh mount reading back from real IndexedDB.
+    cleanup();
+    mockImageDecode({ width: REAL_LOGO_WIDTH_PX, height: REAL_LOGO_HEIGHT_PX });
+    render(<ProApp />);
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    const reopenedImages = await screen.findAllByRole('img', { name: /logo/i });
+    expect(reopenedImages[0].getAttribute('src')).toBe(REAL_LOGO_DATA_URI); // persistence did not drop or alter it
+
+    // Issue it -- the frozen customerDocumentSnapshot must carry the same bytes.
+    fireEvent.click(screen.getByRole('button', { name: 'Issue estimate' }));
+    await waitFor(() => expect(screen.getByText('Estimate issued and saved.')).toBeTruthy());
+    const issuedImages = await screen.findAllByRole('img', { name: /logo/i });
+    expect(issuedImages.length).toBeGreaterThan(0);
+    expect(issuedImages[0].getAttribute('src')).toBe(REAL_LOGO_DATA_URI); // the issued snapshot did not lose or change the image
+
+    // Confirm the actual persisted revision record (not just the DOM)
+    // carries the exact real logo bytes in its frozen snapshot.
+    const db = await openAppDb();
+    try {
+      const projects = await db.getAll(STORES.projects);
+      expect(projects).toHaveLength(1); // the per-test beforeEach clears every store, so this is the one we just created
+      const project = projects[0];
+      const issuedRevision = project.revisions.find((r: EstimateRevision) => r.state === 'issued')!;
+      expect(issuedRevision.businessInfo.logo).toBe(REAL_LOGO_DATA_URI);
+      expect(issuedRevision.customerDocumentSnapshot?.businessInfo.logo).toBe(REAL_LOGO_DATA_URI);
+
+      // Backup export/import-as-copy (the real production domain
+      // functions the UI's Export/Restore buttons call) must also carry
+      // the real logo through unchanged.
+      const ids = sequentialIdSource();
+      const settings = (await db.getAll(STORES.businessSettings))[0];
+      const variants = await db.getAll(STORES.paintVariants);
+      const envelope = exportBackup('test-install', settings, variants, [], [], [project], ids);
+      const exportedRevision = envelope.projects[0].revisions.find((r) => r.state === 'issued')!;
+      expect(exportedRevision.businessInfo.logo).toBe(REAL_LOGO_DATA_URI); // backup export did not lose it
+
+      const ids2 = sequentialIdSource();
+      const plan = planImportAsCopies(envelope.projects, envelope.exportId, new Set(), ids2);
+      expect(plan.projects).toHaveLength(1);
+      const copiedRevision = plan.projects[0].revisions.find((r) => r.state === 'issued')!;
+      expect(copiedRevision.businessInfo.logo).toBe(REAL_LOGO_DATA_URI); // import-as-copy did not lose it
+      expect(plan.projects[0].id).not.toBe(project.id); // a genuine new ID, not a collision
+    } finally {
+      db.close();
+    }
   });
 });

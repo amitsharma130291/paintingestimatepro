@@ -21,7 +21,7 @@ import {
 import { defaultIdSource } from '../../../domain/ids';
 import { readInteriorHandoff, clearInteriorHandoff, buildProjectFromInteriorHandoff, type InteriorHandoffPayload, type HandoffFieldNote } from '../../../domain/interiorHandoff';
 import { ConflictError } from '../../../storage/db';
-import { validateLogoBytes, MAX_LOGO_DIMENSION_PX } from '../../../domain/logo';
+import { validateLogoBytes, MAX_LOGO_DIMENSION_PX, MIN_LOGO_DIMENSION_PX } from '../../../domain/logo';
 import { reconcileDisplayedComponents } from '../../../engine/document';
 
 /** DOC-010: dimension limits require an actual browser image decode
@@ -303,6 +303,10 @@ export default function ProApp() {
       const { width, height } = await decodeImageDimensions(result.dataUri);
       if (width > MAX_LOGO_DIMENSION_PX || height > MAX_LOGO_DIMENSION_PX) {
         setLogoError(`Image is ${width}x${height}px; the maximum is ${MAX_LOGO_DIMENSION_PX}x${MAX_LOGO_DIMENSION_PX}px.`);
+        return;
+      }
+      if (width < MIN_LOGO_DIMENSION_PX || height < MIN_LOGO_DIMENSION_PX) {
+        setLogoError(`Image is ${width}x${height}px; the minimum is ${MIN_LOGO_DIMENSION_PX}x${MIN_LOGO_DIMENSION_PX}px.`);
         return;
       }
     } catch {

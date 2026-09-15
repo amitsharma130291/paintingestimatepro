@@ -18,6 +18,14 @@
 // dimension limits; this module only ever validates bytes on disk).
 export const MAX_LOGO_BYTES = 1024 * 1024; // 1 MiB — BACK-019's own boundary.
 export const MAX_LOGO_DIMENSION_PX = 2000; // generous print-quality cap; enforced by the browser-layer decode step (see ProApp.tsx).
+// v7.2: a logo below this size cannot show a recognizable mark on a
+// customer document or its print/PDF output -- 16px is the same floor
+// browsers commonly treat as "a real icon" (the smallest generated
+// favicon size), below which the file is more likely an accidental
+// upload (a 1x1 tracking pixel, a corrupt crop) than an intended logo.
+// Enforced alongside MAX_LOGO_DIMENSION_PX by the same browser-layer
+// decode step in ProApp.tsx.
+export const MIN_LOGO_DIMENSION_PX = 16;
 
 export type LogoMimeType = 'image/png' | 'image/jpeg' | 'image/webp';
 
