@@ -100,6 +100,13 @@ export default function ProApp() {
   // enter a real actual dollar figure. Defaults to baselineAllocation, the
   // spec's labeled default ("Label baseline overhead as allocated").
   const [overheadMode, setOverheadMode] = useState<'baselineAllocation' | 'actualFlat'>('baselineAllocation');
+  // ACT-011 (DATA_CONTRACT.md): actual labor may be entered directly as a
+  // dollar amount, or as hours x rate -- the domain model already defined
+  // laborBreakdown for this, but no UI ever exposed the hoursRate mode; every
+  // review was silently forced through a single flat-amount box.
+  const [laborMode, setLaborMode] = useState<'direct' | 'hoursRate'>('direct');
+  const [laborHours, setLaborHours] = useState('');
+  const [laborRate, setLaborRate] = useState('');
   const [importMessage, setImportMessage] = useState<string | null>(null);
   type PendingImport =
     | { mode: 'merge'; envelope: BackupEnvelope; plan: FullRestorePlan; resolutions: Record<string, ImportConflict['resolution']>; existingOtherMaterials: OtherMaterial[]; existingServiceDefinitions: ServiceDefinition[]; existingProjectVersions: Record<string, number> }
@@ -572,9 +579,21 @@ export default function ProApp() {
         overhead: { confirmed: existingActualReview.overhead.confirmed, amount: existingActualReview.overhead.amount ?? '' },
       });
       setOverheadMode(existingActualReview.overhead.mode);
+      if (existingActualReview.laborBreakdown) {
+        setLaborMode(existingActualReview.laborBreakdown.mode);
+        setLaborHours(existingActualReview.laborBreakdown.hours ?? '');
+        setLaborRate(existingActualReview.laborBreakdown.rate ?? '');
+      } else {
+        setLaborMode('direct');
+        setLaborHours('');
+        setLaborRate('');
+      }
     } else {
       setActuals({ materials: { confirmed: false, amount: '' }, labor: { confirmed: false, amount: '' }, otherExpenses: { confirmed: false, amount: '' }, overhead: { confirmed: false, amount: '' } });
       setOverheadMode('baselineAllocation');
+      setLaborMode('direct');
+      setLaborHours('');
+      setLaborRate('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issuedRevision?.id]);
@@ -610,15 +629,30 @@ export default function ProApp() {
     return deriveActualCategory(actuals.overhead);
   }
 
+  // ACT-011: actual labor entered as hours x rate, using ONE authoritative
+  // active mode (DATA_CONTRACT.md: "no stale values contribute") -- the
+  // direct-amount field's stale text never leaks into an hoursRate-mode
+  // save, and vice versa, exactly like the free job-cost calculator's own
+  // materialsMode/laborMode never blending inactive fields.
+  function deriveLaborCategory(): { confirmed: boolean; value: Dec | null; invalid: boolean } {
+    if (laborMode === 'direct') return deriveActualCategory(actuals.labor);
+    if (!actuals.labor.confirmed) return { confirmed: false, value: null, invalid: false };
+    if (laborHours.trim() === '' || laborRate.trim() === '') return { confirmed: true, value: null, invalid: false };
+    const hoursField = parseDecimalField(laborHours);
+    const rateField = parseDecimalField(laborRate);
+    if (hoursField.kind !== 'valid' || rateField.kind !== 'valid') return { confirmed: true, value: null, invalid: true };
+    return { confirmed: true, value: hoursField.value.times(rateField.value), invalid: false };
+  }
+
   const derivedActuals = useMemo(
     () => ({
       materials: deriveActualCategory(actuals.materials),
-      labor: deriveActualCategory(actuals.labor),
+      labor: deriveLaborCategory(),
       otherExpenses: deriveActualCategory(actuals.otherExpenses),
       overhead: deriveOverheadCategory(),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [actuals, overheadMode, issuedRevision]
+    [actuals, overheadMode, issuedRevision, laborMode, laborHours, laborRate]
   );
   const anyActualCategoryInvalid = Object.values(derivedActuals).some((c) => c.invalid);
 
@@ -636,6 +670,7 @@ export default function ProApp() {
       labor: { confirmed: actuals.labor.confirmed, amount: derivedActuals.labor.value?.toString() ?? null },
       otherExpenses: { confirmed: actuals.otherExpenses.confirmed, amount: derivedActuals.otherExpenses.value?.toString() ?? null },
       overhead: { confirmed: actuals.overhead.confirmed, amount: derivedActuals.overhead.value?.toString() ?? null, mode: overheadMode },
+      ...(laborMode === 'hoursRate' ? { laborBreakdown: { mode: laborMode, hours: laborHours, rate: laborRate } } : {}),
       updatedAt: now(),
     };
     const nextProject = upsertActualReview(activeProject, review);
@@ -1399,6 +1434,18 @@ export default function ProApp() {
                 )}
                 {(['materials', 'labor', 'otherExpenses', 'overhead'] as const).map((cat) => (
                   <div key={cat} className="mb-3">
+                    {cat === 'labor' && (
+                      <div className="mb-1 flex items-center gap-4 text-xs text-ink-soft">
+                        <label className="flex items-center gap-1">
+                          <input type="radio" name="laborMode" checked={laborMode === 'direct'} onChange={() => setLaborMode('direct')} />
+                          Enter amount directly
+                        </label>
+                        <label className="flex items-center gap-1">
+                          <input type="radio" name="laborMode" checked={laborMode === 'hoursRate'} onChange={() => setLaborMode('hoursRate')} />
+                          Hours × rate
+                        </label>
+                      </div>
+                    )}
                     {cat === 'overhead' && (
                       <div className="mb-1 flex items-center gap-4 text-xs text-ink-soft">
                         <label className="flex items-center gap-1">
@@ -1425,6 +1472,13 @@ export default function ProApp() {
                           onChange={(e) => setActuals((a) => ({ ...a, overhead: { ...a.overhead, amount: e.target.value } }))}
                           placeholder="0.00"
                         />
+                      ) : cat === 'labor' && laborMode === 'hoursRate' ? (
+                        <>
+                          <input aria-label="Labor hours" className="w-24 rounded-btn border border-line px-2 py-1 tabular-nums" value={laborHours} onChange={(e) => setLaborHours(e.target.value)} placeholder="hours" />
+                          <span className="text-ink-soft">×</span>
+                          <input aria-label="Labor rate" className="w-24 rounded-btn border border-line px-2 py-1 tabular-nums" value={laborRate} onChange={(e) => setLaborRate(e.target.value)} placeholder="$/hour" />
+                          <span className="text-ink-soft tabular-nums">= {derivedActuals.labor.value ? money(derivedActuals.labor.value) : '—'}</span>
+                        </>
                       ) : (
                         <input className={`w-32 rounded-btn border px-2 py-1 tabular-nums ${derivedActuals[cat].invalid ? 'border-bad' : 'border-line'}`} value={actuals[cat].amount} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], amount: e.target.value } }))} placeholder="0.00" />
                       )}
