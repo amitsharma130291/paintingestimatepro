@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { PEP, type Dec } from '../../../engine/decimal';
 import { evaluateActualReview, type ActualCategory } from '../../../engine/actuals';
 import { parseDecimalField } from '../../../engine/parse';
-import { assembleServiceHealth } from '../../../domain/serviceHealthAssembly';
+import { assembleServiceHealth, type ServiceHealthAssemblyResult } from '../../../domain/serviceHealthAssembly';
 import { statusBadge, money, parseCoatsInput, parseOpeningCountInput } from '../shared';
 import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope, AdditionalLaborLine, OtherMaterialLine, ExpenseLine } from '../../../domain/entities';
 import { ENGINE_VERSION } from '../../../domain/entities';
@@ -12,6 +12,7 @@ import { createDraftRevision, issueRevision, createDraftFromIssued, checkIssueGa
 import type { ActualReview } from '../../../domain/entities';
 import { assembleProjectEstimate, type ProjectEstimateAssembly } from '../../../domain/estimateAssembly';
 import { previewRateRefresh, applyRateRefresh, undoRateRefresh as undoRateRefreshDomain, type RateRefreshDiff, type VariantResolution } from '../../../domain/rateRefresh';
+import { previewServiceDefaultsRefresh, applyServiceDefaultsRefresh, type ServiceRefreshDiff, type ServiceRefreshableField } from '../../../domain/serviceRefresh';
 import { buildCustomerDocument } from '../../../domain/customerDocument';
 import {
   exportBackup, validateBackupEnvelope, planFullRestoreMerge, planImportAsCopies, applyFullRestoreResolutions,
@@ -580,6 +581,28 @@ export default function ProApp() {
   function removeService(id: string) {
     setServiceDefinitions((ss) => ss.filter((s) => s.id !== id));
     deleteServiceDefinition(id).catch(() => setSaveMessage('Removed locally, but deleting from storage failed.'));
+  }
+
+  // CAT-008: explicit refresh-defaults preview -- never triggered by an
+  // ordinary save, only by this action, and never rewrites a customized
+  // field until the user picks it and confirms.
+  const [serviceRefreshPreview, setServiceRefreshPreview] = useState<{ serviceId: string; diff: ServiceRefreshDiff; fieldsToRevert: Set<ServiceRefreshableField> } | null>(null);
+
+  function startServiceRefreshPreview(service: ServiceDefinition) {
+    setServiceRefreshPreview({ serviceId: service.id, diff: previewServiceDefaultsRefresh(service, catalog, settings), fieldsToRevert: new Set() });
+  }
+
+  function cancelServiceRefreshPreview() {
+    setServiceRefreshPreview(null);
+  }
+
+  function confirmServiceRefreshPreview() {
+    if (!serviceRefreshPreview) return;
+    const service = serviceDefinitions.find((s) => s.id === serviceRefreshPreview.serviceId);
+    if (!service) return;
+    const updated = applyServiceDefaultsRefresh(service, serviceRefreshPreview.fieldsToRevert);
+    patchService(service.id, updated);
+    setServiceRefreshPreview(null);
   }
 
   // ---- Actuals (scoped to the active project's issued revision) ----
@@ -1461,9 +1484,23 @@ export default function ProApp() {
                     >
                       {expandedServiceIds.has(service.id) ? 'Hide details' : 'Details'}
                     </button>
+                    <button type="button" className="text-link text-xs" onClick={() => startServiceRefreshPreview(service)}>Check for default updates</button>
                     <button type="button" className="text-link text-xs" onClick={() => removeService(service.id)}>Remove</button>
                   </div>
                 </div>
+                {serviceRefreshPreview?.serviceId === service.id && (
+                  <ServiceRefreshPanel
+                    service={service}
+                    beforeResult={result}
+                    catalog={catalog}
+                    settings={settings}
+                    diff={serviceRefreshPreview.diff}
+                    fieldsToRevert={serviceRefreshPreview.fieldsToRevert}
+                    onFieldsToRevertChange={(fields) => setServiceRefreshPreview((p) => (p ? { ...p, fieldsToRevert: fields } : p))}
+                    onConfirm={confirmServiceRefreshPreview}
+                    onCancel={cancelServiceRefreshPreview}
+                  />
+                )}
                 <TextField label="Service name" value={service.name} onChange={(v) => patchService(service.id, { name: v })} />
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <label className="block text-sm">
@@ -1967,6 +2004,70 @@ function RateRefreshPanel({ diff, catalog, resolutions, onResolutionsChange, onC
       <div className="mt-4 flex gap-2">
         <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-primary" disabled={!allMissingResolved} onClick={onConfirm}>Confirm refresh</button>
+      </div>
+    </div>
+  );
+}
+
+/** CAT-008: preview a service's own customized fields against the
+ * CURRENT live business defaults before touching anything. Each field is
+ * an opt-in checkbox (default unchecked -- "keep my custom value"); the
+ * before/after modeled-cost/price/margin comparison is computed live via
+ * the same real assembleServiceHealth the row itself already uses,
+ * against a candidate service with only the checked fields reverted. */
+function ServiceRefreshPanel({ service, beforeResult, catalog, settings, diff, fieldsToRevert, onFieldsToRevertChange, onConfirm, onCancel }: {
+  service: ServiceDefinition; beforeResult: ServiceHealthAssemblyResult; catalog: PaintVariant[]; settings: BusinessSettings;
+  diff: ServiceRefreshDiff; fieldsToRevert: Set<ServiceRefreshableField>;
+  onFieldsToRevertChange: (fields: Set<ServiceRefreshableField>) => void; onConfirm: () => void; onCancel: () => void;
+}) {
+  const afterResult = assembleServiceHealth(applyServiceDefaultsRefresh(service, fieldsToRevert), catalog, settings);
+  return (
+    <div className="mt-3 rounded-btn border border-line p-4">
+      {diff.fieldChanges.length === 0 && !diff.variantMissing && <p className="text-sm text-ink-soft">No customized assumptions to review — every field on this service already tracks your current defaults.</p>}
+      {diff.fieldChanges.length > 0 && (
+        <div>
+          <p className="text-sm font-semibold">Customized assumptions vs. your current defaults</p>
+          <ul className="mt-1 space-y-1 text-sm">
+            {diff.fieldChanges.map((c) => (
+              <li key={c.field} className="flex items-center gap-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={fieldsToRevert.has(c.field)}
+                    onChange={(e) => {
+                      const next = new Set(fieldsToRevert);
+                      if (e.target.checked) next.add(c.field); else next.delete(c.field);
+                      onFieldsToRevertChange(next);
+                    }}
+                  />
+                  Update {c.label} to current default
+                </label>
+                <span className="text-ink-soft">({c.customValue} → {c.liveDefaultValue ?? '—'})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {diff.variantMissing && (
+        <p className="mt-3 text-sm text-warn">This service's paint variant no longer exists in your catalog — choose a replacement using the "Paint variant" selector above before confirming.</p>
+      )}
+      {diff.fieldChanges.length > 0 && (
+        <div className="mt-3 text-sm">
+          <p className="font-semibold">Effect on this service if confirmed</p>
+          <Row label="Modeled cost/unit" value={beforeResult.state === 'ok' ? `${money(beforeResult.row.unitCost!.modeledCostPerUnit)} → ${afterResult.state === 'ok' ? money(afterResult.row.unitCost!.modeledCostPerUnit) : '—'}` : '—'} />
+          <Row
+            label="Status"
+            value={
+              beforeResult.state === 'ok' && beforeResult.row.price
+                ? `${statusBadge(beforeResult.row.price).label} → ${afterResult.state === 'ok' && afterResult.row.price ? statusBadge(afterResult.row.price).label : '—'}`
+                : '—'
+            }
+          />
+        </div>
+      )}
+      <div className="mt-4 flex gap-2">
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+        <button type="button" className="btn btn-primary" disabled={diff.fieldChanges.length === 0 || fieldsToRevert.size === 0} onClick={onConfirm}>Confirm updates</button>
       </div>
     </div>
   );
