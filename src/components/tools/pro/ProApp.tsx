@@ -80,6 +80,8 @@ export default function ProApp() {
   // LIFE-014: which project (if any) is showing its inline "are you sure"
   // delete confirmation -- an explicit second step, never a single click.
   const [confirmDeleteProjectId, setConfirmDeleteProjectId] = useState<string | null>(null);
+  // HEALTH-016: which Price Book Health rows have their detail breakdown expanded.
+  const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(new Set());
   const [draftEdit, setDraftEdit] = useState<EstimateRevision | null>(null);
   const [draftBaselineVersion, setDraftBaselineVersion] = useState<number | null>(null);
   const [customPriceRaw, setCustomPriceRaw] = useState('');
@@ -1419,7 +1421,21 @@ export default function ProApp() {
               <div key={service.id} className="rounded-btn border border-line p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold">{service.name || 'Untitled service'}</p>
-                  <button type="button" className="text-link text-xs" onClick={() => removeService(service.id)}>Remove</button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="text-link text-xs"
+                      aria-expanded={expandedServiceIds.has(service.id)}
+                      onClick={() => setExpandedServiceIds((ids) => {
+                        const next = new Set(ids);
+                        if (next.has(service.id)) next.delete(service.id); else next.add(service.id);
+                        return next;
+                      })}
+                    >
+                      {expandedServiceIds.has(service.id) ? 'Hide details' : 'Details'}
+                    </button>
+                    <button type="button" className="text-link text-xs" onClick={() => removeService(service.id)}>Remove</button>
+                  </div>
                 </div>
                 <TextField label="Service name" value={service.name} onChange={(v) => patchService(service.id, { name: v })} />
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1479,6 +1495,37 @@ export default function ProApp() {
                       )}
                     </dl>
                   )}
+                  {/* HEALTH-016: on expand, the full cost breakdown behind
+                      the single "Modeled cost/unit" figure above -- every
+                      field computeServiceUnitCost already returns, plus
+                      the resolved product/geometry inputs that produced
+                      it, so a reviewer can see WHY a price is over/under
+                      target without re-deriving it by hand. */}
+                  {result.state === 'ok' && expandedServiceIds.has(service.id) && (() => {
+                    const variant = service.paintVariantId ? catalog.find((v) => v.id === service.paintVariantId) : undefined;
+                    const geometry =
+                      service.kind === 'door'
+                        ? `${service.widthFt ?? '—'} × ${service.heightFt ?? '—'} ft, ${service.paintedSides ?? '—'} side(s), per door`
+                        : service.kind === 'trim'
+                          ? `${service.developedWidthFt ?? '—'} ft developed width, per linear ft`
+                          : 'per ft²';
+                    const uc = result.row.unitCost!;
+                    return (
+                      <dl className="mt-3 space-y-1 border-t border-line pt-3 text-xs text-ink-soft">
+                        <Row label="Product / color" value={variant ? `${variant.name} / ${variant.color}` : '—'} />
+                        <Row label="Coverage" value={variant ? `${variant.coverageFt2PerGal} ft²/gal` : '—'} />
+                        <Row label="Coats" value={String(service.coats ?? settings.defaultCoats)} />
+                        <Row label="Waste ratio" value={`${new PEP(service.wasteRatio ?? settings.defaultWasteRatio).times(100).toFixed(1)}%`} />
+                        <Row label="Geometry" value={geometry} />
+                        <Row label="Labor hours/unit" value={uc.laborHoursPerUnit.toFixed(4)} />
+                        <Row label="Labor cost/unit" value={money(uc.laborCostPerUnit)} />
+                        <Row label="Paint consumption cost/unit" value={money(uc.paintConsumptionCostPerUnit)} />
+                        <Row label="Materials/unit" value={money(uc.materialsPerUnit)} />
+                        <Row label="Direct cost/unit" value={money(uc.directCostPerUnit)} />
+                        <Row label="Overhead/unit" value={money(uc.overheadPerUnit)} />
+                      </dl>
+                    );
+                  })()}
                 </div>
               </div>
             ))}
