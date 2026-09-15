@@ -1,6 +1,7 @@
 import type { EstimateRevision, Project, RateSnapshot, Room, Surface, CustomerDocumentSnapshot, ActualReview } from './entities';
 import { ENGINE_VERSION } from './entities';
 import type { IdSource } from './ids';
+import { parseDecimalField } from '../engine/parse';
 
 /**
  * DATA_CONTRACT.md "Drafts, issue, and revisions". Every mutation here
@@ -60,7 +61,13 @@ export function checkIssueGate(revision: EstimateRevision, opts: { sampleAssumpt
   if (!revision.surfaces.some((s) => s.enabled)) reasons.push('At least one enabled surface is required to issue.');
   if (!opts.sampleAssumptionsConfirmed) reasons.push('Sample business assumptions must be confirmed before the first priced issue.');
   if (revision.proposedPrice === null) reasons.push('A proposed price is required to issue (or explicitly confirm a $0 no-charge estimate).');
-  if (revision.proposedPrice === '0' && !opts.zeroPriceConfirmed) reasons.push('A $0 price requires explicit no-charge confirmation.');
+  // independent-review R07: compared the raw string to the literal '0',
+  // so '0.00'/'0.0' silently bypassed the no-charge confirmation gate.
+  // Parse to the actual numeric value and compare that to zero instead.
+  const parsedPrice = revision.proposedPrice === null ? null : parseDecimalField(revision.proposedPrice);
+  if (parsedPrice?.kind === 'valid' && parsedPrice.value.isZero() && !opts.zeroPriceConfirmed) {
+    reasons.push('A $0 price requires explicit no-charge confirmation.');
+  }
   return { canIssue: reasons.length === 0, reasons };
 }
 

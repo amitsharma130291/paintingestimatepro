@@ -74,6 +74,12 @@ export default function ProApp() {
   const [draftEdit, setDraftEdit] = useState<EstimateRevision | null>(null);
   const [draftBaselineVersion, setDraftBaselineVersion] = useState<number | null>(null);
   const [customPriceRaw, setCustomPriceRaw] = useState('');
+  // independent-review R07: the issue gate always received
+  // zeroPriceConfirmed: false with no UI to ever satisfy it — a $0
+  // estimate could never be issued at all. Resets whenever the open
+  // draft changes so a stale confirmation from a DIFFERENT project never
+  // silently carries over.
+  const [zeroPriceConfirmed, setZeroPriceConfirmed] = useState(false);
   const [conflict, setConflict] = useState<{ project: Project; attempted: Project } | null>(null);
   const [refreshPreview, setRefreshPreview] = useState<{ diff: RateRefreshDiff; resolutions: Record<string, VariantResolution> } | null>(null);
 
@@ -182,6 +188,7 @@ export default function ProApp() {
     setDraftEdit(revision);
     setDraftBaselineVersion(null); // not yet created in storage — the next save is a create, not an update
     setCustomPriceRaw('');
+    setZeroPriceConfirmed(false);
     setRefreshPreview(null);
   }
 
@@ -193,6 +200,7 @@ export default function ProApp() {
     setDraftEdit(revision);
     setDraftBaselineVersion(project.version);
     setCustomPriceRaw(revision.priceMode === 'custom' ? revision.proposedPrice ?? '' : '');
+    setZeroPriceConfirmed(false);
     setRefreshPreview(null);
   }
 
@@ -202,6 +210,7 @@ export default function ProApp() {
     setDraftEdit(newDraft);
     setDraftBaselineVersion(project.version);
     setCustomPriceRaw(newDraft.priceMode === 'custom' ? newDraft.proposedPrice ?? '' : '');
+    setZeroPriceConfirmed(false);
     setRefreshPreview(null);
   }
 
@@ -368,8 +377,8 @@ export default function ProApp() {
       calculationState: summary.calculationState,
       proposedPrice: draftEdit.priceMode === 'custom' ? (customPriceRaw.trim() === '' ? null : customPriceRaw) : summary.effectivePrice?.toFixed(2) ?? null,
     };
-    return checkIssueGate(forGate, { sampleAssumptionsConfirmed: settings.sampleAssumptionsConfirmed, zeroPriceConfirmed: false });
-  }, [draftEdit, summary, settings.sampleAssumptionsConfirmed, customPriceRaw]);
+    return checkIssueGate(forGate, { sampleAssumptionsConfirmed: settings.sampleAssumptionsConfirmed, zeroPriceConfirmed });
+  }, [draftEdit, summary, settings.sampleAssumptionsConfirmed, customPriceRaw, zeroPriceConfirmed]);
 
   async function issueEstimate() {
     if (!draftEdit || !activeProject || !summary || summary.calculationState !== 'complete') return;
@@ -931,6 +940,13 @@ export default function ProApp() {
                           </div>
                         )}
                       </dl>
+
+                      {summary.effectivePrice?.isZero() && (
+                        <label className="mt-2 flex items-center gap-2 text-sm text-warn">
+                          <input type="checkbox" checked={zeroPriceConfirmed} onChange={(e) => setZeroPriceConfirmed(e.target.checked)} />
+                          I confirm this is an intentional $0 no-charge estimate.
+                        </label>
+                      )}
 
                       <div className="mt-4 flex gap-2">
                         <button type="button" className="btn btn-secondary" onClick={saveDraft}>Save draft</button>
