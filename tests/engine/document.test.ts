@@ -49,4 +49,32 @@ describe('DOC: free-document ledger and cost-breakdown reconciliation', () => {
     expect(displayedTotal.toFixed(2)).toBe('0.01'); // raw total (0.01) rounds to 0.01
     expect(adjustment.toFixed(2)).toBe('-0.01'); // 0.01 - (0.01+0.01) = -0.01, shown, not hidden
   });
+
+  it('TPL-005: one simple line, quantity 2 at $12.50, computes a line/subtotal of exactly $25.00', () => {
+    const totals = computeDocumentTotals([{ quantity: d('2'), unitSellingPrice: d('12.50') }], false, d('0'));
+    expect(totals.lineTotals[0].toFixed(2)).toBe('25.00');
+    expect(totals.subtotal.toFixed(2)).toBe('25.00');
+  });
+
+  it('TPL-007: one line, quantity 3 at $0.3333, extends to raw $0.9999 -> rounds to $1.00, matching the subtotal', () => {
+    // lineTotal() itself rounds HALF_UP to cents (CALCULATION_SPEC §7) --
+    // the raw extension (0.9999) never reaches the caller unrounded.
+    const rawExtension = d('3').times(d('0.3333'));
+    expect(rawExtension.toString()).toBe('0.9999');
+    const totals = computeDocumentTotals([{ quantity: d('3'), unitSellingPrice: d('0.3333') }], false, d('0'));
+    expect(totals.lineTotals[0].toFixed(2)).toBe('1.00'); // HALF_UP rounds 0.9999 up to 1.00
+    expect(totals.subtotal.toFixed(2)).toBe('1.00');
+  });
+
+  it('TPL-008: disabling tax ignores a retained nonzero taxRatio entirely -- tax=$0, total=subtotal', () => {
+    const totals = computeDocumentTotals([{ quantity: d('1'), unitSellingPrice: d('100') }], false, d('0.10'));
+    expect(totals.tax.toFixed(2)).toBe('0.00'); // the 0.10 ratio is passed but taxApplies=false means it's never used
+    expect(totals.total.toFixed(2)).toBe('100.00');
+  });
+
+  it('TPL-009: tax explicitly enabled at ratio 0 computes a valid $0 tax -- no forced nonzero assumption', () => {
+    const totals = computeDocumentTotals([{ quantity: d('1'), unitSellingPrice: d('100') }], true, d('0'));
+    expect(totals.tax.toFixed(2)).toBe('0.00');
+    expect(totals.total.toFixed(2)).toBe('100.00');
+  });
 });
