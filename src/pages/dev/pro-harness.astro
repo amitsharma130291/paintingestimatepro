@@ -22,7 +22,7 @@ const title = "Pro harness (dev only)";
 <BaseLayout title={title} description="Internal dev-only verification harness. Not linked from any production page.">
   <main id="main-content" class="section-pad">
     <div class="content-shell">
-      <p class="mb-4 rounded-btn border border-warn-line bg-warn-soft p-3 text-sm text-warn">
+      <p class="mb-4 rounded-btn border border-warn-line bg-warn-soft p-3 text-sm text-warn print:hidden">
         Dev-only verification harness — real ProApp component, synthetic local data, no payment/account code involved. Not part of the production site.
       </p>
       <ProApp client:only="react" />
