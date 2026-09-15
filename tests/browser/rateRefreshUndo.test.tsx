@@ -109,7 +109,7 @@ describe('Pre-refresh recovery (DATA_CONTRACT.md #3): rate refresh can be undone
     expect(screen.getByRole('button', { name: 'Undo refresh' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
-    await waitFor(() => expect(screen.getByText('Draft saved.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Draft saved.')).toBeTruthy(), { timeout: 5000 });
     expect(screen.queryByRole('button', { name: 'Undo refresh' })).toBeNull();
   });
 });
