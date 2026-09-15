@@ -221,6 +221,11 @@ export default function InteriorCalculator() {
       hours,
       laborCost,
       total: laborCost ? paintCost.plus(laborCost) : paintCost,
+      // INT-006: "Allow a labeled zero-rate scenario WITH a warning" -- the
+      // calculation itself already tolerated $0/hr (a Decimal zero is a
+      // valid, non-throwing divisor operand here since labor cost is a
+      // multiplication, not a division), but no warning was ever surfaced.
+      zeroRateWarning: calculateLabor && rateVal !== null && rateVal.isZero(),
     } as const;
   }, [length, width, height, includeWalls, includeCeiling, deductOpenings, openingMode, openings, doorCount, windowCount, coats, coverage, wastePercent, pricePerGal, calculateLabor, hourlyRate, wallThroughput, ceilingThroughput, prepHours]);
 
@@ -357,6 +362,9 @@ export default function InteriorCalculator() {
                 </>
               )}
               <Row label="Total" value={`$${result.total!.toFixed(2)}`} strong />
+              {result.zeroRateWarning && (
+                <p className="pt-1 text-xs text-warn">An hourly rate of $0 produces a $0 labor cost — double-check this is an intentional free/self-labor scenario, not a blank rate.</p>
+              )}
               <p className="pt-2 text-xs text-ink-soft">{result.laborCost ? 'Paint + entered labor estimate; excludes other supplies, overhead, and tax.' : 'Paint materials only.'}</p>
               <button
                 type="button"
