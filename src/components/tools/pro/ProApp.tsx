@@ -1467,6 +1467,13 @@ export default function ProApp() {
                   </div>
                 </div>
 
+                <div className="card space-y-4 p-6">
+                  <h3 className="font-semibold">Notes and terms</h3>
+                  <p className="text-xs text-ink-soft">Shown on the customer-facing document below the total, exactly as typed here.</p>
+                  <TextAreaField label="Notes" value={draftEdit.notes} onChange={(v) => mutateDraft((r) => ({ ...r, notes: v, updatedAt: ids.now() }))} />
+                  <TextAreaField label="Terms" value={draftEdit.terms} onChange={(v) => mutateDraft((r) => ({ ...r, terms: v, updatedAt: ids.now() }))} />
+                </div>
+
                 <div className="card p-6">
                   <h3 className="font-semibold">Rate refresh</h3>
                   <p className="mt-1 text-xs text-ink-soft">This draft's rates were captured on {new Date(draftEdit.activeRateSnapshot.capturedAt).toLocaleString()}. Refreshing pulls today's catalog and settings — nothing changes until you confirm.</p>
@@ -2296,6 +2303,15 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
     <label className="block text-sm">
       <span className="font-medium text-ink-soft">{label}</span>
       <input value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-btn border border-line bg-card px-3 py-2 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" />
+    </label>
+  );
+}
+
+function TextAreaField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block text-sm">
+      <span className="font-medium text-ink-soft">{label}</span>
+      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={3} className="mt-1 w-full rounded-btn border border-line bg-card px-3 py-2 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" />
     </label>
   );
 }
