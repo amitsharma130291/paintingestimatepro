@@ -1286,18 +1286,34 @@ export default function ProApp() {
                           I confirm this is an intentional $0 no-charge estimate.
                         </label>
                       )}
-
-                      <div className="mt-4 flex gap-2">
-                        <button type="button" className="btn btn-secondary" onClick={saveDraft}>Save draft</button>
-                        <button type="button" className="btn btn-primary" disabled={!issueGate.canIssue} onClick={issueEstimate}>Issue estimate</button>
-                      </div>
-                      {!issueGate.canIssue && (
-                        <ul className="mt-2 text-xs text-warn">
-                          {issueGate.reasons.map((r, i) => (<li key={i}>{r}</li>))}
-                        </ul>
-                      )}
                     </>
                   )}
+
+                  {/* V6-05/CORE-028: saving a draft must never depend on
+                      calculation completeness -- a work-in-progress room,
+                      blank line item, or invalid raw entry is exactly what
+                      "save draft" exists to preserve for later correction.
+                      saveDraft() already tolerates a null/incomplete
+                      `summary` (falls back to calculationState:'incomplete',
+                      proposedPrice:null); only the render gate previously
+                      hid the button. Issuing stays behind the separate,
+                      already-correct issueGate.canIssue check below. */}
+                  <div className="mt-4 flex gap-2">
+                    <button type="button" className="btn btn-secondary" onClick={saveDraft}>Save draft</button>
+                    <button type="button" className="btn btn-primary" disabled={!issueGate.canIssue} onClick={issueEstimate}>Issue estimate</button>
+                  </div>
+                  {!issueGate.canIssue && (() => {
+                    // The calculation-incompleteness reason is already shown,
+                    // more specifically, in the "not complete/invalid"
+                    // message above -- don't repeat it verbatim here.
+                    const incompleteAlreadyShown = summary && summary.calculationState !== 'complete';
+                    const reasons = issueGate.reasons.filter((r) => !(incompleteAlreadyShown && r === 'Estimate is not complete — check for missing or invalid inputs.'));
+                    return reasons.length > 0 ? (
+                      <ul className="mt-2 text-xs text-warn">
+                        {reasons.map((r, i) => (<li key={i}>{r}</li>))}
+                      </ul>
+                    ) : null;
+                  })()}
                 </div>
               </>
             )}
