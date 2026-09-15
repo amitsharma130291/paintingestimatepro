@@ -4,7 +4,7 @@ import { sequentialIdSource } from '../../src/domain/ids';
 import { validateBackupEnvelope, planRestoreMerge, planFullRestoreMerge, planImportAsCopies, applyFullRestoreResolutions, exportBackup } from '../../src/domain/backup';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision } from '../../src/domain/project';
-import type { BusinessSettings, PaintVariant, Project } from '../../src/domain/entities';
+import type { BusinessSettings, PaintVariant, Project, CustomerDocumentSnapshot } from '../../src/domain/entities';
 
 function makeSettings(): BusinessSettings {
   const now = '2026-01-01T00:00:00.000Z';
@@ -17,6 +17,13 @@ function makeSettings(): BusinessSettings {
 function makeVariant(): PaintVariant {
   const now = '2026-01-01T00:00:00.000Z';
   return { id: 'paint-1', name: 'Sample White', color: 'white', sheen: 'eggshell', pricePerGal: '42', coverageFt2PerGal: '350', purchaseIncrementGal: '1', createdAt: now, updatedAt: now };
+}
+function makeIssuedDocument(): CustomerDocumentSnapshot {
+  return {
+    estimateNumber: 'E-1', estimateDate: '2026-01-01', businessInfo: { name: 'Acme Painting', contact: '555-0100', address: '1 Main St' },
+    customerInfo: { name: 'Jane Homeowner', address: '2 Elm St', contact: '555-0200' }, projectTitle: 'Kitchen repaint', projectAddress: '2 Elm St',
+    scopeLines: ['Paint kitchen walls'], proposedPrice: '900.00', notes: '', terms: '', revisionLabel: 'Rev 1', taxNotice: '', status: 'issued',
+  };
 }
 function makeProject(id: string, ids: ReturnType<typeof sequentialIdSource>): Project {
   const snapshot = createSnapshot(makeSettings(), [makeVariant()], [], ids, 'rev-1');
@@ -95,7 +102,7 @@ describe('BACK-015: an actual-review baseline pointing at a missing revision is 
   it('accepts an actualReview whose baseline correctly matches an existing ISSUED revision', () => {
     const ids = sequentialIdSource();
     const project = makeProject('p1', ids);
-    const issuedRevision = { ...project.revisions[0], state: 'issued' as const };
+    const issuedRevision = { ...project.revisions[0], state: 'issued' as const, customerDocumentSnapshot: makeIssuedDocument() };
     const withValidActual: Project = {
       ...project,
       revisions: [issuedRevision],
@@ -341,7 +348,7 @@ describe('BACK-COMPLETE: full schema validation (item 5) — null entries, wrong
     const project = makeProject('p1', ids);
     const room = { id: 'room-1', name: 'Bedroom', lengthFt: '10', widthFt: '10', heightFt: '8', deductionEnabled: false, openingMode: 'quick' as const, quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: ['surf-1'] };
     const surface = { id: 'surf-1', roomId: 'room-1', kind: 'wall' as const, enabled: true, measurementMode: 'roomDerived' as const, areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: null, loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
-    const issuedRevision = { ...project.revisions[0], state: 'issued' as const, rooms: [room], surfaces: [surface] };
+    const issuedRevision = { ...project.revisions[0], state: 'issued' as const, rooms: [room], surfaces: [surface], customerDocumentSnapshot: makeIssuedDocument() };
     const withValid: Project = {
       ...project,
       revisions: [issuedRevision],

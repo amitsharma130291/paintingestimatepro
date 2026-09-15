@@ -15,6 +15,7 @@ const CALCULATION_STATES = new Set(['complete', 'incomplete', 'invalid']);
 const ACTUAL_REVIEW_STATES = new Set(['inProgress', 'final']);
 const OVERHEAD_MODES = new Set(['baselineAllocation', 'actualFlat']);
 const LABOR_BREAKDOWN_MODES = new Set(['direct', 'hoursRate']);
+const DOCUMENT_STATUSES = new Set(['draft', 'issued']);
 
 /** True for a non-null, non-array object — the guard every nested-entity
  * validator runs before touching a single field, so a corrupted `null` or
@@ -304,6 +305,48 @@ function validateOtherMaterialLine(path: string, raw: unknown, issues: Validatio
   checkRequiredNonNegativeDecimal(`${path}.unitCost`, raw.unitCost, issues);
 }
 
+/** independent-review R06: previously not validated at all — `{}` passed
+ * as a "valid" issued document, even though the live renderer
+ * dereferences `businessInfo.name`, `customerInfo`, and `scopeLines.map()`
+ * unconditionally. Every field the renderer actually reads is required
+ * here. */
+function validateCustomerDocumentSnapshot(path: string, raw: unknown, issues: ValidationIssue[]): void {
+  if (!isPlainObject(raw)) {
+    issues.push({ path, message: `Expected a customer document snapshot object at ${path}.` });
+    return;
+  }
+  checkRequiredString(`${path}.estimateNumber`, raw.estimateNumber, issues);
+  checkRequiredString(`${path}.estimateDate`, raw.estimateDate, issues);
+  if (!isPlainObject(raw.businessInfo)) {
+    issues.push({ path: `${path}.businessInfo`, message: `Expected an object at ${path}.businessInfo.` });
+  } else {
+    checkRequiredString(`${path}.businessInfo.name`, raw.businessInfo.name, issues);
+    checkRequiredString(`${path}.businessInfo.contact`, raw.businessInfo.contact, issues);
+    checkRequiredString(`${path}.businessInfo.address`, raw.businessInfo.address, issues);
+    checkOptionalString(`${path}.businessInfo.logo`, raw.businessInfo.logo, issues);
+  }
+  if (!isPlainObject(raw.customerInfo)) {
+    issues.push({ path: `${path}.customerInfo`, message: `Expected an object at ${path}.customerInfo.` });
+  } else {
+    checkRequiredString(`${path}.customerInfo.name`, raw.customerInfo.name, issues);
+    checkRequiredString(`${path}.customerInfo.address`, raw.customerInfo.address, issues);
+    checkRequiredString(`${path}.customerInfo.contact`, raw.customerInfo.contact, issues);
+  }
+  checkRequiredString(`${path}.projectTitle`, raw.projectTitle, issues);
+  checkRequiredString(`${path}.projectAddress`, raw.projectAddress, issues);
+  if (!Array.isArray(raw.scopeLines)) {
+    issues.push({ path: `${path}.scopeLines`, message: `Expected an array at ${path}.scopeLines.` });
+  } else {
+    raw.scopeLines.forEach((line, i) => checkRequiredString(`${path}.scopeLines[${i}]`, line, issues));
+  }
+  checkRequiredNonNegativeDecimal(`${path}.proposedPrice`, raw.proposedPrice, issues);
+  checkRequiredString(`${path}.notes`, raw.notes, issues);
+  checkRequiredString(`${path}.terms`, raw.terms, issues);
+  checkRequiredString(`${path}.revisionLabel`, raw.revisionLabel, issues);
+  checkRequiredString(`${path}.taxNotice`, raw.taxNotice, issues);
+  checkEnum(`${path}.status`, raw.status, DOCUMENT_STATUSES, issues);
+}
+
 function validateSuppliesAllowance(path: string, raw: unknown, issues: ValidationIssue[]): void {
   if (!isPlainObject(raw)) {
     issues.push({ path, message: `Expected a supplies-allowance object at ${path}.` });
@@ -547,6 +590,20 @@ export function validateBackupEnvelope(raw: unknown, rawByteLength: number): { o
 
         if (!rev.activeRateSnapshot) issues.push({ path: `${revPath}.activeRateSnapshot`, message: 'Revision missing embedded rate snapshot.' });
         else validateRateSnapshot(`${revPath}.activeRateSnapshot`, rev.activeRateSnapshot, issues);
+
+        // independent-review R06: an issued revision's frozen customer
+        // document was never validated at all — `{}` passed. The live
+        // renderer dereferences businessInfo.name, customerInfo, and
+        // scopeLines.map(), so an accepted malformed document breaks the
+        // project view. DATA_CONTRACT.md requires it "on issue," so it's
+        // REQUIRED (not merely well-formed-if-present) whenever state is
+        // 'issued'; for a draft it's optional but must still be
+        // well-formed if somehow present.
+        if (rev.state === 'issued' && !rev.customerDocumentSnapshot) {
+          issues.push({ path: `${revPath}.customerDocumentSnapshot`, message: 'An issued revision must have a frozen customer document snapshot.' });
+        } else if (rev.customerDocumentSnapshot !== null && rev.customerDocumentSnapshot !== undefined) {
+          validateCustomerDocumentSnapshot(`${revPath}.customerDocumentSnapshot`, rev.customerDocumentSnapshot, issues);
+        }
 
         // Surfaces are validated before rooms so rooms can cross-reference
         // the resulting ID set (surfaceIds -> real surfaces in this revision).
