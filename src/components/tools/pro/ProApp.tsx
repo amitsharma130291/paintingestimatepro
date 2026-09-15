@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { PEP } from '../../../engine/decimal';
+import { PEP, type Dec } from '../../../engine/decimal';
 import { evaluateActualReview, type ActualCategory } from '../../../engine/actuals';
+import { parseDecimalField } from '../../../engine/parse';
 import { assembleServiceHealth } from '../../../domain/serviceHealthAssembly';
 import { statusBadge, money, parseCoatsInput } from '../shared';
 import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope } from '../../../domain/entities';
@@ -460,18 +461,47 @@ export default function ProApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issuedRevision?.id]);
 
+  // independent-review R09/R10: raw typed text was fed directly into
+  // `new PEP(...)` (crashes on "abc") and finality was derived from the
+  // CHECKBOX count alone, ignoring whether the amounts were actually
+  // valid/non-null — a review with all 4 boxes checked but every amount
+  // left blank was saved as 'final' even though the engine's own
+  // completeness rule (confirmed && amount != null) says otherwise. This
+  // is the one shared, crash-proof parse both saveActuals() and
+  // actualResult below now use, so the saved finality and the on-screen
+  // preview can never disagree.
+  function deriveActualCategory(raw: { confirmed: boolean; amount: string }): { confirmed: boolean; value: Dec | null; invalid: boolean } {
+    if (!raw.confirmed) return { confirmed: false, value: null, invalid: false };
+    if (raw.amount.trim() === '') return { confirmed: true, value: null, invalid: false }; // confirmed but not yet entered — a real partial state, never zero
+    const parsed = parseDecimalField(raw.amount); // rejects negative by default — a cost cannot be negative
+    return parsed.kind === 'valid' ? { confirmed: true, value: parsed.value, invalid: false } : { confirmed: true, value: null, invalid: true };
+  }
+
+  const derivedActuals = useMemo(
+    () => ({
+      materials: deriveActualCategory(actuals.materials),
+      labor: deriveActualCategory(actuals.labor),
+      otherExpenses: deriveActualCategory(actuals.otherExpenses),
+      overhead: deriveActualCategory(actuals.overhead),
+    }),
+    [actuals]
+  );
+  const anyActualCategoryInvalid = Object.values(derivedActuals).some((c) => c.invalid);
+
   async function saveActuals() {
     if (!activeProject || !issuedRevision) return;
-    const confirmedCount = (['materials', 'labor', 'otherExpenses', 'overhead'] as const).filter((c) => actuals[c].confirmed).length;
+    // Genuinely complete = confirmed AND a valid, non-null amount (explicit
+    // zero counts — ACT-02) — never just "the checkbox is ticked."
+    const genuinelyCompleteCount = Object.values(derivedActuals).filter((c) => c.confirmed && c.value !== null).length;
     const review: ActualReview = {
       id: existingActualReview?.id ?? ids.nextId(),
       projectId: activeProject.id,
       baselineIssuedRevisionId: issuedRevision.id,
-      state: confirmedCount === 4 ? 'final' : 'inProgress',
-      materials: { confirmed: actuals.materials.confirmed, amount: actuals.materials.confirmed && actuals.materials.amount.trim() !== '' ? actuals.materials.amount : null },
-      labor: { confirmed: actuals.labor.confirmed, amount: actuals.labor.confirmed && actuals.labor.amount.trim() !== '' ? actuals.labor.amount : null },
-      otherExpenses: { confirmed: actuals.otherExpenses.confirmed, amount: actuals.otherExpenses.confirmed && actuals.otherExpenses.amount.trim() !== '' ? actuals.otherExpenses.amount : null },
-      overhead: { confirmed: actuals.overhead.confirmed, amount: actuals.overhead.confirmed && actuals.overhead.amount.trim() !== '' ? actuals.overhead.amount : null, mode: 'actualFlat' },
+      state: genuinelyCompleteCount === 4 ? 'final' : 'inProgress',
+      materials: { confirmed: actuals.materials.confirmed, amount: derivedActuals.materials.value?.toString() ?? null },
+      labor: { confirmed: actuals.labor.confirmed, amount: derivedActuals.labor.value?.toString() ?? null },
+      otherExpenses: { confirmed: actuals.otherExpenses.confirmed, amount: derivedActuals.otherExpenses.value?.toString() ?? null },
+      overhead: { confirmed: actuals.overhead.confirmed, amount: derivedActuals.overhead.value?.toString() ?? null, mode: 'actualFlat' },
       updatedAt: now(),
     };
     const nextProject = upsertActualReview(activeProject, review);
@@ -491,19 +521,19 @@ export default function ProApp() {
 
   const actualResult = useMemo(() => {
     if (!issuedRevision || !issuedRevision.proposedPrice) return null;
-    const toCategory = (c: { confirmed: boolean; amount: string }): ActualCategory => ({ confirmed: c.confirmed, amount: c.confirmed && c.amount.trim() !== '' ? new PEP(c.amount) : null });
+    const toCategory = (c: { confirmed: boolean; value: Dec | null }): ActualCategory => ({ confirmed: c.confirmed, amount: c.value });
     const storedJobCost = (issuedRevision.rawCalculatedOutputs as { jobCost?: string } | null)?.jobCost;
     const issuedSummary = assembleProjectEstimate(issuedRevision, { priceMode: issuedRevision.priceMode, customPriceRaw: issuedRevision.proposedPrice ?? '' });
     const baselineCost = storedJobCost ?? (issuedSummary.calculationState === 'complete' ? issuedSummary.jobCost!.toString() : '0');
     return evaluateActualReview({
-      materials: toCategory(actuals.materials),
-      labor: toCategory(actuals.labor),
-      otherExpenses: toCategory(actuals.otherExpenses),
-      overhead: toCategory(actuals.overhead),
+      materials: toCategory(derivedActuals.materials),
+      labor: toCategory(derivedActuals.labor),
+      otherExpenses: toCategory(derivedActuals.otherExpenses),
+      overhead: toCategory(derivedActuals.overhead),
       baselinePrice: new PEP(issuedRevision.proposedPrice),
       baselineCost: new PEP(baselineCost),
     });
-  }, [issuedRevision, actuals]);
+  }, [issuedRevision, derivedActuals]);
 
   // ---- Backup ----
   async function handleExport() {
@@ -1108,15 +1138,19 @@ export default function ProApp() {
             {issuedRevision && (
               <>
                 {(['materials', 'labor', 'otherExpenses', 'overhead'] as const).map((cat) => (
-                  <div key={cat} className="mb-3 flex items-center gap-3">
-                    <label className="flex items-center gap-2 text-sm capitalize">
-                      <input type="checkbox" checked={actuals[cat].confirmed} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], confirmed: e.target.checked } }))} />
-                      {cat}
-                    </label>
-                    <input className="w-32 rounded-btn border border-line px-2 py-1 tabular-nums" value={actuals[cat].amount} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], amount: e.target.value } }))} placeholder="0.00" />
+                  <div key={cat} className="mb-3">
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-sm capitalize">
+                        <input type="checkbox" checked={actuals[cat].confirmed} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], confirmed: e.target.checked } }))} />
+                        {cat}
+                      </label>
+                      <input className={`w-32 rounded-btn border px-2 py-1 tabular-nums ${derivedActuals[cat].invalid ? 'border-bad' : 'border-line'}`} value={actuals[cat].amount} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], amount: e.target.value } }))} placeholder="0.00" />
+                    </div>
+                    {derivedActuals[cat].invalid && <p className="mt-1 text-xs text-bad">Enter a plain non-negative number (e.g. 120.50), or leave blank.</p>}
                   </div>
                 ))}
-                <button type="button" className="btn btn-secondary" onClick={saveActuals}>Save actuals</button>
+                <button type="button" className="btn btn-secondary" disabled={anyActualCategoryInvalid} onClick={saveActuals}>Save actuals</button>
+                {anyActualCategoryInvalid && <p className="mt-1 text-xs text-bad">Fix the invalid amount(s) above before saving.</p>}
                 {actualResult && (
                   <dl className="mt-4 space-y-2 text-sm">
                     {actualResult.state === 'in_progress' ? (
