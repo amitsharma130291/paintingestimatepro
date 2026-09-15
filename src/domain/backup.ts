@@ -1,7 +1,22 @@
 import type { BackupEnvelope, Project, BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, ImportProvenanceRecord } from './entities';
 import { SCHEMA_VERSION, ENGINE_VERSION } from './entities';
 import type { IdSource } from './ids';
-import { parseDecimalField, isPositiveDivisor, MAX_OPENING_COUNT } from '../engine/parse';
+import {
+  parseDecimalField,
+  isPositiveDivisor,
+  MAX_OPENING_COUNT,
+  MAX_RATIO,
+  MAX_ROOM_DIMENSION_FT,
+  MAX_AREA_FT2,
+  MAX_TRIM_LENGTH_FT,
+  MAX_HOURS,
+  MAX_RATE,
+  MAX_MONETARY_INPUT,
+  MAX_ROOMS_PER_PROJECT,
+  MAX_SURFACES_PER_PROJECT,
+  MAX_DOCUMENT_LINES_PER_PROJECT,
+  type ParseOptions,
+} from '../engine/parse';
 import { readFrozenCalculatedOutputs } from './calculationSnapshot';
 
 const REVISION_STATES = new Set(['draft', 'issued', 'superseded']);
@@ -44,13 +59,17 @@ function checkEnum(path: string, v: unknown, allowed: Set<string>, issues: Valid
 }
 
 /** A required, non-negative decimal scalar (catalog prices, coverage, etc.).
- * BACK-020: reject non-decimal scalars and negative costs, never coerce. */
-function checkRequiredNonNegativeDecimal(path: string, raw: unknown, issues: ValidationIssue[]): void {
+ * BACK-020: reject non-decimal scalars and negative costs, never coerce.
+ * `opts` (BOUND-0xx/CORE-021) optionally forwards an engineering-bound
+ * ceiling and/or a fraction-digit cap to the same parseDecimalField the
+ * domain layer uses, so import validation can never drift out of
+ * agreement with the calculation engine's own bounds (V6-04's finding). */
+function checkRequiredNonNegativeDecimal(path: string, raw: unknown, issues: ValidationIssue[], opts: ParseOptions = {}): void {
   if (typeof raw !== 'string') {
     issues.push({ path, message: `Expected a decimal string at ${path}, got ${raw === null ? 'null' : typeof raw}.` });
     return;
   }
-  const parsed = parseDecimalField(raw);
+  const parsed = parseDecimalField(raw, opts);
   if (parsed.kind === 'missing') issues.push({ path, message: `Missing required decimal value at ${path}.` });
   else if (parsed.kind === 'invalid') issues.push({ path, message: `Invalid decimal value at ${path}: ${parsed.message}` });
 }
@@ -58,9 +77,22 @@ function checkRequiredNonNegativeDecimal(path: string, raw: unknown, issues: Val
 /** An optional (nullable) decimal scalar that, when present, must be a
  * non-negative decimal string — e.g. a revision's proposedPrice, which is
  * legitimately `null` for an unpriced estimate. */
-function checkOptionalNonNegativeDecimal(path: string, raw: unknown, issues: ValidationIssue[]): void {
-  if (raw === null || raw === undefined) return;
-  checkRequiredNonNegativeDecimal(path, raw, issues);
+function checkOptionalNonNegativeDecimal(path: string, raw: unknown, issues: ValidationIssue[], opts: ParseOptions = {}): void {
+  if (isBlankOptionalValue(raw)) return;
+  checkRequiredNonNegativeDecimal(path, raw, issues, opts);
+}
+
+/** BOUND-018..021 (discovered while wiring the room-dimension ceiling): a
+ * field typed `string | null` in the domain model (Room.lengthFt etc.)
+ * represents "not yet filled in" as EITHER `null` (its initial value) OR
+ * `''` (after a user types then clears it -- ProApp.tsx's NumField always
+ * passes a string). Every "Optional" decimal check below must treat both
+ * the same way "missing," never an error -- otherwise exporting a
+ * perfectly valid, saved incomplete draft (V6-05) and re-importing that
+ * exact backup file would reject it, even though nothing was ever wrong
+ * with it. Matches parseDecimalField's own `trim() === ''` -> missing rule. */
+function isBlankOptionalValue(raw: unknown): boolean {
+  return raw === null || raw === undefined || (typeof raw === 'string' && raw.trim() === '');
 }
 
 /** A required decimal that must ALSO be safely usable as a divisor
@@ -68,10 +100,10 @@ function checkOptionalNonNegativeDecimal(path: string, raw: unknown, issues: Val
  * near-zero positive divisor outright rather than letting a quotient blow
  * up silently. Zero itself is the most common real-world corruption case
  * (item 5's "zero coverage" regression) and is caught by the same check. */
-function checkRequiredPositiveDivisorDecimal(path: string, raw: unknown, issues: ValidationIssue[]): void {
-  checkRequiredNonNegativeDecimal(path, raw, issues);
+function checkRequiredPositiveDivisorDecimal(path: string, raw: unknown, issues: ValidationIssue[], opts: ParseOptions = {}): void {
+  checkRequiredNonNegativeDecimal(path, raw, issues, opts);
   if (typeof raw !== 'string') return;
-  const parsed = parseDecimalField(raw);
+  const parsed = parseDecimalField(raw, opts);
   if (parsed.kind === 'valid' && !isPositiveDivisor(parsed.value)) {
     issues.push({ path, message: `${path} must be a positive value large enough to safely divide by; got "${raw}".` });
   }
@@ -80,9 +112,40 @@ function checkRequiredPositiveDivisorDecimal(path: string, raw: unknown, issues:
 /** Same as above, but the field is nullable (nullable-until-configured
  * business settings, or a per-surface override that falls back to a
  * global default when absent). */
-function checkOptionalPositiveDivisorDecimal(path: string, raw: unknown, issues: ValidationIssue[]): void {
+function checkOptionalPositiveDivisorDecimal(path: string, raw: unknown, issues: ValidationIssue[], opts: ParseOptions = {}): void {
+  if (isBlankOptionalValue(raw)) return;
+  checkRequiredPositiveDivisorDecimal(path, raw, issues, opts);
+}
+
+/** V6-06 (import side): an INACTIVE mode-dependent field (e.g. a supplies
+ * allowance's amount when mode isn't 'flat') is never read by the
+ * calculation engine, so it is checked ONLY for its basic type contract
+ * (still a string) here -- not for blankness, not for decimal well-
+ * formedness, not for range. "An invalid hidden field must not block the
+ * active mode" applies equally to import: a malformed or stale leftover
+ * value in a field the active mode ignores is inert and must never be a
+ * reason to reject an otherwise-valid import. */
+function checkInactiveNonNegativeDecimal(path: string, raw: unknown, issues: ValidationIssue[]): void {
   if (raw === null || raw === undefined) return;
-  checkRequiredPositiveDivisorDecimal(path, raw, issues);
+  if (typeof raw !== 'string') {
+    issues.push({ path, message: `Expected a decimal string at ${path}, got ${typeof raw}.` });
+  }
+}
+
+/** A plain "must be greater than 0" decimal (room dimensions, a manual
+ * surface area) — distinct from `PositiveDivisor` above, which additionally
+ * enforces the MIN_POSITIVE_DIVISOR safety margin for values used as a
+ * formula divisor. These fields are only ever multiplied, never divided
+ * by, so the spec's literal ">0" is the correct bound, not the stricter
+ * divisor floor. */
+function checkOptionalPositiveDecimal(path: string, raw: unknown, issues: ValidationIssue[], opts: ParseOptions = {}): void {
+  if (isBlankOptionalValue(raw)) return;
+  checkRequiredNonNegativeDecimal(path, raw, issues, opts);
+  if (typeof raw !== 'string') return;
+  const parsed = parseDecimalField(raw, opts);
+  if (parsed.kind === 'valid' && !parsed.value.greaterThan(0)) {
+    issues.push({ path, message: `${path} must be greater than 0; got "${raw}".` });
+  }
 }
 
 function checkRequiredInt(path: string, v: unknown, issues: ValidationIssue[], opts: { min?: number; max?: number } = {}): void {
@@ -121,24 +184,20 @@ function validateBusinessSettings(path: string, raw: unknown, issues: Validation
     return;
   }
   checkRequiredString(`${path}.id`, raw.id, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.loadedHourlyRate`, raw.loadedHourlyRate, issues);
-  checkRequiredNonNegativeDecimal(`${path}.overheadRatio`, raw.overheadRatio, issues);
+  checkOptionalPositiveDivisorDecimal(`${path}.loadedHourlyRate`, raw.loadedHourlyRate, issues, { max: MAX_RATE });
+  checkRequiredNonNegativeDecimal(`${path}.overheadRatio`, raw.overheadRatio, issues, { max: MAX_RATIO }); // BOUND-012/013
   checkRequiredNonNegativeDecimal(`${path}.targetMarginRatio`, raw.targetMarginRatio, issues);
   checkRequiredInt(`${path}.defaultCoats`, raw.defaultCoats, issues, { min: 1, max: 5 });
-  checkRequiredNonNegativeDecimal(`${path}.defaultWasteRatio`, raw.defaultWasteRatio, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.wallThroughput`, raw.wallThroughput, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.ceilingThroughput`, raw.ceilingThroughput, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.trimThroughput`, raw.trimThroughput, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.doorHoursPerSidePerCoat`, raw.doorHoursPerSidePerCoat, issues);
-  checkRequiredNonNegativeDecimal(`${path}.defaultTravelAmount`, raw.defaultTravelAmount, issues);
+  checkRequiredNonNegativeDecimal(`${path}.defaultWasteRatio`, raw.defaultWasteRatio, issues, { max: MAX_RATIO }); // BOUND-016/017
+  checkOptionalPositiveDivisorDecimal(`${path}.wallThroughput`, raw.wallThroughput, issues, { max: MAX_RATE });
+  checkOptionalPositiveDivisorDecimal(`${path}.ceilingThroughput`, raw.ceilingThroughput, issues, { max: MAX_RATE });
+  checkOptionalPositiveDivisorDecimal(`${path}.trimThroughput`, raw.trimThroughput, issues, { max: MAX_RATE });
+  checkOptionalPositiveDivisorDecimal(`${path}.doorHoursPerSidePerCoat`, raw.doorHoursPerSidePerCoat, issues, { max: MAX_RATE });
+  checkRequiredNonNegativeDecimal(`${path}.defaultTravelAmount`, raw.defaultTravelAmount, issues, { max: MAX_MONETARY_INPUT });
   checkRequiredBoolean(`${path}.sampleAssumptionsConfirmed`, raw.sampleAssumptionsConfirmed, issues);
-  if (!isPlainObject(raw.defaultSuppliesAllowance)) {
-    issues.push({ path: `${path}.defaultSuppliesAllowance`, message: `Expected an object at ${path}.defaultSuppliesAllowance.` });
-  } else {
-    checkEnum(`${path}.defaultSuppliesAllowance.mode`, raw.defaultSuppliesAllowance.mode, SUPPLIES_MODES, issues);
-    checkRequiredNonNegativeDecimal(`${path}.defaultSuppliesAllowance.amount`, raw.defaultSuppliesAllowance.amount, issues);
-    checkRequiredNonNegativeDecimal(`${path}.defaultSuppliesAllowance.ratio`, raw.defaultSuppliesAllowance.ratio, issues);
-  }
+  // Same shape and same V6-06 mode-gated rule as a revision's own
+  // suppliesAllowance -- see validateSuppliesAllowance below.
+  validateSuppliesAllowance(`${path}.defaultSuppliesAllowance`, raw.defaultSuppliesAllowance, issues);
 }
 
 function validatePaintVariant(path: string, raw: unknown, issues: ValidationIssue[]): void {
@@ -163,7 +222,7 @@ function validateOtherMaterial(path: string, raw: unknown, issues: ValidationIss
   checkRequiredString(`${path}.id`, raw.id, issues);
   checkRequiredString(`${path}.name`, raw.name, issues);
   checkRequiredString(`${path}.unit`, raw.unit, issues);
-  checkRequiredNonNegativeDecimal(`${path}.unitCost`, raw.unitCost, issues);
+  checkRequiredNonNegativeDecimal(`${path}.unitCost`, raw.unitCost, issues, { max: MAX_MONETARY_INPUT }); // BOUND-039..042
 }
 
 function validateServiceDefinition(path: string, raw: unknown, issues: ValidationIssue[]): void {
@@ -177,20 +236,20 @@ function validateServiceDefinition(path: string, raw: unknown, issues: Validatio
   checkEnum(`${path}.kind`, raw.kind, SERVICE_KINDS, issues);
   checkOptionalString(`${path}.paintVariantId`, raw.paintVariantId, issues);
   checkOptionalInt(`${path}.coats`, raw.coats, issues, { min: 1, max: 5 });
-  if (raw.wasteRatio !== null) checkOptionalNonNegativeDecimal(`${path}.wasteRatio`, raw.wasteRatio, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.loadedHourlyRate`, raw.loadedHourlyRate, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.throughput`, raw.throughput, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.hoursPerSidePerCoat`, raw.hoursPerSidePerCoat, issues);
+  if (raw.wasteRatio !== null) checkOptionalNonNegativeDecimal(`${path}.wasteRatio`, raw.wasteRatio, issues, { max: MAX_RATIO });
+  checkOptionalPositiveDivisorDecimal(`${path}.loadedHourlyRate`, raw.loadedHourlyRate, issues, { max: MAX_RATE });
+  checkOptionalPositiveDivisorDecimal(`${path}.throughput`, raw.throughput, issues, { max: MAX_RATE });
+  checkOptionalPositiveDivisorDecimal(`${path}.hoursPerSidePerCoat`, raw.hoursPerSidePerCoat, issues, { max: MAX_RATE });
   checkOptionalNonNegativeDecimal(`${path}.developedWidthFt`, raw.developedWidthFt, issues);
   checkOptionalNonNegativeDecimal(`${path}.widthFt`, raw.widthFt, issues);
   checkOptionalNonNegativeDecimal(`${path}.heightFt`, raw.heightFt, issues);
   if (raw.paintedSides !== null && raw.paintedSides !== 1 && raw.paintedSides !== 2) {
     issues.push({ path: `${path}.paintedSides`, message: `paintedSides must be 1, 2, or null; got ${String(raw.paintedSides)}.` });
   }
-  checkRequiredNonNegativeDecimal(`${path}.additionalLaborHoursPerUnit`, raw.additionalLaborHoursPerUnit, issues);
-  checkRequiredNonNegativeDecimal(`${path}.suppliesCostPerUnit`, raw.suppliesCostPerUnit, issues);
-  checkRequiredNonNegativeDecimal(`${path}.directExpensePerUnit`, raw.directExpensePerUnit, issues);
-  checkOptionalNonNegativeDecimal(`${path}.currentSellingPrice`, raw.currentSellingPrice, issues);
+  checkRequiredNonNegativeDecimal(`${path}.additionalLaborHoursPerUnit`, raw.additionalLaborHoursPerUnit, issues, { max: MAX_HOURS });
+  checkRequiredNonNegativeDecimal(`${path}.suppliesCostPerUnit`, raw.suppliesCostPerUnit, issues, { max: MAX_MONETARY_INPUT });
+  checkRequiredNonNegativeDecimal(`${path}.directExpensePerUnit`, raw.directExpensePerUnit, issues, { max: MAX_MONETARY_INPUT });
+  checkOptionalNonNegativeDecimal(`${path}.currentSellingPrice`, raw.currentSellingPrice, issues, { max: MAX_MONETARY_INPUT });
 }
 
 function validateRoom(path: string, raw: unknown, surfaceIdsInRevision: Set<string>, issues: ValidationIssue[]): void {
@@ -200,9 +259,13 @@ function validateRoom(path: string, raw: unknown, surfaceIdsInRevision: Set<stri
   }
   checkRequiredString(`${path}.id`, raw.id, issues);
   checkRequiredString(`${path}.name`, raw.name, issues);
-  checkOptionalNonNegativeDecimal(`${path}.lengthFt`, raw.lengthFt, issues);
-  checkOptionalNonNegativeDecimal(`${path}.widthFt`, raw.widthFt, issues);
-  checkOptionalNonNegativeDecimal(`${path}.heightFt`, raw.heightFt, issues);
+  // BOUND-018..021: a room dimension, when present, is >0 and <=100,000 ft
+  // -- absent (blank, work-in-progress) stays "missing", never an error,
+  // matching V6-05's "incomplete drafts must still import."
+  const roomDimOpts = { max: MAX_ROOM_DIMENSION_FT };
+  checkOptionalPositiveDecimal(`${path}.lengthFt`, raw.lengthFt, issues, roomDimOpts);
+  checkOptionalPositiveDecimal(`${path}.widthFt`, raw.widthFt, issues, roomDimOpts);
+  checkOptionalPositiveDecimal(`${path}.heightFt`, raw.heightFt, issues, roomDimOpts);
   checkRequiredBoolean(`${path}.deductionEnabled`, raw.deductionEnabled, issues);
   checkEnum(`${path}.openingMode`, raw.openingMode, OPENING_MODES, issues);
   if (!isPlainObject(raw.quick)) {
@@ -255,8 +318,22 @@ function validateSurface(path: string, raw: unknown, roomIdsInRevision: Set<stri
   checkEnum(`${path}.kind`, raw.kind, SERVICE_KINDS, issues);
   checkRequiredBoolean(`${path}.enabled`, raw.enabled, issues);
   checkEnum(`${path}.measurementMode`, raw.measurementMode, MEASUREMENT_MODES, issues);
-  checkOptionalNonNegativeDecimal(`${path}.areaFt2`, raw.areaFt2, issues);
-  checkOptionalNonNegativeDecimal(`${path}.trimLengthFt`, raw.trimLengthFt, issues);
+  // BOUND-022..025: manualAreaFt2 (>0, <=1e9) only applies when this
+  // surface's OWN measurementMode is 'manual' -- when 'roomDerived', the
+  // field is inactive/unused by the calculation engine (V6-06's lesson:
+  // never let a stale/leftover value in an inactive field block import).
+  if (raw.measurementMode === 'manual') {
+    checkOptionalPositiveDecimal(`${path}.areaFt2`, raw.areaFt2, issues, { max: MAX_AREA_FT2 });
+  } else {
+    checkOptionalNonNegativeDecimal(`${path}.areaFt2`, raw.areaFt2, issues);
+  }
+  // BOUND-026..029: trimLengthFt ([0,1e6]) only applies to a trim surface;
+  // same inactive-field reasoning as areaFt2 above.
+  if (raw.kind === 'trim') {
+    checkOptionalNonNegativeDecimal(`${path}.trimLengthFt`, raw.trimLengthFt, issues, { max: MAX_TRIM_LENGTH_FT });
+  } else {
+    checkOptionalNonNegativeDecimal(`${path}.trimLengthFt`, raw.trimLengthFt, issues);
+  }
   checkOptionalNonNegativeDecimal(`${path}.developedWidthFt`, raw.developedWidthFt, issues);
   checkOptionalInt(`${path}.doorCount`, raw.doorCount, issues, { min: 0, max: MAX_OPENING_COUNT });
   checkOptionalNonNegativeDecimal(`${path}.widthFt`, raw.widthFt, issues);
@@ -266,10 +343,10 @@ function validateSurface(path: string, raw: unknown, roomIdsInRevision: Set<stri
   }
   checkOptionalString(`${path}.paintVariantId`, raw.paintVariantId, issues);
   checkOptionalInt(`${path}.coats`, raw.coats, issues, { min: 1, max: 5 });
-  if (raw.wasteRatio !== null) checkOptionalNonNegativeDecimal(`${path}.wasteRatio`, raw.wasteRatio, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.loadedHourlyRate`, raw.loadedHourlyRate, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.throughput`, raw.throughput, issues);
-  checkOptionalPositiveDivisorDecimal(`${path}.hoursPerSidePerCoat`, raw.hoursPerSidePerCoat, issues);
+  if (raw.wasteRatio !== null) checkOptionalNonNegativeDecimal(`${path}.wasteRatio`, raw.wasteRatio, issues, { max: MAX_RATIO });
+  checkOptionalPositiveDivisorDecimal(`${path}.loadedHourlyRate`, raw.loadedHourlyRate, issues, { max: MAX_RATE });
+  checkOptionalPositiveDivisorDecimal(`${path}.throughput`, raw.throughput, issues, { max: MAX_RATE });
+  checkOptionalPositiveDivisorDecimal(`${path}.hoursPerSidePerCoat`, raw.hoursPerSidePerCoat, issues, { max: MAX_RATE });
 }
 
 function validateExpenseLine(path: string, raw: unknown, issues: ValidationIssue[]): void {
@@ -279,7 +356,7 @@ function validateExpenseLine(path: string, raw: unknown, issues: ValidationIssue
   }
   checkRequiredString(`${path}.id`, raw.id, issues);
   checkRequiredString(`${path}.description`, raw.description, issues);
-  checkRequiredNonNegativeDecimal(`${path}.amount`, raw.amount, issues);
+  checkRequiredNonNegativeDecimal(`${path}.amount`, raw.amount, issues, { max: MAX_MONETARY_INPUT }); // BOUND-039..042
 }
 
 function validateAdditionalLaborLine(path: string, raw: unknown, issues: ValidationIssue[]): void {
@@ -289,8 +366,8 @@ function validateAdditionalLaborLine(path: string, raw: unknown, issues: Validat
   }
   checkRequiredString(`${path}.id`, raw.id, issues);
   checkRequiredString(`${path}.description`, raw.description, issues);
-  checkRequiredNonNegativeDecimal(`${path}.hours`, raw.hours, issues);
-  checkRequiredPositiveDivisorDecimal(`${path}.loadedHourlyRate`, raw.loadedHourlyRate, issues);
+  checkRequiredNonNegativeDecimal(`${path}.hours`, raw.hours, issues, { max: MAX_HOURS }); // BOUND-035..038
+  checkRequiredPositiveDivisorDecimal(`${path}.loadedHourlyRate`, raw.loadedHourlyRate, issues, { max: MAX_RATE });
 }
 
 function validateOtherMaterialLine(path: string, raw: unknown, issues: ValidationIssue[]): void {
@@ -303,7 +380,7 @@ function validateOtherMaterialLine(path: string, raw: unknown, issues: Validatio
   checkOptionalString(`${path}.sourceMaterialId`, raw.sourceMaterialId, issues);
   checkRequiredString(`${path}.unit`, raw.unit, issues);
   checkRequiredNonNegativeDecimal(`${path}.quantity`, raw.quantity, issues);
-  checkRequiredNonNegativeDecimal(`${path}.unitCost`, raw.unitCost, issues);
+  checkRequiredNonNegativeDecimal(`${path}.unitCost`, raw.unitCost, issues, { max: MAX_MONETARY_INPUT }); // BOUND-039..042
 }
 
 /** independent-review R06: previously not validated at all — `{}` passed
@@ -340,7 +417,7 @@ function validateCustomerDocumentSnapshot(path: string, raw: unknown, issues: Va
   } else {
     raw.scopeLines.forEach((line, i) => checkRequiredString(`${path}.scopeLines[${i}]`, line, issues));
   }
-  checkRequiredNonNegativeDecimal(`${path}.proposedPrice`, raw.proposedPrice, issues);
+  checkRequiredNonNegativeDecimal(`${path}.proposedPrice`, raw.proposedPrice, issues, { maxFractionDigits: 2, max: MAX_MONETARY_INPUT }); // CORE-021, BOUND-039..042
   checkRequiredString(`${path}.notes`, raw.notes, issues);
   checkRequiredString(`${path}.terms`, raw.terms, issues);
   checkRequiredString(`${path}.revisionLabel`, raw.revisionLabel, issues);
@@ -354,8 +431,23 @@ function validateSuppliesAllowance(path: string, raw: unknown, issues: Validatio
     return;
   }
   checkEnum(`${path}.mode`, raw.mode, SUPPLIES_MODES, issues);
-  checkRequiredNonNegativeDecimal(`${path}.amount`, raw.amount, issues);
-  checkRequiredNonNegativeDecimal(`${path}.ratio`, raw.ratio, issues);
+  // V6-06 (import-side counterpart): the calculation engine only ever
+  // reads the ONE field the active mode uses (see estimateAssembly.ts) --
+  // requiring BOTH amount and ratio unconditionally here would reject a
+  // perfectly valid, previously-saved draft on export/re-import the moment
+  // the inactive field was left blank (e.g. mode switched to 'none' after
+  // clearing a flat amount). Only require/bound the active field; the
+  // inactive one is checked for well-formedness only if present.
+  if (raw.mode === 'flat') {
+    checkRequiredNonNegativeDecimal(`${path}.amount`, raw.amount, issues, { max: MAX_MONETARY_INPUT });
+    checkInactiveNonNegativeDecimal(`${path}.ratio`, raw.ratio, issues);
+  } else if (raw.mode === 'paintPercent') {
+    checkInactiveNonNegativeDecimal(`${path}.amount`, raw.amount, issues);
+    checkRequiredNonNegativeDecimal(`${path}.ratio`, raw.ratio, issues);
+  } else {
+    checkInactiveNonNegativeDecimal(`${path}.amount`, raw.amount, issues);
+    checkInactiveNonNegativeDecimal(`${path}.ratio`, raw.ratio, issues);
+  }
 }
 
 function validateRateSnapshot(path: string, raw: unknown, issues: ValidationIssue[]): void {
@@ -369,8 +461,18 @@ function validateRateSnapshot(path: string, raw: unknown, issues: ValidationIssu
   checkRequiredString(`${path}.sourceCatalogRevision`, raw.sourceCatalogRevision, issues);
   checkRequiredString(`${path}.engineVersion`, raw.engineVersion, issues);
   validateBusinessSettings(`${path}.businessSettings`, raw.businessSettings, issues);
+  // GEO-014: a snapshot embeds its OWN independent copy of the catalog at
+  // capture time -- two entries sharing one id but disagreeing on price/
+  // coverage/etc. would let the aggregator's `.find(v => v.id === id)`
+  // silently resolve to whichever one happens to be first, picking a rate
+  // with no way for the user to know a conflict existed. checkNoDuplicateIds
+  // already flags same-id (however the values differ); it just was never
+  // wired up for a snapshot's embedded array before.
   if (!Array.isArray(raw.paintVariants)) issues.push({ path: `${path}.paintVariants`, message: `Expected an array at ${path}.paintVariants.` });
-  else raw.paintVariants.forEach((v, i) => validatePaintVariant(`${path}.paintVariants[${i}]`, v, issues));
+  else {
+    raw.paintVariants.forEach((v, i) => validatePaintVariant(`${path}.paintVariants[${i}]`, v, issues));
+    checkNoDuplicateIds(`${path}.paintVariants`, raw.paintVariants as { id: unknown }[], issues);
+  }
   if (!Array.isArray(raw.otherMaterials)) issues.push({ path: `${path}.otherMaterials`, message: `Expected an array at ${path}.otherMaterials.` });
   else raw.otherMaterials.forEach((m, i) => validateOtherMaterial(`${path}.otherMaterials[${i}]`, m, issues));
 }
@@ -520,7 +622,7 @@ function validateRevisionStructure(
   checkRequiredString(`${revPath}.engineVersion`, rev.engineVersion, issues);
   checkEnum(`${revPath}.calculationState`, rev.calculationState, CALCULATION_STATES, issues);
   checkEnum(`${revPath}.priceMode`, rev.priceMode, PRICE_MODES, issues);
-  checkOptionalNonNegativeDecimal(`${revPath}.proposedPrice`, rev.proposedPrice, issues);
+  checkOptionalNonNegativeDecimal(`${revPath}.proposedPrice`, rev.proposedPrice, issues, { maxFractionDigits: 2, max: MAX_MONETARY_INPUT }); // CORE-021, BOUND-039..042
   checkOptionalString(`${revPath}.issuedAt`, rev.issuedAt, issues);
 
   if (!isPlainObject(rev.businessInfo)) issues.push({ path: `${revPath}.businessInfo`, message: `Expected an object at ${revPath}.businessInfo.` });
@@ -596,6 +698,10 @@ function validateRevisionStructure(
   } else {
     for (const s of rev.surfaces) if (isPlainObject(s) && typeof s.id === 'string') surfaceIds.add(s.id);
     checkNoDuplicateIds(`${revPath}.surfaces`, rev.surfaces as { id: unknown }[], issues);
+    // BOUND-052..056: at most 2,000 surfaces per project.
+    if (rev.surfaces.length > MAX_SURFACES_PER_PROJECT) {
+      issues.push({ path: `${revPath}.surfaces`, message: `${revPath}.surfaces has ${rev.surfaces.length} entries; at most ${MAX_SURFACES_PER_PROJECT} are allowed.` });
+    }
   }
   const roomIds = new Set<string>();
   if (Array.isArray(rev.rooms)) for (const r of rev.rooms) if (isPlainObject(r) && typeof r.id === 'string') roomIds.add(r.id);
@@ -606,6 +712,10 @@ function validateRevisionStructure(
     issues.push({ path: `${revPath}.rooms`, message: `Expected an array at ${revPath}.rooms.` });
   } else {
     checkNoDuplicateIds(`${revPath}.rooms`, rev.rooms as { id: unknown }[], issues);
+    // BOUND-047..051: at most 500 rooms per project.
+    if (rev.rooms.length > MAX_ROOMS_PER_PROJECT) {
+      issues.push({ path: `${revPath}.rooms`, message: `${revPath}.rooms has ${rev.rooms.length} entries; at most ${MAX_ROOMS_PER_PROJECT} are allowed.` });
+    }
     rev.rooms.forEach((r, i) => validateRoom(`${revPath}.rooms[${i}]`, r, surfaceIds, issues));
   }
 
@@ -619,6 +729,16 @@ function validateRevisionStructure(
 
   if (!Array.isArray(rev.otherExpenses)) issues.push({ path: `${revPath}.otherExpenses`, message: `Expected an array at ${revPath}.otherExpenses.` });
   else rev.otherExpenses.forEach((l, i) => validateExpenseLine(`${revPath}.otherExpenses[${i}]`, l, issues));
+
+  // BOUND-057..061: at most 2,000 "document lines" per project -- see
+  // MAX_DOCUMENT_LINES_PER_PROJECT's own comment in engine/parse.ts for
+  // the interpretation (additionalLabor + otherMaterialLines + otherExpenses).
+  if (Array.isArray(rev.additionalLabor) && Array.isArray(rev.otherMaterialLines) && Array.isArray(rev.otherExpenses)) {
+    const documentLineCount = rev.additionalLabor.length + rev.otherMaterialLines.length + rev.otherExpenses.length;
+    if (documentLineCount > MAX_DOCUMENT_LINES_PER_PROJECT) {
+      issues.push({ path: revPath, message: `${revPath} has ${documentLineCount} combined additional cost lines; at most ${MAX_DOCUMENT_LINES_PER_PROJECT} are allowed.` });
+    }
+  }
 }
 
 /** Full-shape validation BEFORE any write — D11: "failed/truncated/invalid

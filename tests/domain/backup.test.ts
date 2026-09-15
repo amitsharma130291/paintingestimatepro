@@ -957,3 +957,149 @@ describe('V6-03: import-as-copy remaps preRefreshCheckpoint\'s internal identiti
     expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
   });
 });
+
+describe('Boundary matrix (import side): engineering-bound ceilings stay consistent with the calculation engine', () => {
+  function projectWithSettings(settingsOverrides: Partial<BusinessSettings> = {}): Project {
+    const ids = sequentialIdSource();
+    const snap = createSnapshot(makeSettings(settingsOverrides), [makeVariant()], [], ids, 'rev-1');
+    const revision = createDraftRevision('p1', snap, ids);
+    return { id: 'p1', title: 'Job', revisions: [revision], activeRevisionId: revision.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now(), version: 1 };
+  }
+  function envelopeFor(project: Project) {
+    return exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [project], sequentialIdSource());
+  }
+
+  it('BOUND-013: rejects overheadRatio just above 1', () => {
+    const project = projectWithSettings({ overheadRatio: '1.001' });
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+  it('BOUND-012/013: accepts overheadRatio at the 0/1 boundaries', () => {
+    expect(validateBackupEnvelope(envelopeFor(projectWithSettings({ overheadRatio: '0' })), 10_000).ok).toBe(true);
+    expect(validateBackupEnvelope(envelopeFor(projectWithSettings({ overheadRatio: '1' })), 10_000).ok).toBe(true);
+  });
+  it('BOUND-017: rejects defaultWasteRatio just above 1', () => {
+    const project = projectWithSettings({ defaultWasteRatio: '1.001' });
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+  it('BOUND-046: rejects a throughput setting just above 1,000,000', () => {
+    const project = projectWithSettings({ wallThroughput: '1000000.001' });
+    expect(validateBackupEnvelope(envelopeFor(project), 10_000).ok).toBe(false);
+  });
+  it('BOUND-043/044: accepts throughput at its floor and ceiling', () => {
+    expect(validateBackupEnvelope(envelopeFor(projectWithSettings({ wallThroughput: '0.001' })), 10_000).ok).toBe(true);
+    expect(validateBackupEnvelope(envelopeFor(projectWithSettings({ wallThroughput: '1000000' })), 10_000).ok).toBe(true);
+  });
+
+  function projectWithRoom(roomOverrides: Partial<{ lengthFt: string | null }> = {}): Project {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const room = { id: 'room-1', name: 'Bedroom', lengthFt: '20', widthFt: '16', heightFt: '9', deductionEnabled: false, openingMode: 'quick' as const, quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: ['surf-1'], ...roomOverrides };
+    const surface = { id: 'surf-1', roomId: 'room-1', kind: 'wall' as const, enabled: true, measurementMode: 'roomDerived' as const, areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: '0.1', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
+    return { ...project, revisions: [{ ...project.revisions[0], rooms: [room], surfaces: [surface] }] };
+  }
+
+  it('BOUND-021: rejects a room dimension just above 100,000 ft', () => {
+    const p = projectWithRoom({ lengthFt: '100000.001' });
+    expect(validateBackupEnvelope(exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [p], sequentialIdSource()), 10_000).ok).toBe(false);
+  });
+  it('BOUND-020: rejects a room dimension of exactly 0', () => {
+    const p = projectWithRoom({ lengthFt: '0' });
+    expect(validateBackupEnvelope(exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [p], sequentialIdSource()), 10_000).ok).toBe(false);
+  });
+  // REGRESSION (found while wiring BOUND-018..021): Room.lengthFt is typed
+  // `string | null` -- "blank" is reachable as EITHER representation
+  // (`null` before the field is ever touched, `''` after a user types then
+  // clears it). checkOptionalNonNegativeDecimal previously only skipped
+  // `null`/`undefined`, so an incomplete draft saved fine locally (V6-05)
+  // but its OWN exported backup file would fail re-import the moment that
+  // blank dimension was the empty-string form -- a real, silent way to
+  // "lose" a perfectly valid draft on restore.
+  it.each([
+    ['null (never touched)', null],
+    ["'' (typed then cleared)", ''],
+  ] as const)('a blank (work-in-progress) room dimension represented as %s is NOT an error', (_label, blankValue) => {
+    const p = projectWithRoom({ lengthFt: blankValue });
+    expect(validateBackupEnvelope(exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [p], sequentialIdSource()), 10_000).ok).toBe(true);
+  });
+
+  it('BOUND-047..051: rejects a project with 501 rooms', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const rooms = Array.from({ length: 501 }, (_, i) => ({ id: `room-${i}`, name: 'Bedroom', lengthFt: '', widthFt: '', heightFt: '', deductionEnabled: false, openingMode: 'quick' as const, quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' }, openings: [], surfaceIds: [] }));
+    const withRooms = { ...project, revisions: [{ ...project.revisions[0], rooms }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withRooms], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('BOUND-039..042: rejects an other-expense amount just above 1,000,000,000', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withExpense = { ...project, revisions: [{ ...project.revisions[0], otherExpenses: [{ id: 'e1', description: 'Travel', amount: '1000000000.01' }] }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withExpense], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('BOUND-035..038: rejects additional-labor hours just above 1,000,000', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withLabor = { ...project, revisions: [{ ...project.revisions[0], additionalLabor: [{ id: 'l1', description: 'Prep', hours: '1000000.001', loadedHourlyRate: '32' }] }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withLabor], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('CORE-021 (import side): rejects a proposedPrice with more than 2 fractional digits', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withPrice = { ...project, revisions: [{ ...project.revisions[0], proposedPrice: '12.005' }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withPrice], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('CORE-021 (import side): accepts a proposedPrice with exactly 2 fractional digits', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withPrice = { ...project, revisions: [{ ...project.revisions[0], proposedPrice: '899.99' }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withPrice], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+});
+
+describe('GEO-014 (import side): a snapshot cannot embed two conflicting variant entries under one id', () => {
+  it('rejects two paint variants sharing an id within the SAME snapshot', () => {
+    const ids = sequentialIdSource();
+    const dup1 = makeVariant();
+    const dup2 = { ...makeVariant(), pricePerGal: '99.99' }; // same id, different price -- exactly the "conflicting values" case
+    const settings = makeSettings();
+    const snap = createSnapshot(settings, [dup1, dup2], [], ids, 'rev-1');
+    const revision = createDraftRevision('p1', snap, ids);
+    const project: Project = { id: 'p1', title: 'Job', revisions: [revision], activeRevisionId: revision.id, actualReviews: [], createdAt: ids.now(), updatedAt: ids.now(), version: 1 };
+    const envelope = exportBackup('install-1', settings, [dup1], [], [], [project], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+});
+
+describe('V6-06 (import side): supplies allowance import validation matches the calculation engine\'s mode gating', () => {
+  it('accepts a mode=none allowance whose stale amount field is blank, after switching away from flat', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withAllowance = { ...project, revisions: [{ ...project.revisions[0], suppliesAllowance: { mode: 'none' as const, amount: '', ratio: '0' } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withAllowance], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+
+  it('accepts a mode=flat allowance whose stale, malformed ratio field is left over from a previous paintPercent session', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withAllowance = { ...project, revisions: [{ ...project.revisions[0], suppliesAllowance: { mode: 'flat' as const, amount: '25', ratio: 'garbage' } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withAllowance], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+
+  it('still rejects a mode=flat allowance whose ACTIVE amount field is blank', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withAllowance = { ...project, revisions: [{ ...project.revisions[0], suppliesAllowance: { mode: 'flat' as const, amount: '', ratio: '0' } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withAllowance], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+});

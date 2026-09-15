@@ -11,7 +11,7 @@ import type { BusinessSettings, PaintVariant, Room, Surface, EstimateRevision } 
 import { createDraftRevision } from '../../src/domain/project';
 import { PEP } from '../../src/engine/decimal';
 
-function settings(): BusinessSettings {
+function settings(overrides: Partial<BusinessSettings> = {}): BusinessSettings {
   const now = '2026-01-01T00:00:00.000Z';
   return {
     id: 's1', loadedHourlyRate: '32', overheadRatio: '0.15', targetMarginRatio: '0.35',
@@ -19,6 +19,7 @@ function settings(): BusinessSettings {
     trimThroughput: '40', doorHoursPerSidePerCoat: '0.75', defaultTravelAmount: '0',
     defaultSuppliesAllowance: { mode: 'none', amount: '0', ratio: '0' }, sampleAssumptionsConfirmed: true,
     createdAt: now, updatedAt: now,
+    ...overrides,
   };
 }
 function variant(id: string, price: string): PaintVariant {

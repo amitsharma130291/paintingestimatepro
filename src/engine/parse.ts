@@ -23,6 +23,13 @@ import type { FieldState } from './types';
 export interface ParseOptions {
   allowNegative?: boolean;
   maxFractionDigits?: number;
+  /** Inclusive engineering-bound checks (CALCULATION_SPEC.md §1's
+   * "Engineering bounds" list) — applied AFTER a value parses successfully,
+   * so a malformed string still reports `malformed_number` rather than a
+   * confusing range message. Accepts a plain decimal string or an already-
+   * constructed Dec so callers can reuse an exported constant directly. */
+  min?: string | Dec;
+  max?: string | Dec;
 }
 
 const GRAMMAR = /^[+-]?(\d+)(\.(\d+))?$/;
@@ -76,6 +83,13 @@ export function parseDecimalField(raw: string | null | undefined, opts: ParseOpt
   // "-0" / "-0.00" normalize to 0 rather than a signed zero.
   if (value.isZero()) value = new PEP(0);
 
+  if (opts.min !== undefined && value.lessThan(opts.min)) {
+    return { kind: 'invalid', code: 'below_minimum', message: `"${raw}" must be at least ${opts.min}.`, rawText: raw };
+  }
+  if (opts.max !== undefined && value.greaterThan(opts.max)) {
+    return { kind: 'invalid', code: 'above_maximum', message: `"${raw}" must be at most ${opts.max}.`, rawText: raw };
+  }
+
   return { kind: 'valid', value };
 }
 
@@ -122,6 +136,34 @@ export const MIN_POSITIVE_DIVISOR = new PEP('0.000000001');
 export const MAX_MONETARY_INPUT = new PEP('1000000000');
 export const MONETARY_WARN_THRESHOLD = new PEP('1000000');
 export const MAX_REQUIRED_PRICE = new PEP('1000000000');
+
+/** Boundary matrix (BOUND-012..061) — the remaining named "Engineering
+ * bounds" from CALCULATION_SPEC.md §1, each paired with `ParseOptions.max`
+ * (and, for rates, the existing `isPositiveDivisor` floor) at every call
+ * site that parses that field. Ratios (overheadRatio/wasteRatio) share one
+ * [0,1] bound; geometry/area/trim/hours/money/rate each have their own
+ * spec-quoted ceiling. */
+export const MAX_RATIO = new PEP('1');
+export const MAX_ROOM_DIMENSION_FT = new PEP('100000');
+export const MAX_AREA_FT2 = new PEP('1000000000');
+export const MAX_TRIM_LENGTH_FT = new PEP('1000000');
+export const MAX_HOURS = new PEP('1000000');
+export const MAX_RATE = new PEP('1000000'); // throughput, hourly rates -- "rates <=1,000,000 per unit"
+
+/** Project-level structural caps ("at most 500 rooms, 2,000 surfaces,
+ * 2,000 document lines per project"). `documentLineCount` has no single
+ * canonical array in the data model -- CALCULATION_SPEC.md never defines
+ * it further, and it is not the customer document's derived `scopeLines`
+ * (whose length is mechanically rooms.length + standalone-surfaces.length,
+ * already covered by the room/surface caps below). It is interpreted here
+ * as the total of the revision's independently user-appendable line-item
+ * arrays -- additionalLabor + otherMaterialLines + otherExpenses -- since
+ * those are the project's other unbounded-by-default arrays, the natural
+ * sibling to rooms/surfaces. Documented interpretation, not a spec quote.
+ */
+export const MAX_ROOMS_PER_PROJECT = 500;
+export const MAX_SURFACES_PER_PROJECT = 2000;
+export const MAX_DOCUMENT_LINES_PER_PROJECT = 2000;
 
 export function isPositiveDivisor(value: Dec): boolean {
   return value.greaterThanOrEqualTo(MIN_POSITIVE_DIVISOR);

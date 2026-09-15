@@ -1,5 +1,19 @@
 import { PEP, type Dec } from '../engine/decimal';
-import { parseDecimalField, isPositiveDivisor, isValidOpeningCount } from '../engine/parse';
+import {
+  parseDecimalField,
+  isPositiveDivisor,
+  isValidOpeningCount,
+  MAX_RATIO,
+  MAX_ROOM_DIMENSION_FT,
+  MAX_AREA_FT2,
+  MAX_TRIM_LENGTH_FT,
+  MAX_HOURS,
+  MAX_RATE,
+  MAX_MONETARY_INPUT,
+  MAX_ROOMS_PER_PROJECT,
+  MAX_SURFACES_PER_PROJECT,
+  MAX_DOCUMENT_LINES_PER_PROJECT,
+} from '../engine/parse';
 import { grossWallArea, ceilingArea, netWallArea, quickOpeningArea, detailedOpeningArea } from '../engine/geometry';
 import { aggregateProjectSurfaces, type ProjectSurface, type ProjectAggregateResult, type VariantPricing, type SurfaceGeometryInput } from '../engine/estimate';
 import { materialsTotal, otherMaterialCost, otherExpensesTotal, directCost, overheadAmount, estimatedJobCost, suppliesAllowance } from '../engine/cost';
@@ -41,9 +55,12 @@ function invalidResult(reasons: string[]): ProjectEstimateAssembly {
  * is 'roomDerived'. Returns null (incomplete) if the room's own dimensions
  * are not yet filled in, or `valid:false` if openings exceed gross area. */
 function roomDerivedGeometry(room: Room, kind: 'wall' | 'ceiling'): { state: 'missing' | 'invalid' | 'ok'; area?: Dec } {
-  const length = parseDecimalField(room.lengthFt);
-  const width = parseDecimalField(room.widthFt);
-  const height = parseDecimalField(room.heightFt);
+  // BOUND-018..021: a room dimension is a "geometry" field (spec: >0,
+  // <=100,000 ft) -- the upper bound used to be entirely unchecked here.
+  const dimOpts = { max: MAX_ROOM_DIMENSION_FT };
+  const length = parseDecimalField(room.lengthFt, dimOpts);
+  const width = parseDecimalField(room.widthFt, dimOpts);
+  const height = parseDecimalField(room.heightFt, dimOpts);
   if (length.kind === 'missing' || width.kind === 'missing' || height.kind === 'missing') return { state: 'missing' };
   if (length.kind === 'invalid' || width.kind === 'invalid' || height.kind === 'invalid') return { state: 'invalid' };
   if (!length.value.greaterThan(0) || !width.value.greaterThan(0) || !height.value.greaterThan(0)) return { state: 'invalid' };
@@ -89,11 +106,16 @@ function resolveSurface(s: Surface, rooms: Map<string, Room>, defaults: { coats:
 
   const coats = s.coats ?? defaults.coats;
   if (coats < 1) return { state: 'invalid' };
-  const wasteRatioField = parseDecimalField(s.wasteRatio ?? defaults.wasteRatio);
+  // BOUND-012..017: overheadRatio/wasteRatio share CALCULATION_SPEC's [0,1]
+  // bound; the upper half (>1 rejected) used to be entirely unchecked.
+  const wasteRatioField = parseDecimalField(s.wasteRatio ?? defaults.wasteRatio, { max: MAX_RATIO });
   if (wasteRatioField.kind !== 'valid') return { state: wasteRatioField.kind === 'missing' ? 'missing' : 'invalid' };
 
+  // BOUND-043..046: a rate/throughput field is a positive divisor
+  // (isPositiveDivisor, unchanged) AND now also capped at the spec's
+  // "rates <=1,000,000 per unit" ceiling.
   const hourlyRateRaw = s.loadedHourlyRate ?? defaults.loadedHourlyRate;
-  const hourlyRateField = parseDecimalField(hourlyRateRaw);
+  const hourlyRateField = parseDecimalField(hourlyRateRaw, { max: MAX_RATE });
   if (hourlyRateField.kind !== 'valid' || !hourlyRateField.value.greaterThan(0)) return { state: hourlyRateField.kind === 'missing' ? 'missing' : 'invalid' };
 
   let geometry: SurfaceGeometryInput;
@@ -107,13 +129,16 @@ function resolveSurface(s: Surface, rooms: Map<string, Room>, defaults: { coats:
       if (derived.state !== 'ok') return { state: derived.state };
       area = derived.area!;
     } else {
-      const areaField = parseDecimalField(s.areaFt2);
+      // BOUND-022..025: manualAreaFt2 is >0, <=1,000,000,000 ft².
+      const areaField = parseDecimalField(s.areaFt2, { max: MAX_AREA_FT2 });
       if (areaField.kind !== 'valid' || !areaField.value.greaterThan(0)) return { state: areaField.kind === 'missing' ? 'missing' : 'invalid' };
       area = areaField.value;
     }
     geometry = { kind: s.kind, wallOrCeilingAreaFt2: area };
   } else if (s.kind === 'trim') {
-    const lengthField = parseDecimalField(s.trimLengthFt);
+    // BOUND-026..029: trimLengthFt is [0,1,000,000] ft (0 IS a valid
+    // field value -- see the comment below -- only the ceiling was absent).
+    const lengthField = parseDecimalField(s.trimLengthFt, { max: MAX_TRIM_LENGTH_FT });
     const widthField = parseDecimalField(s.developedWidthFt);
     if (lengthField.kind !== 'valid' || widthField.kind !== 'valid') return { state: lengthField.kind === 'missing' || widthField.kind === 'missing' ? 'missing' : 'invalid' };
     // BOUND-026: a trim length (or width) of exactly 0 is a valid field
@@ -135,7 +160,7 @@ function resolveSurface(s: Surface, rooms: Map<string, Room>, defaults: { coats:
 
   const throughputByKindKey = s.kind === 'door' ? s.hoursPerSidePerCoat : s.throughput;
   const rateRaw = throughputByKindKey ?? defaults.throughputByKind[s.kind];
-  const rateField = parseDecimalField(rateRaw);
+  const rateField = parseDecimalField(rateRaw, { max: MAX_RATE });
   if (rateField.kind !== 'valid' || !isPositiveDivisor(rateField.value)) return { state: rateField.kind === 'missing' ? 'missing' : 'invalid' };
 
   return {
@@ -159,6 +184,16 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   const settings = snapshot.businessSettings;
   const rooms = new Map(revision.rooms.map((r) => [r.id, r]));
   const variantIds = new Set(snapshot.paintVariants.map((v) => v.id));
+
+  // BOUND-047..061: project-level structural caps (CALCULATION_SPEC.md §1
+  // "at most 500 rooms, 2,000 surfaces, 2,000 document lines per project").
+  // documentLineCount is interpreted as additionalLabor + otherMaterialLines
+  // + otherExpenses combined -- see MAX_DOCUMENT_LINES_PER_PROJECT's own
+  // comment in engine/parse.ts for why.
+  if (revision.rooms.length > MAX_ROOMS_PER_PROJECT) return invalidResult([`A project may have at most ${MAX_ROOMS_PER_PROJECT} rooms.`]);
+  if (revision.surfaces.length > MAX_SURFACES_PER_PROJECT) return invalidResult([`A project may have at most ${MAX_SURFACES_PER_PROJECT} surfaces.`]);
+  const documentLineCount = revision.additionalLabor.length + revision.otherMaterialLines.length + revision.otherExpenses.length;
+  if (documentLineCount > MAX_DOCUMENT_LINES_PER_PROJECT) return invalidResult([`A project may have at most ${MAX_DOCUMENT_LINES_PER_PROJECT} additional cost lines.`]);
 
   const enabledSurfaces = revision.surfaces.filter((s) => s.enabled);
   if (enabledSurfaces.length === 0) return incompleteResult(['At least one enabled surface is required.']);
@@ -194,7 +229,8 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   const otherMaterialUnitCosts: Dec[] = [];
   for (const l of revision.otherMaterialLines) {
     const q = parseDecimalField(l.quantity);
-    const uc = parseDecimalField(l.unitCost);
+    const uc = parseDecimalField(l.unitCost, { max: MAX_MONETARY_INPUT }); // BOUND-039..042
+
     if (q.kind === 'missing' || uc.kind === 'missing') return incompleteResult([`Other material "${l.description || l.id}" is missing a quantity or unit cost.`]);
     if (q.kind === 'invalid' || uc.kind === 'invalid') return invalidResult([`Other material "${l.description || l.id}" has an invalid quantity or unit cost.`]);
     otherMaterialQuantities.push(q.value);
@@ -211,7 +247,7 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   let allowanceFlatAmount: Dec | undefined;
   let allowancePaintPercentRatio: Dec | undefined;
   if (revision.suppliesAllowance.mode === 'flat') {
-    const amountField = parseDecimalField(revision.suppliesAllowance.amount);
+    const amountField = parseDecimalField(revision.suppliesAllowance.amount, { max: MAX_MONETARY_INPUT }); // BOUND-039..042
     if (amountField.kind === 'missing') return incompleteResult(['Supplies allowance amount is missing.']);
     if (amountField.kind === 'invalid') return invalidResult(['Supplies allowance amount is invalid.']);
     allowanceFlatAmount = amountField.value;
@@ -229,8 +265,8 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
 
   let additionalLaborCost = new PEP(0);
   for (const l of revision.additionalLabor) {
-    const hoursField = parseDecimalField(l.hours);
-    const rateField = parseDecimalField(l.loadedHourlyRate);
+    const hoursField = parseDecimalField(l.hours, { max: MAX_HOURS }); // BOUND-035..038
+    const rateField = parseDecimalField(l.loadedHourlyRate, { max: MAX_RATE });
     if (hoursField.kind === 'missing' || rateField.kind === 'missing') return incompleteResult([`Additional labor "${l.description || l.id}" is missing hours or a loaded rate.`]);
     if (hoursField.kind === 'invalid' || rateField.kind === 'invalid') return invalidResult([`Additional labor "${l.description || l.id}" has invalid hours or rate.`]);
     additionalLaborCost = additionalLaborCost.plus(hoursField.value.times(rateField.value));
@@ -239,14 +275,14 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
 
   const otherExpenseAmounts: Dec[] = [];
   for (const l of revision.otherExpenses) {
-    const amountField = parseDecimalField(l.amount);
+    const amountField = parseDecimalField(l.amount, { max: MAX_MONETARY_INPUT }); // BOUND-039..042
     if (amountField.kind === 'missing') return incompleteResult([`Expense "${l.description || l.id}" is missing an amount.`]);
     if (amountField.kind === 'invalid') return invalidResult([`Expense "${l.description || l.id}" has an invalid amount.`]);
     otherExpenseAmounts.push(amountField.value);
   }
   const otherExpenses = otherExpensesTotal(otherExpenseAmounts.map((amount) => ({ amount })));
   const dc = directCost(materials, laborCost, otherExpenses);
-  const overheadRatioField = parseDecimalField(settings.overheadRatio);
+  const overheadRatioField = parseDecimalField(settings.overheadRatio, { max: MAX_RATIO }); // BOUND-012..013
   if (overheadRatioField.kind !== 'valid') return invalidResult(['Overhead ratio is invalid.']);
   const oh = overheadAmount(dc, overheadRatioField.value);
   const jobCost = estimatedJobCost(dc, oh);
