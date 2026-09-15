@@ -88,6 +88,15 @@ export default function ProApp() {
   const [zeroPriceConfirmed, setZeroPriceConfirmed] = useState(false);
   const [conflict, setConflict] = useState<{ project: Project; attempted: Project } | null>(null);
   const [refreshPreview, setRefreshPreview] = useState<{ diff: RateRefreshDiff; resolutions: Record<string, VariantResolution> } | null>(null);
+  // DATA_CONTRACT.md #3: "Confirm before applying. Keep a recoverable
+  // pre-refresh draft snapshot." applyRateRefresh() itself is pure (never
+  // mutates its input), but confirmRateRefresh() below was overwriting
+  // draftEdit with the refreshed result and discarding the only reference
+  // to the pre-refresh draft — there was no way back once confirmed, short
+  // of an unsaved-changes page reload (which only helps before the next
+  // save). This holds the pre-refresh draft until the user explicitly
+  // undoes the refresh, saves over it, or leaves the project.
+  const [preRefreshSnapshot, setPreRefreshSnapshot] = useState<EstimateRevision | null>(null);
 
   const [actuals, setActuals] = useState<Record<'materials' | 'labor' | 'otherExpenses' | 'overhead', { confirmed: boolean; amount: string }>>({
     materials: { confirmed: false, amount: '' },
@@ -202,6 +211,7 @@ export default function ProApp() {
     setCustomPriceRaw('');
     setZeroPriceConfirmed(false);
     setRefreshPreview(null);
+    setPreRefreshSnapshot(null);
   }
 
   function openProject(projectId: string) {
@@ -214,6 +224,7 @@ export default function ProApp() {
     setCustomPriceRaw(revision.priceMode === 'custom' ? revision.proposedPrice ?? '' : '');
     setZeroPriceConfirmed(false);
     setRefreshPreview(null);
+    setPreRefreshSnapshot(null);
   }
 
   function editIssuedAsNewDraft(project: Project, issued: EstimateRevision) {
@@ -224,6 +235,7 @@ export default function ProApp() {
     setCustomPriceRaw(newDraft.priceMode === 'custom' ? newDraft.proposedPrice ?? '' : '');
     setZeroPriceConfirmed(false);
     setRefreshPreview(null);
+    setPreRefreshSnapshot(null);
   }
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
@@ -304,6 +316,7 @@ export default function ProApp() {
       setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? { ...nextProject, version: committedVersion } : p)));
       setDraftEdit(revisionToSave);
       setDraftBaselineVersion(committedVersion);
+      setPreRefreshSnapshot(null); // saved over the refresh — the pre-refresh draft is no longer the recoverable point
       setSaveMessage('Draft saved.');
     } catch (err) {
       if (err instanceof ConflictError) {
@@ -374,12 +387,20 @@ export default function ProApp() {
     const resolutions = Object.values(refreshPreview.resolutions);
     try {
       const refreshed = applyRateRefresh(draftEdit, liveSnapshot, resolutions, ids);
+      setPreRefreshSnapshot(draftEdit); // DATA_CONTRACT.md #3: recoverable pre-refresh snapshot
       setDraftEdit(refreshed);
       setRefreshPreview(null);
       setSaveMessage('Rates refreshed. Review the updated summary, then save.');
     } catch (err) {
       setSaveMessage(err instanceof Error ? err.message : 'Refresh failed.');
     }
+  }
+
+  function undoRateRefresh() {
+    if (!preRefreshSnapshot) return;
+    setDraftEdit(preRefreshSnapshot);
+    setPreRefreshSnapshot(null);
+    setSaveMessage('Refresh undone — restored the draft as it was before refreshing rates.');
   }
 
   const issueGate = useMemo(() => {
@@ -1031,6 +1052,12 @@ export default function ProApp() {
                     <button type="button" className="btn btn-secondary mt-2" onClick={startRateRefreshPreview}>Check for rate updates</button>
                   ) : (
                     <RateRefreshPanel diff={refreshPreview.diff} catalog={catalog} resolutions={refreshPreview.resolutions} onResolutionsChange={(resolutions) => setRefreshPreview({ diff: refreshPreview.diff, resolutions })} onConfirm={confirmRateRefresh} onCancel={cancelRateRefresh} />
+                  )}
+                  {preRefreshSnapshot && (
+                    <div className="mt-3 rounded-btn border border-warn-line bg-warn-soft p-3 text-sm text-warn">
+                      <p>Rates were just refreshed on this draft.</p>
+                      <button type="button" className="btn btn-secondary mt-2" onClick={undoRateRefresh}>Undo refresh</button>
+                    </div>
                   )}
                 </div>
 
