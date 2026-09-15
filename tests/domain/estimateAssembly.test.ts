@@ -290,6 +290,93 @@ describe('Project-costing line items never crash on blank/malformed values (foun
   });
 });
 
+describe('V6-06: supplies allowance validates/uses ONLY the active mode\'s field', () => {
+  function doorRevision(overrides: Partial<EstimateRevision> = {}): EstimateRevision {
+    const door: Surface = {
+      id: 'door-1', roomId: null, kind: 'door', enabled: true, measurementMode: 'manual',
+      areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: 3, widthFt: '2.5', heightFt: '6.67', paintedSides: 2,
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+    };
+    return { ...baseRevision(), rooms: [], surfaces: [door], ...overrides };
+  }
+  function calc(mode: 'none' | 'flat' | 'paintPercent', amount: string, ratio: string) {
+    return assembleProjectEstimate(doorRevision({ suppliesAllowance: { mode, amount, ratio } }), { priceMode: 'suggested', customPriceRaw: '' });
+  }
+  const baseline = () => assembleProjectEstimate(doorRevision(), { priceMode: 'suggested', customPriceRaw: '' });
+
+  describe('mode: none -- neither field is read, no matter what it contains', () => {
+    it.each([
+      ['both blank', '', ''],
+      ['both zero', '0', '0'],
+      ['a stale valid flat amount', '25', '0'],
+      ['a stale valid paint-percent ratio', '0', '0.1'],
+      ['a malformed amount', 'abc', '0'],
+      ['a malformed ratio', '0', 'xyz'],
+      ['a negative amount', '-5', '0'],
+      ['a negative ratio', '0', '-0.1'],
+      ['an out-of-range ratio (>1)', '0', '5'],
+    ])('mode=none with %s never blocks or contributes to materials', (_label, amount, ratio) => {
+      const result = calc('none', amount, ratio);
+      expect(result.calculationState).toBe('complete');
+      expect(result.materials!.minus(baseline().materials!).toString()).toBe('0');
+    });
+  });
+
+  describe('mode: flat -- only the amount is read; the ratio is fully ignored', () => {
+    it('a blank amount reports incomplete regardless of the ratio', () => {
+      expect(calc('flat', '', 'xyz').calculationState).toBe('incomplete');
+      expect(calc('flat', '', '-5').calculationState).toBe('incomplete');
+    });
+    it('a malformed amount reports invalid regardless of the ratio', () => {
+      expect(calc('flat', 'abc', 'xyz').calculationState).toBe('invalid');
+    });
+    it('a negative amount reports invalid', () => {
+      expect(calc('flat', '-10', '0').calculationState).toBe('invalid');
+    });
+    it('a valid amount contributes exactly itself, even with a garbage/negative/out-of-range ratio sitting inactive', () => {
+      for (const staleRatio of ['', 'xyz', '-0.5', '5']) {
+        const result = calc('flat', '25', staleRatio);
+        expect(result.calculationState).toBe('complete');
+        expect(result.materials!.minus(baseline().materials!).toString()).toBe('25');
+      }
+    });
+  });
+
+  describe('mode: paintPercent -- only the ratio is read; the amount is fully ignored', () => {
+    it('a blank ratio reports incomplete regardless of the amount', () => {
+      expect(calc('paintPercent', 'xyz', '').calculationState).toBe('incomplete');
+      expect(calc('paintPercent', '-5', '').calculationState).toBe('incomplete');
+    });
+    it('a malformed ratio reports invalid regardless of the amount', () => {
+      expect(calc('paintPercent', 'xyz', 'abc').calculationState).toBe('invalid');
+    });
+    it('a negative ratio reports invalid', () => {
+      expect(calc('paintPercent', '0', '-0.1').calculationState).toBe('invalid');
+    });
+    it('a valid ratio contributes ratio*paintCost, even with a garbage/negative/blank amount sitting inactive', () => {
+      const base = baseline();
+      for (const staleAmount of ['', 'xyz', '-25']) {
+        const result = calc('paintPercent', staleAmount, '0.1');
+        expect(result.calculationState).toBe('complete');
+        // paintCost contribution = 10% of the paint materials cost portion (base.materials, since no other-material lines here).
+        expect(result.materials!.minus(base.materials!).toString()).toBe(base.materials!.times('0.1').toString());
+      }
+    });
+  });
+
+  describe('switching modes never mixes stale values from a previously-active mode', () => {
+    it('flat -> none -> flat: a value entered while flat was active still applies once flat is reselected', () => {
+      const flatFirst = calc('flat', '25', '0');
+      const backToFlat = calc('flat', '25', '0'); // simulates re-selecting flat with its own remembered amount intact
+      expect(backToFlat.materials!.toString()).toBe(flatFirst.materials!.toString());
+    });
+    it('paintPercent -> flat: the old ratio never leaks into the new flat total', () => {
+      const result = calc('flat', '25', '0.5'); // stale ratio from a previous paintPercent session
+      expect(result.materials!.minus(baseline().materials!).toString()).toBe('25'); // NOT 25 + 50% of paint cost
+    });
+  });
+});
+
 describe('V5-07/CORE-021: a custom selling total enforces at most two fractional digits', () => {
   function priced(customPriceRaw: string) {
     const door: Surface = {

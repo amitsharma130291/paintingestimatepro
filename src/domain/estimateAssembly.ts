@@ -202,12 +202,27 @@ export function assembleProjectEstimate(revision: EstimateRevision, opts: { pric
   }
   const otherMaterials = otherMaterialCost(otherMaterialQuantities.map((quantity, i) => ({ quantity, unitCost: otherMaterialUnitCosts[i] })));
 
-  const allowanceAmountField = parseDecimalField(revision.suppliesAllowance.amount);
-  const allowanceRatioField = parseDecimalField(revision.suppliesAllowance.ratio);
-  if (allowanceAmountField.kind === 'missing' || allowanceRatioField.kind === 'missing') return incompleteResult(['Supplies allowance amount/ratio is missing.']);
-  if (allowanceAmountField.kind === 'invalid' || allowanceRatioField.kind === 'invalid') return invalidResult(['Supplies allowance amount/ratio is invalid.']);
+  // V6-06: this used to parse and REQUIRE both the flat amount and the
+  // percent ratio regardless of which mode was active, so a stale/blank
+  // value left behind in the INACTIVE field (e.g. switching Flat -> None
+  // without ever touching the ratio) blocked the whole estimate even
+  // though suppliesAllowance() below never reads that field for the
+  // active mode. Only validate/use the one field the active mode reads.
+  let allowanceFlatAmount: Dec | undefined;
+  let allowancePaintPercentRatio: Dec | undefined;
+  if (revision.suppliesAllowance.mode === 'flat') {
+    const amountField = parseDecimalField(revision.suppliesAllowance.amount);
+    if (amountField.kind === 'missing') return incompleteResult(['Supplies allowance amount is missing.']);
+    if (amountField.kind === 'invalid') return invalidResult(['Supplies allowance amount is invalid.']);
+    allowanceFlatAmount = amountField.value;
+  } else if (revision.suppliesAllowance.mode === 'paintPercent') {
+    const ratioField = parseDecimalField(revision.suppliesAllowance.ratio);
+    if (ratioField.kind === 'missing') return incompleteResult(['Supplies allowance percentage is missing.']);
+    if (ratioField.kind === 'invalid') return invalidResult(['Supplies allowance percentage is invalid.']);
+    allowancePaintPercentRatio = ratioField.value;
+  }
   const allowance = suppliesAllowance(
-    { mode: revision.suppliesAllowance.mode, flatAmount: allowanceAmountField.value, paintPercentRatio: allowanceRatioField.value },
+    { mode: revision.suppliesAllowance.mode, flatAmount: allowanceFlatAmount, paintPercentRatio: allowancePaintPercentRatio },
     result.materialsCost
   );
   const materials = materialsTotal(result.materialsCost, otherMaterials, allowance);
