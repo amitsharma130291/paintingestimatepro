@@ -256,7 +256,8 @@ export default function EstimateTemplate() {
         </button>
       </div>
       {!evaluation.eligibility.canPrint && (
-        <ul className="mt-2 text-xs text-warn print:hidden">
+        // UX-003: same role="alert" fix as the other two free tools.
+        <ul role="alert" className="mt-2 text-xs text-warn print:hidden">
           {evaluation.eligibility.reasons.map((r, i) => (
             <li key={i}>{r}</li>
           ))}

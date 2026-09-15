@@ -340,7 +340,9 @@ export default function InteriorCalculator() {
           {result.errors.length === 0 && 'missing' in result && result.missing ? (
             <p className="mt-3 text-sm text-ink-soft">Enter the room's length and width to see your estimate — or load the sample room below.</p>
           ) : result.errors.length > 0 ? (
-            <div className="mt-3 rounded-[calc(var(--radius-card)-8px)] border border-bad-line bg-bad-soft p-3 text-sm text-bad">
+            // UX-003: role="alert" announces this to assistive tech as soon
+            // as it appears, matching the free job-cost calculator's fix.
+            <div role="alert" className="mt-3 rounded-[calc(var(--radius-card)-8px)] border border-bad-line bg-bad-soft p-3 text-sm text-bad">
               {result.errors.map((e, i) => (
                 <p key={i}>{e}</p>
               ))}

@@ -61,7 +61,7 @@ export default function JobCostCalculator() {
           <h3 className="text-base font-semibold text-ink">Costs</h3>
           <div className="mt-3 space-y-3">
             <div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button type="button" className={`btn ${materialsMode === 'lumpSum' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMaterialsMode('lumpSum')}>
                   Materials: one amount
                 </button>
@@ -81,7 +81,7 @@ export default function JobCostCalculator() {
             </div>
 
             <div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button type="button" className={`btn ${laborMode === 'direct' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLaborMode('direct')}>
                   Labor: one amount
                 </button>
@@ -121,7 +121,7 @@ export default function JobCostCalculator() {
 
             <div>
               <label className="text-sm font-medium text-ink-soft">Overhead</label>
-              <div className="mt-1 flex gap-2">
+              <div className="mt-1 flex flex-wrap gap-2">
                 <button type="button" className={`btn ${overheadMode === 'percent' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setOverheadMode('percent')}>
                   % of direct cost
                 </button>
@@ -142,7 +142,7 @@ export default function JobCostCalculator() {
 
         <div>
           <h3 className="text-base font-semibold text-ink">Price</h3>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className={`btn ${pricingMode === 'solveForPrice' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPricingMode('solveForPrice')}>
               Suggest a price
             </button>
@@ -155,7 +155,11 @@ export default function JobCostCalculator() {
           {result.state === 'incomplete' && <p className="mt-4 text-sm text-ink-soft">Enter materials, labor, and a target margin to see your estimated total.</p>}
 
           {result.state === 'invalid' && (
-            <div className="mt-4 rounded-[calc(var(--radius-card)-8px)] border border-bad-line bg-bad-soft p-3 text-sm text-bad">
+            // UX-003: an assistive-tech user gets no visual cue that
+            // something changed after typing an invalid value -- role="alert"
+            // is an implicit assertive live region, so this is announced as
+            // soon as it appears, without needing a separate aria-live prop.
+            <div role="alert" className="mt-4 rounded-[calc(var(--radius-card)-8px)] border border-bad-line bg-bad-soft p-3 text-sm text-bad">
               {result.errors.map((e, i) => (
                 <p key={i}>{e}</p>
               ))}

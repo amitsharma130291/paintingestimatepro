@@ -1461,7 +1461,10 @@ export default function ProApp() {
                 <div className="card p-6">
                   <h3 className="font-semibold">Estimate summary</h3>
                   {summary && summary.calculationState !== 'complete' && (
-                    <p className="mt-2 text-sm text-bad">{summary.calculationState === 'invalid' ? 'One or more enabled surfaces have invalid inputs.' : 'Add at least one enabled, fully-specified surface.'} {summary.reasons.join(' ')}</p>
+                    // UX-003: same role="alert" fix as the free tools -- an
+                    // assistive-tech user gets an announcement as soon as
+                    // this appears, not just a silent visual cue.
+                    <p role="alert" className="mt-2 text-sm text-bad">{summary.calculationState === 'invalid' ? 'One or more enabled surfaces have invalid inputs.' : 'Add at least one enabled, fully-specified surface.'} {summary.reasons.join(' ')}</p>
                   )}
                   {summary && summary.calculationState === 'complete' && (() => {
                     // PRO-013: CALCULATION_SPEC §7's own reconciliation
