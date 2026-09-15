@@ -1595,13 +1595,52 @@ function RoomEditor({ room, surfaces, catalog, onPatchRoom, onDeleteRoom, onAddC
         <NumField label="Width (ft)" value={room.widthFt ?? ''} onChange={(v) => onPatchRoom({ widthFt: v })} />
         <NumField label="Height (ft)" value={room.heightFt ?? ''} onChange={(v) => onPatchRoom({ heightFt: v })} />
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <NumField label="Doors" value={String(room.quick.doorCount)} onChange={(v) => onPatchRoom({ quick: { ...room.quick, doorCount: Number.parseInt(v, 10) || 0 } })} />
-        <NumField label="Windows" value={String(room.quick.windowCount)} onChange={(v) => onPatchRoom({ quick: { ...room.quick, windowCount: Number.parseInt(v, 10) || 0 } })} />
-        <label className="flex items-center gap-2 pt-5 text-sm">
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={room.deductionEnabled} onChange={(e) => onPatchRoom({ deductionEnabled: e.target.checked })} /> Deduct openings
         </label>
+        {room.deductionEnabled && (
+          <label className="block text-sm">
+            <span className="font-medium text-ink-soft">Opening entry</span>
+            <select
+              className="mt-1 rounded-btn border border-line px-2 py-1"
+              value={room.openingMode}
+              onChange={(e) => onPatchRoom({ openingMode: e.target.value as 'quick' | 'detailed' })}
+            >
+              <option value="quick">Quick (20/15 ft² each)</option>
+              <option value="detailed">Detailed (measured)</option>
+            </select>
+          </label>
+        )}
       </div>
+      {room.deductionEnabled && room.openingMode === 'quick' && (
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <NumField label="Doors" value={String(room.quick.doorCount)} onChange={(v) => onPatchRoom({ quick: { ...room.quick, doorCount: Number.parseInt(v, 10) || 0 } })} />
+          <NumField label="Windows" value={String(room.quick.windowCount)} onChange={(v) => onPatchRoom({ quick: { ...room.quick, windowCount: Number.parseInt(v, 10) || 0 } })} />
+        </div>
+      )}
+      {room.deductionEnabled && room.openingMode === 'detailed' && (
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-ink-soft">Measured openings supersede the quick 20/15 ft² constants — enter each opening's own width and height.</p>
+          {room.openings.map((o) => (
+            <div key={o.id} className="grid grid-cols-2 items-end gap-2 rounded-btn border border-line p-2 sm:grid-cols-5">
+              <label className="block text-sm">
+                <span className="font-medium text-ink-soft">Type</span>
+                <select className="mt-1 w-full rounded-btn border border-line px-2 py-1" value={o.type} onChange={(e) => onPatchRoom({ openings: room.openings.map((x) => (x.id === o.id ? { ...x, type: e.target.value as 'door' | 'window' } : x)) })}>
+                  <option value="door">Door</option>
+                  <option value="window">Window</option>
+                </select>
+              </label>
+              <NumField label="Width (ft)" value={o.widthFt} onChange={(v) => onPatchRoom({ openings: room.openings.map((x) => (x.id === o.id ? { ...x, widthFt: v } : x)) })} />
+              <NumField label="Height (ft)" value={o.heightFt} onChange={(v) => onPatchRoom({ openings: room.openings.map((x) => (x.id === o.id ? { ...x, heightFt: v } : x)) })} />
+              <NumField label="Count" value={String(o.count)} onChange={(v) => onPatchRoom({ openings: room.openings.map((x) => (x.id === o.id ? { ...x, count: Number.parseInt(v, 10) || 0 } : x)) })} />
+              <button type="button" className="text-link text-xs text-bad" onClick={() => onPatchRoom({ openings: room.openings.filter((x) => x.id !== o.id) })}>Remove</button>
+            </div>
+          ))}
+          <button type="button" className="btn btn-secondary" onClick={() => onPatchRoom({ openings: [...room.openings, { id: defaultIdSource.nextId(), type: 'door', widthFt: '', heightFt: '', count: 1 }] })}>+ Add measured opening</button>
+          {room.openings.length === 0 && <p className="text-sm text-ink-soft">No measured openings added.</p>}
+        </div>
+      )}
 
       {wall && (
         <SurfaceRow label="Wall" surface={wall} catalog={catalog} onPatch={(patch) => onPatchSurface(wall.id, patch)} />
