@@ -129,3 +129,42 @@ describe('ACT-010: actual-cost overhead has two explicit modes (baselineAllocati
     expect((screen.getByLabelText(/overhead amount/i) as HTMLInputElement).value).toBe('500');
   });
 });
+
+describe('V5-11: a repeating-decimal baseline overhead (an ordinary, non-round production rate) remains confirmable', () => {
+  beforeEach(async () => {
+    // 137 ft²/hr/coat (an ordinary, editable rate a real painter might use)
+    // produces hours/labor/overhead with far more than 10 fractional
+    // digits internally -- 150 (this file's other tests) happens to share
+    // enough factors with the 0.15 overhead ratio to cancel out to a clean
+    // 2-decimal result by coincidence, which is exactly why the review
+    // used a deliberately un-clean number instead.
+    const db = await openAppDb();
+    try {
+      await db.put(STORES.businessSettings, {
+        id: 'default-settings', loadedHourlyRate: '32', overheadRatio: '0.15', targetMarginRatio: '0.35', defaultCoats: 2, defaultWasteRatio: '0.10',
+        wallThroughput: '137', ceilingThroughput: '120', trimThroughput: '40', doorHoursPerSidePerCoat: '0.75', defaultTravelAmount: '0',
+        defaultSuppliesAllowance: { mode: 'none', amount: '0', ratio: '0' }, sampleAssumptionsConfirmed: true, createdAt: NOW, updatedAt: NOW,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('the baseline overhead field is non-empty, and Save actuals is enabled once confirmed', async () => {
+    const frozenOverhead = await issueAKitchenEstimateAndOpenActuals();
+    expect(frozenOverhead.split('.')[1]?.length ?? 0).toBeGreaterThan(10); // confirms this scenario genuinely exercises the >10-digit case
+    fireEvent.click(screen.getByRole('checkbox', { name: 'overhead' }));
+    expect(screen.getByRole('button', { name: 'Save actuals' })).toHaveProperty('disabled', false);
+  });
+
+  it('saves and reopens with the confirmed baseline allocation intact, in_progress state (other categories still blank)', async () => {
+    await issueAKitchenEstimateAndOpenActuals();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'overhead' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save actuals' }));
+    await waitFor(async () => expect((await readProjects())[0].actualReviews).toHaveLength(1));
+    const saved = (await readProjects())[0].actualReviews[0];
+    expect(saved.overhead.mode).toBe('baselineAllocation');
+    expect(saved.overhead.confirmed).toBe(true);
+    expect(saved.state).toBe('inProgress'); // only overhead confirmed so far
+  });
+});

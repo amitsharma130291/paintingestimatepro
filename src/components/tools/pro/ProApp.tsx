@@ -498,13 +498,22 @@ export default function ProApp() {
   // populate/confirm the 'baselineAllocation' mode. Prefers the frozen
   // snapshot (independent-review R13); falls back to a live recompute for
   // an old issued revision from before outputs were frozen, exactly like
-  // actualResult's own baselineCost fallback below.
-  function baselineOverheadString(): string | null {
+  // actualResult's own baselineCost fallback below. Returns the exact Dec
+  // — V5-11: this value is a fully-precise INTERNAL calculation result
+  // (e.g. a repeating decimal from a production-rate division), not
+  // manually typed text, so it must never be forced back through the
+  // 10-fractional-digit TEXT-ENTRY grammar in parseDecimalField. That
+  // limit exists to catch a human mistyping a number, not to second-guess
+  // the app's own arithmetic.
+  function baselineOverheadValue(): Dec | null {
     if (!issuedRevision) return null;
     const frozen = readFrozenCalculatedOutputs(issuedRevision.rawCalculatedOutputs);
-    if (frozen.status === 'frozen' && frozen.overhead !== null) return frozen.overhead.toString();
+    if (frozen.status === 'frozen' && frozen.overhead !== null) return frozen.overhead;
     const issuedSummary = assembleProjectEstimate(issuedRevision, { priceMode: issuedRevision.priceMode, customPriceRaw: issuedRevision.proposedPrice ?? '' });
-    return issuedSummary.calculationState === 'complete' && issuedSummary.overhead !== null ? issuedSummary.overhead.toString() : null;
+    return issuedSummary.calculationState === 'complete' ? issuedSummary.overhead : null;
+  }
+  function baselineOverheadString(): string | null {
+    return baselineOverheadValue()?.toString() ?? null;
   }
 
   // ACT-013/014 fix: reload previously-saved actuals when switching to a
@@ -542,18 +551,27 @@ export default function ProApp() {
     return parsed.kind === 'valid' ? { confirmed: true, value: parsed.value, invalid: false } : { confirmed: true, value: null, invalid: true };
   }
 
-  // ACT-010: in baselineAllocation mode, the value being confirmed is the
-  // baseline's own allocated overhead (read live from the issued revision),
-  // never the free-text box — there is nothing for the user to retype.
-  const overheadRawForDerivation =
-    overheadMode === 'baselineAllocation' ? { confirmed: actuals.overhead.confirmed, amount: baselineOverheadString() ?? '' } : actuals.overhead;
+  // ACT-010/V5-11: in baselineAllocation mode, the value being confirmed is
+  // the baseline's own allocated overhead, taken directly as the Dec
+  // already computed above — never round-tripped through the free-text
+  // parser (which would wrongly reject a legitimate repeating-decimal
+  // baseline over 10 fractional digits, exactly as a manually mistyped
+  // value would be rejected). There is nothing for the user to retype, and
+  // nothing for them to get wrong, so this category is never "invalid" in
+  // this mode — only present (a real baseline exists) or absent.
+  function deriveOverheadCategory(): { confirmed: boolean; value: Dec | null; invalid: boolean } {
+    if (overheadMode === 'baselineAllocation') {
+      return { confirmed: actuals.overhead.confirmed, value: actuals.overhead.confirmed ? baselineOverheadValue() : null, invalid: false };
+    }
+    return deriveActualCategory(actuals.overhead);
+  }
 
   const derivedActuals = useMemo(
     () => ({
       materials: deriveActualCategory(actuals.materials),
       labor: deriveActualCategory(actuals.labor),
       otherExpenses: deriveActualCategory(actuals.otherExpenses),
-      overhead: deriveActualCategory(overheadRawForDerivation),
+      overhead: deriveOverheadCategory(),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [actuals, overheadMode, issuedRevision]
