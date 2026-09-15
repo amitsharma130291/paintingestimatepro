@@ -1031,14 +1031,47 @@ function remapRevisionChildIds(rev: Project['revisions'][number], ids: IdSource)
   };
 }
 
+/**
+ * V6-03: `preRefreshCheckpoint` is a COMPLETE embedded revision (see
+ * rateRefresh.ts's applyRateRefresh) belonging to the exact same project
+ * and the exact same revision identity as the revision that carries it
+ * (V6-02's validator now enforces this on import). remapProjectIds used to
+ * carry the checkpoint through `structuredClone(rev)` completely
+ * untouched, so a copied project's checkpoint kept pointing at the
+ * ORIGINAL project/revision ids forever -- Undo on the copy would restore
+ * a revision whose own id/projectId belonged to a project the copy no
+ * longer is, and the resulting export failed backup validation outright.
+ * Remap the checkpoint's own rooms/surfaces/openings/line items exactly
+ * like a normal revision (catalog/snapshot references are untouched by
+ * that call, same as for the live revision), then stamp its identity to
+ * match the COPY's revision, not a fresh id of its own -- a checkpoint is
+ * that revision's own prior state, never a different revision.
+ */
+function remapCheckpointIds(
+  checkpoint: NonNullable<Project['revisions'][number]['preRefreshCheckpoint']>,
+  ids: IdSource,
+  newRevisionId: string,
+  newProjectId: string
+): NonNullable<Project['revisions'][number]['preRefreshCheckpoint']> {
+  return {
+    ...remapRevisionChildIds(checkpoint, ids),
+    id: newRevisionId,
+    projectId: newProjectId,
+  };
+}
+
 function remapProjectIds(source: Project, ids: IdSource): Project {
   const newProjectId = ids.nextId();
   const revisionIdMap = new Map(source.revisions.map((r) => [r.id, ids.nextId()]));
-  const newRevisions = source.revisions.map((rev) => ({
-    ...remapRevisionChildIds(rev, ids),
-    id: revisionIdMap.get(rev.id)!,
-    projectId: newProjectId,
-  }));
+  const newRevisions = source.revisions.map((rev) => {
+    const newRevisionId = revisionIdMap.get(rev.id)!;
+    return {
+      ...remapRevisionChildIds(rev, ids),
+      id: newRevisionId,
+      projectId: newProjectId,
+      preRefreshCheckpoint: rev.preRefreshCheckpoint ? remapCheckpointIds(rev.preRefreshCheckpoint, ids, newRevisionId, newProjectId) : rev.preRefreshCheckpoint,
+    };
+  });
   // "New copied IDs remap all children/actual baselines, not only project
   // IDs." Import validation (BACK-015) already guarantees every source
   // actual review's baseline matches one of this project's own revisions,
