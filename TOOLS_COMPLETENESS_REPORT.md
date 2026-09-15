@@ -1,3 +1,115 @@
+# Tools Completeness Report — v7 session (supersedes the v6 report below)
+
+## Current status: 357/357 in-scope requirements verified
+
+`TOOL_REQUIREMENTS_MATRIX.csv` now shows **357 verified, 0 unverified, 0
+missing, 0 failed, 0 deferred, 0 decision_required** — every in-scope row
+(CORE, GEO, COST, TPL, JOB, INT, CAT, PRO, HEALTH, DOC, ACT, LIFE, BACK,
+UX, BOUND) carries a real implementation location, a specific automated
+test reference, and evidence describing exactly what that test proves.
+Three tests remain individually `.skip`'d (`tests/audit/independent-
+contract.test.ts` R01, R02, R14) — confirmed by direct reading to concern
+payment/checkout retry and purchaser-domain recovery, both explicitly
+out of scope for this tools-only contract. No other `.skip`, `.only`,
+`.todo`, `xit`, or `xdescribe` exists anywhere in the test tree (repo-wide
+grep, zero matches).
+
+This session's work, on top of the v6 state below (which itself already
+closed 6 confirmed defects): resolved 5 named features (INT-010 detailed
+openings, CAT-008 explicit refresh-defaults confirmation, PRO-014
+accessible room/surface reordering, the full logo lifecycle across
+DOC-010/BACK-019/BACK-025, and BACK-026's engine-version-compatibility
+policy), then worked through the entire remaining backlog of unverified
+rows one requirement at a time. That sweep found and fixed several
+genuine implementation gaps beyond missing tests:
+
+- **PRO-013**: `reconcileDisplayedComponents` (the rounding-reconciliation
+  primitive) was implemented and unit-tested in isolation but never wired
+  into the live Pro estimate summary — independently-rounded Direct
+  cost/Overhead rows could silently disagree by a cent with the displayed
+  Estimated job cost. Now surfaced as an explicit "Rounding adjustment"
+  row whenever it happens.
+- **COST-019 / CALCULATION_SPEC §1**: "waste >0.5 and overhead >0.5
+  produce nonblocking review warnings" was specified but never
+  implemented anywhere (the only warnings-shaped type in the codebase was
+  dead, unused scaffolding). Added real warning collection to
+  `assembleProjectEstimate` and a nonblocking notice in the Pro summary.
+- **INT-006**: the free interior calculator allowed a $0/hr labor rate
+  (correctly, per spec) but never showed the required warning for it.
+  Added.
+- **UX-001**: a real 360px mobile viewport check (Browser pane, not
+  simulated) found the free job-cost calculator's mode-toggle buttons
+  overflowing horizontally. Fixed with `flex-wrap`.
+- **UX-003**: none of the four tools' error containers had any
+  `aria-live`/`role="alert"` — confirmed live in a real browser (0
+  matches). A screen-reader user got no announcement on an invalid entry.
+  Fixed across all four tools.
+- **UX-008**: `saveDraft`/`issueEstimate` in the Pro app could silently
+  overwrite a user's newer keystrokes with a stale async save result if
+  the user kept typing while a save was in flight. Fixed with a
+  staleness guard on the resolved-state update.
+- **UX-010**: Pro's save-failure messages never included the free tool's
+  existing export-backup guidance. Added.
+
+Several other rows turned out to be **stale evidence, not real gaps**:
+prior audits had cited test files that actually exercised a different
+scenario entirely (HEALTH-002/003, DOC-003/005), or claimed a bug that a
+later session had already fixed without updating the ledger (LIFE-006,
+LIFE-010, CAT-007). Each of these was re-verified against current source
+and given a real, specific confirming test rather than trusted at face
+value.
+
+Real-browser verification (required, not optional, per this session's
+contract) was performed via an isolated dev-only harness
+(`src/pages/dev/pro-harness.astro`) that mounts the real `ProApp`
+component with synthetic local data — it 404s in a production build
+(`import.meta.env.PROD` guard, confirmed by inspecting the actual built
+output) and imports no payment/auth code, so it never touches or
+bypasses the real payment gate. Using it: confirmed zero horizontal
+overflow at 360px across every tool, confirmed real keyboard Tab
+navigation produces a genuine visible `:focus-visible` outline with no
+trap across a full cycle, confirmed the compiled `@media print`
+stylesheet is real (not just a class name with no matching rule), and
+confirmed an 8-room + trim + door issued project's customer document
+renders every line with nothing clipped or truncated.
+
+Final gates run this session, all clean: `npm ci` (clean install, 481
+packages, 0 install-time errors — `npm audit` separately reports 3 high-
+severity advisories in a transitive Vercel-adapter build dependency,
+`path-to-regexp` via `@vercel/routing-utils`; fixing it requires a
+breaking `@astrojs/vercel` major-version bump, left as a known,
+separately-actionable item rather than an unauthorized breaking change),
+`npm run check` (0 errors), `python3 docs/verify_reference.py` (20
+fixtures / 106 fields, all PASS), `npm run build` (clean production
+build), and the full test suite — 84 files / 820 tests / 3 pre-approved
+skips, run four times total (once serial, three times in default
+parallel mode) with **zero failures in any run**, closing out this
+session's required rigorous (not dismissive) flakiness investigation:
+the previously-documented "intermittent timeout under high parallelism"
+is architecturally explained (`fake-indexeddb` is isolated per test-file
+worker, no cross-file shared state) and did not reproduce in four
+consecutive full runs.
+
+Two end-to-end workflow tests were added as required deliverables in
+their own right, not just matrix-row evidence:
+`tests/integration/freeToProWorkflow.test.tsx` (build a room in the free
+calculator, hand it off, decline once, accept, verify exact data
+parity, price and save it in Pro) and
+`tests/integration/proEstimateLifecycle.test.tsx` (new project -> save
+-> issue -> edit -> reorder -> rate refresh -> undo -> partial actuals
+-> export backup, one continuous session).
+
+One item remains a deliberately documented simplification, not a matrix
+gap: `IMPLEMENTATION_DECISIONS.md` item 9 ("aggregate/display limits
+beyond individual field bounds," e.g. summing 2,000 surfaces' costs
+against a project-level display-range cap) was never promoted to a
+numbered requirement in `TOOL_REQUIREMENTS_MATRIX.csv` and remains
+un-built by original design choice ("building an untested guess felt
+worse than leaving it as a named gap") — flagged here for visibility,
+not newly discovered.
+
+---
+
 # Tools Completeness Report — v6 session (supersedes the v5 report)
 
 Scope: every free and paid tool in the approved specs (`docs/tool-specs/`),

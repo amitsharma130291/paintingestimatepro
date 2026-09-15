@@ -1,4 +1,96 @@
-# Tool Bug Fix Log — v5 and v6 sessions
+# Tool Bug Fix Log — v5, v6, and v7 sessions
+
+## v7 session: closed the entire remaining unverified backlog (114 -> 0 rows) plus 5 named features
+
+All fixes below were developed test-first (RED confirmed before the fix,
+GREEN after), matching this file's established discipline. Genuine
+implementation gaps found and fixed (as opposed to rows that only needed
+a confirming test written against already-correct code):
+
+1. **PRO-013 — rounding reconciliation never wired into the live UI.**
+   `reconcileDisplayedComponents` (CALCULATION_SPEC §7) existed and was
+   unit-tested in isolation but the Pro estimate summary never called it,
+   so independently-rounded Direct cost/Overhead could silently disagree
+   by a cent with the displayed Estimated job cost. Fix: call it in the
+   summary card, render an explicit "Rounding adjustment" row when
+   nonzero. Evidence: `tests/browser/rowReconciliation.test.tsx`.
+2. **COST-019 — nonblocking review warnings were entirely unimplemented.**
+   CALCULATION_SPEC §1 requires "waste >0.5 and overhead >0.5 produce
+   nonblocking review warnings"; the only warnings-shaped type in the
+   codebase (`CalculationResult`/`FieldWarning` in `src/engine/types.ts`)
+   was dead, unimported scaffolding (confirmed by grep). Fix: real
+   `warnings: string[]` on `ProjectEstimateAssembly`, populated for any
+   surface's wasteRatio > 0.5 or settings.overheadRatio > 0.5, rendered
+   as a nonblocking notice. Evidence: `tests/domain/reviewWarnings.test.ts`,
+   `tests/browser/reviewWarnings.test.tsx`.
+3. **INT-006 — a $0/hr labor rate was allowed but never warned about.**
+   The free interior calculator correctly computed a real $0 labor cost
+   at rate=0 (no divisor error), but no warning text existed anywhere in
+   the file for this case. Fix: `zeroRateWarning` flag + rendered notice.
+   Evidence: `tests/ui/interiorCalculatorRequirements.test.tsx`.
+4. **UX-001 — real 360px mobile overflow in the free job-cost calculator.**
+   Found via an actual Browser-pane viewport check (not simulated): the
+   materials/labor/overhead/pricing mode-toggle button rows used a
+   non-wrapping `flex gap-2`, and "Materials: paint + supplies" (233px)
+   didn't fit beside its sibling. Fix: `flex-wrap` on all four rows;
+   re-verified via `document.documentElement.scrollWidth ===
+   clientWidth` in the real browser.
+5. **UX-003 — zero screen-reader announcement on any invalid input.**
+   None of the four tools' error containers had `aria-live`/`role="alert"`
+   — confirmed live in a real browser (0 matches for
+   `[aria-live],[role="alert"],[role="status"]` before the fix). Fix:
+   `role="alert"` on all four error containers (JobCostCalculator,
+   InteriorCalculator, EstimateTemplate, ProApp's estimate summary).
+   Evidence: `tests/ui/errorAnnouncement.test.tsx`.
+6. **UX-008 — a slow Pro save could silently overwrite newer keystrokes.**
+   `saveDraft`/`issueEstimate` captured `draftEdit` in a closure and
+   unconditionally overwrote it with the resolved async-save snapshot;
+   if the user typed further while that save was in flight, their newer
+   edit would be silently discarded once the stale save resolved. Fix:
+   capture `updatedAt` at call time, use the functional `setState`
+   updater to skip the overwrite when the live draft has moved on.
+   Evidence: `tests/browser/uxRaceAndFailureGuidance.test.tsx`.
+7. **UX-010 — Pro save failures gave no actionable recovery guidance.**
+   The free tool already told a user to export/print before closing on a
+   storage failure; Pro's many `setSaveMessage('...failed...')` sites
+   never did. Fix: one shared rendering site now appends an "Export
+   backup (.json)" pointer whenever the message contains "failed."
+   Evidence: `tests/browser/uxRaceAndFailureGuidance.test.tsx`.
+
+Stale evidence corrected (a prior audit's claim did not match current
+source; re-verified and re-pointed at real, specific tests rather than
+trusted at face value): CAT-007, HEALTH-002, HEALTH-003, HEALTH-005,
+HEALTH-006, DOC-003, DOC-005, LIFE-006, LIFE-010, GEO-013, GEO-029,
+GEO-030, ACT-014, BACK-008. A data-loss bug in an earlier in-session
+matrix-update script (207 of 357 rows silently dropped) was also found
+and corrected by restoring from the last commit and reapplying only the
+intended row updates on top, with a row-count assertion added to every
+subsequent update script.
+
+Five named features completed this session, each with its own
+independent-review-grounded requirement: INT-010 (detailed measured
+openings in the free interior calculator, quick/detailed mode mutual
+exclusivity, lossless free-to-Pro handoff), CAT-008 (explicit
+refresh-defaults preview/confirm/cancel for Price Book Health services,
+never an automatic silent rewrite), PRO-014 (accessible keyboard-operable
+Move up/down room and surface reordering, id-based not index-based),
+the business-logo lifecycle (DOC-010/BACK-019/BACK-025 — byte-level
+format sniffing, size/dimension limits, no script-capable formats), and
+BACK-026 (a written, deterministic engine-version-compatibility policy:
+unrecognized future versions are always blocked on draft data, never
+silently recalculated; issued/frozen data is exempt by the existing
+immutability guarantee).
+
+Final state: `TOOL_REQUIREMENTS_MATRIX.csv` at 357/357 verified, 0
+unverified/missing/failed/deferred/decision_required. See
+`TOOLS_COMPLETENESS_REPORT.md`'s v7 section for the full final-gates
+summary (clean install, typecheck, `verify_reference.py`, build, full
+suite x4 with zero flakiness, independent regression suites, and the
+`.skip`/`.only`/`.todo` sweep).
+
+---
+
+
 
 Covers the defects investigated and fixed under this task across two
 sessions: v5 (item 4's 14 independent-review regressions, minus R01/R02/R14
