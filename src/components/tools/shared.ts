@@ -2,7 +2,7 @@
 // so every tool renders FieldState/CalculationResult consistently. No
 // calculation logic lives here; it only formats/dispatches to src/engine.
 import { toMoneyString, toPercentString, type Dec } from '../../engine/decimal';
-import { parseDecimalField, parseCountField, type ParseOptions } from '../../engine/parse';
+import { parseDecimalField, parseCountField, MAX_OPENING_COUNT, type ParseOptions } from '../../engine/parse';
 import type { FieldState } from '../../engine/types';
 import type { PriceResult, PriceStatus } from '../../engine/types';
 
@@ -58,5 +58,21 @@ export function fieldError(f: FieldState<Dec>): string | null {
 export function parseCoatsInput(raw: string): number | null | 'reject' {
   if (raw.trim() === '') return null;
   const parsed = parseCountField(raw, { min: 1, max: 5 });
+  return parsed.kind === 'valid' ? parsed.value : 'reject';
+}
+
+/**
+ * V6-04 regression: every opening-count field (quick door/window counts,
+ * each detailed opening's count, a standalone door surface's door count)
+ * committed `Number.parseInt(v, 10) || 0` directly — negative counts pass
+ * straight through (`-1` is truthy, so `|| 0` never catches it), "1.9"
+ * truncates to 1 instead of being rejected, and "2abc" (NaN, falsy)
+ * silently becomes 0. Blank is ALSO rejected here (never silently 0) since,
+ * unlike coats, there is no "blank means use the settings default" concept
+ * for an opening count — the caller must NOT commit on 'reject', leaving
+ * the previously-committed value in place rather than substituting a guess.
+ */
+export function parseOpeningCountInput(raw: string): number | 'reject' {
+  const parsed = parseCountField(raw, { min: 0, max: MAX_OPENING_COUNT });
   return parsed.kind === 'valid' ? parsed.value : 'reject';
 }

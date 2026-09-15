@@ -97,6 +97,23 @@ export function parseCountField(raw: string | null | undefined, opts: { min?: nu
   return { kind: 'valid', value: n };
 }
 
+/** CALCULATION_SPEC.md §1: "door count <=100,000." Applies to every opening
+ * count (quick doors/windows, and each detailed opening entry's count). */
+export const MAX_OPENING_COUNT = 100000;
+
+/** Defense-in-depth range check for a count field ALREADY typed as a plain
+ * `number` in the domain model (Room.quick.doorCount/windowCount,
+ * OpeningEntry.count) — used at calculation time so a negative or
+ * out-of-range value that reached the model by any path (a direct object
+ * mutation, a future code path, not just the interactive UI) can never
+ * silently inflate an area calculation. Import validation
+ * (checkRequiredInt) is the primary gate for imported data; this is the
+ * calculation engine's own independent guard, matching V6-04's finding
+ * that those two gates had drifted out of agreement. */
+export function isValidOpeningCount(n: number): boolean {
+  return Number.isInteger(n) && n >= 0 && n <= MAX_OPENING_COUNT;
+}
+
 /** ENGINEERING BOUNDS — CALCULATION_SPEC §1. A near-zero positive divisor
  * (throughput, coverage) is rejected outright rather than allowed to blow
  * an intermediate quotient up toward the aggregate cap silently

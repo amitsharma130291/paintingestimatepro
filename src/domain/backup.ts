@@ -1,7 +1,7 @@
 import type { BackupEnvelope, Project, BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, ImportProvenanceRecord } from './entities';
 import { SCHEMA_VERSION, ENGINE_VERSION } from './entities';
 import type { IdSource } from './ids';
-import { parseDecimalField, isPositiveDivisor } from '../engine/parse';
+import { parseDecimalField, isPositiveDivisor, MAX_OPENING_COUNT } from '../engine/parse';
 import { readFrozenCalculatedOutputs } from './calculationSnapshot';
 
 const REVISION_STATES = new Set(['draft', 'issued', 'superseded']);
@@ -208,8 +208,8 @@ function validateRoom(path: string, raw: unknown, surfaceIdsInRevision: Set<stri
   if (!isPlainObject(raw.quick)) {
     issues.push({ path: `${path}.quick`, message: `Expected an object at ${path}.quick.` });
   } else {
-    checkRequiredInt(`${path}.quick.doorCount`, raw.quick.doorCount, issues, { min: 0 });
-    checkRequiredInt(`${path}.quick.windowCount`, raw.quick.windowCount, issues, { min: 0 });
+    checkRequiredInt(`${path}.quick.doorCount`, raw.quick.doorCount, issues, { min: 0, max: MAX_OPENING_COUNT });
+    checkRequiredInt(`${path}.quick.windowCount`, raw.quick.windowCount, issues, { min: 0, max: MAX_OPENING_COUNT });
     checkRequiredNonNegativeDecimal(`${path}.quick.doorAreaEach`, raw.quick.doorAreaEach, issues);
     checkRequiredNonNegativeDecimal(`${path}.quick.windowAreaEach`, raw.quick.windowAreaEach, issues);
   }
@@ -226,7 +226,7 @@ function validateRoom(path: string, raw: unknown, surfaceIdsInRevision: Set<stri
       checkEnum(`${openingPath}.type`, opening.type, OPENING_TYPES, issues);
       checkRequiredNonNegativeDecimal(`${openingPath}.widthFt`, opening.widthFt, issues);
       checkRequiredNonNegativeDecimal(`${openingPath}.heightFt`, opening.heightFt, issues);
-      checkRequiredInt(`${openingPath}.count`, opening.count, issues, { min: 0 });
+      checkRequiredInt(`${openingPath}.count`, opening.count, issues, { min: 0, max: MAX_OPENING_COUNT });
     });
   }
   if (!Array.isArray(raw.surfaceIds)) {
@@ -258,7 +258,7 @@ function validateSurface(path: string, raw: unknown, roomIdsInRevision: Set<stri
   checkOptionalNonNegativeDecimal(`${path}.areaFt2`, raw.areaFt2, issues);
   checkOptionalNonNegativeDecimal(`${path}.trimLengthFt`, raw.trimLengthFt, issues);
   checkOptionalNonNegativeDecimal(`${path}.developedWidthFt`, raw.developedWidthFt, issues);
-  checkOptionalInt(`${path}.doorCount`, raw.doorCount, issues, { min: 0 });
+  checkOptionalInt(`${path}.doorCount`, raw.doorCount, issues, { min: 0, max: MAX_OPENING_COUNT });
   checkOptionalNonNegativeDecimal(`${path}.widthFt`, raw.widthFt, issues);
   checkOptionalNonNegativeDecimal(`${path}.heightFt`, raw.heightFt, issues);
   if (raw.paintedSides !== null && raw.paintedSides !== 1 && raw.paintedSides !== 2) {

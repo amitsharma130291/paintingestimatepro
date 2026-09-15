@@ -702,3 +702,42 @@ describe('BACK-D10: import-as-copies — provenance-based skip, full ID remap in
     expect(forced.projects).toHaveLength(1);
   });
 });
+
+describe('V6-04: import validation of opening counts stays consistent with the calculation engine\'s own guard', () => {
+  function projectWithRoom(quickOverrides: Partial<{ doorCount: number; windowCount: number }> = {}, openingCount?: number) {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const room = {
+      id: 'room-1', name: 'Bedroom', lengthFt: '20', widthFt: '16', heightFt: '9', deductionEnabled: true, openingMode: (openingCount !== undefined ? 'detailed' : 'quick') as 'quick' | 'detailed',
+      quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15', ...quickOverrides },
+      openings: openingCount !== undefined ? [{ id: 'o1', type: 'door' as const, widthFt: '3', heightFt: '6.67', count: openingCount }] : [],
+      surfaceIds: ['surf-1'],
+    };
+    const surface = { id: 'surf-1', roomId: 'room-1', kind: 'wall' as const, enabled: true, measurementMode: 'roomDerived' as const, areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1', coats: 2, wasteRatio: '0.1', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null };
+    return { ...project, revisions: [{ ...project.revisions[0], rooms: [room], surfaces: [surface] }] };
+  }
+
+  it('rejects a negative quick doorCount on import', () => {
+    const p = projectWithRoom({ doorCount: -1 });
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [p], sequentialIdSource());
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('rejects a quick windowCount above the approved maximum (100001) on import', () => {
+    const p = projectWithRoom({ windowCount: 100001 });
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [p], sequentialIdSource());
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('rejects a negative detailed opening count on import', () => {
+    const p = projectWithRoom({}, -1);
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [p], sequentialIdSource());
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('accepts a well-formed quick room within bounds', () => {
+    const p = projectWithRoom({ doorCount: 2, windowCount: 3 });
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [p], sequentialIdSource());
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+});

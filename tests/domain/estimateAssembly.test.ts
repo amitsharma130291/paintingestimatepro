@@ -317,3 +317,96 @@ describe('V5-07/CORE-021: a custom selling total enforces at most two fractional
     expect(priced('500.0001').calculationState).toBe('invalid');
   });
 });
+
+describe('V6-04: opening counts (quick doorCount/windowCount, detailed entry count) must be nonnegative integers within the approved bound', () => {
+  function roomWithDeductions(overrides: Partial<Room> = {}): Room {
+    return {
+      id: 'room-1', name: 'Bedroom', lengthFt: '20', widthFt: '16', heightFt: '9',
+      deductionEnabled: true, openingMode: 'quick', quick: { doorCount: 0, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' },
+      openings: [], surfaceIds: ['wall-1'],
+      ...overrides,
+    };
+  }
+  const wallSurface: Surface = {
+    id: 'wall-1', roomId: 'room-1', kind: 'wall', enabled: true, measurementMode: 'roomDerived',
+    areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null,
+    paintVariantId: 'paint-white', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+  };
+  function withRoom(room: Room) {
+    return { ...baseRevision(), rooms: [room], surfaces: [wallSurface] };
+  }
+
+  describe('quick mode', () => {
+    it('accepts zero (no openings)', () => {
+      const out = assembleProjectEstimate(withRoom(roomWithDeductions()), { priceMode: 'suggested', customPriceRaw: '' });
+      expect(out.calculationState).toBe('complete');
+    });
+    it('accepts the maximum bound (100000)', () => {
+      // A door count this large makes openings exceed gross wall area (invalid for a DIFFERENT reason: net<0), so use windowAreaEach=0 to isolate the count-bound check itself.
+      const room = roomWithDeductions({ quick: { doorCount: 0, windowCount: 100000, doorAreaEach: '20', windowAreaEach: '0' } });
+      const out = assembleProjectEstimate(withRoom(room), { priceMode: 'suggested', customPriceRaw: '' });
+      expect(out.calculationState).toBe('complete');
+    });
+    it('rejects a negative door count, never adding area or producing a price', () => {
+      const room = roomWithDeductions({ quick: { doorCount: -1, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' } });
+      const out = assembleProjectEstimate(withRoom(room), { priceMode: 'suggested', customPriceRaw: '' });
+      expect(out.calculationState).toBe('invalid');
+      expect(out.effectivePrice).toBeNull();
+    });
+    it('rejects a negative window count', () => {
+      const room = roomWithDeductions({ quick: { doorCount: 0, windowCount: -1, doorAreaEach: '20', windowAreaEach: '15' } });
+      expect(assembleProjectEstimate(withRoom(room), { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('invalid');
+    });
+    it('rejects a fractional count reaching the model by any path other than the UI (e.g. a non-integer number)', () => {
+      const room = roomWithDeductions({ quick: { doorCount: 1.9, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' } });
+      expect(assembleProjectEstimate(withRoom(room), { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('invalid');
+    });
+    it('rejects a count above the approved maximum (100001)', () => {
+      const room = roomWithDeductions({ quick: { doorCount: 100001, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' } });
+      expect(assembleProjectEstimate(withRoom(room), { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('invalid');
+    });
+    it('ignores detailed-mode openings entirely while in quick mode (inactive-mode fields never contribute)', () => {
+      const room = roomWithDeductions({ openings: [{ id: 'o1', type: 'door', widthFt: '-5', heightFt: '-5', count: -5 }] });
+      const out = assembleProjectEstimate(withRoom(room), { priceMode: 'suggested', customPriceRaw: '' });
+      expect(out.calculationState).toBe('complete'); // the garbage detailed entry is inactive in quick mode and must not block or corrupt the result
+    });
+  });
+
+  describe('detailed mode', () => {
+    function detailedRoom(count: number, overrides: Partial<Room> = {}): Room {
+      return roomWithDeductions({ openingMode: 'detailed', openings: [{ id: 'o1', type: 'door', widthFt: '3', heightFt: '6.67', count }], ...overrides });
+    }
+    it('accepts a valid positive count', () => {
+      expect(assembleProjectEstimate(withRoom(detailedRoom(1)), { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('complete');
+    });
+    it('accepts zero (an opening entry contributing no deduction)', () => {
+      expect(assembleProjectEstimate(withRoom(detailedRoom(0)), { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('complete');
+    });
+    it('rejects a negative count, never adding area or producing a price', () => {
+      const out = assembleProjectEstimate(withRoom(detailedRoom(-1)), { priceMode: 'suggested', customPriceRaw: '' });
+      expect(out.calculationState).toBe('invalid');
+      expect(out.effectivePrice).toBeNull();
+    });
+    it('rejects a fractional count', () => {
+      expect(assembleProjectEstimate(withRoom(detailedRoom(1.5)), { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('invalid');
+    });
+    it('rejects a count above the approved maximum', () => {
+      expect(assembleProjectEstimate(withRoom(detailedRoom(100001)), { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('invalid');
+    });
+    it('ignores quick-mode doorCount/windowCount entirely while in detailed mode', () => {
+      const room = detailedRoom(1, { quick: { doorCount: -99, windowCount: -99, doorAreaEach: '20', windowAreaEach: '15' } });
+      const out = assembleProjectEstimate(withRoom(room), { priceMode: 'suggested', customPriceRaw: '' });
+      expect(out.calculationState).toBe('complete'); // garbage quick fields are inactive in detailed mode
+    });
+  });
+
+  it('switching modes: a room with a garbage quick count and a valid detailed opening computes correctly once switched to detailed', () => {
+    const room = roomWithDeductions({ openingMode: 'detailed', quick: { doorCount: -1, windowCount: -1, doorAreaEach: '20', windowAreaEach: '15' }, openings: [{ id: 'o1', type: 'door', widthFt: '3', heightFt: '6.67', count: 1 }] });
+    expect(assembleProjectEstimate(withRoom(room), { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('complete');
+  });
+
+  it('disabling deductions ignores an invalid count entirely (deduction inactive -> counts inactive)', () => {
+    const room = roomWithDeductions({ deductionEnabled: false, quick: { doorCount: -1, windowCount: -1, doorAreaEach: '20', windowAreaEach: '15' } });
+    expect(assembleProjectEstimate(withRoom(room), { priceMode: 'suggested', customPriceRaw: '' }).calculationState).toBe('complete');
+  });
+});

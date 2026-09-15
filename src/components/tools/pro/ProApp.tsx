@@ -3,7 +3,7 @@ import { PEP, type Dec } from '../../../engine/decimal';
 import { evaluateActualReview, type ActualCategory } from '../../../engine/actuals';
 import { parseDecimalField } from '../../../engine/parse';
 import { assembleServiceHealth } from '../../../domain/serviceHealthAssembly';
-import { statusBadge, money, parseCoatsInput } from '../shared';
+import { statusBadge, money, parseCoatsInput, parseOpeningCountInput } from '../shared';
 import type { BusinessSettings, PaintVariant, OtherMaterial, ServiceDefinition, Project, Room, Surface, EstimateRevision, ServiceKind, BackupEnvelope, AdditionalLaborLine, OtherMaterialLine, ExpenseLine } from '../../../domain/entities';
 import { ENGINE_VERSION } from '../../../domain/entities';
 import { freezeCalculatedOutputs, readFrozenCalculatedOutputs } from '../../../domain/calculationSnapshot';
@@ -1669,8 +1669,8 @@ function RoomEditor({ room, surfaces, catalog, onPatchRoom, onDeleteRoom, onAddC
       </div>
       {room.deductionEnabled && room.openingMode === 'quick' && (
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <NumField label="Doors" value={String(room.quick.doorCount)} onChange={(v) => onPatchRoom({ quick: { ...room.quick, doorCount: Number.parseInt(v, 10) || 0 } })} />
-          <NumField label="Windows" value={String(room.quick.windowCount)} onChange={(v) => onPatchRoom({ quick: { ...room.quick, windowCount: Number.parseInt(v, 10) || 0 } })} />
+          <NumField label="Doors" value={String(room.quick.doorCount)} onChange={(v) => { const parsed = parseOpeningCountInput(v); if (parsed !== 'reject') onPatchRoom({ quick: { ...room.quick, doorCount: parsed } }); }} />
+          <NumField label="Windows" value={String(room.quick.windowCount)} onChange={(v) => { const parsed = parseOpeningCountInput(v); if (parsed !== 'reject') onPatchRoom({ quick: { ...room.quick, windowCount: parsed } }); }} />
         </div>
       )}
       {room.deductionEnabled && room.openingMode === 'detailed' && (
@@ -1687,7 +1687,7 @@ function RoomEditor({ room, surfaces, catalog, onPatchRoom, onDeleteRoom, onAddC
               </label>
               <NumField label="Width (ft)" value={o.widthFt} onChange={(v) => onPatchRoom({ openings: room.openings.map((x) => (x.id === o.id ? { ...x, widthFt: v } : x)) })} />
               <NumField label="Height (ft)" value={o.heightFt} onChange={(v) => onPatchRoom({ openings: room.openings.map((x) => (x.id === o.id ? { ...x, heightFt: v } : x)) })} />
-              <NumField label="Count" value={String(o.count)} onChange={(v) => onPatchRoom({ openings: room.openings.map((x) => (x.id === o.id ? { ...x, count: Number.parseInt(v, 10) || 0 } : x)) })} />
+              <NumField label="Count" value={String(o.count)} onChange={(v) => { const parsed = parseOpeningCountInput(v); if (parsed !== 'reject') onPatchRoom({ openings: room.openings.map((x) => (x.id === o.id ? { ...x, count: parsed } : x)) }); }} />
               <button type="button" className="text-link text-xs text-bad" onClick={() => onPatchRoom({ openings: room.openings.filter((x) => x.id !== o.id) })}>Remove</button>
             </div>
           ))}
@@ -1759,7 +1759,7 @@ function StandaloneSurfaceEditor({ surface, catalog, onPatch, onRemove }: { surf
           </>
         ) : (
           <>
-            <NumField label="Door count" value={surface.doorCount?.toString() ?? ''} onChange={(v) => onPatch({ doorCount: Number.parseInt(v, 10) || 0 })} />
+            <NumField label="Door count" value={surface.doorCount?.toString() ?? ''} onChange={(v) => { const parsed = parseOpeningCountInput(v); if (parsed !== 'reject') onPatch({ doorCount: parsed }); }} />
             <NumField label="Width (ft)" value={surface.widthFt ?? ''} onChange={(v) => onPatch({ widthFt: v })} />
             <NumField label="Height (ft)" value={surface.heightFt ?? ''} onChange={(v) => onPatch({ heightFt: v })} />
             <label className="block text-sm">

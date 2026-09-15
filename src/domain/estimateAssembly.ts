@@ -1,5 +1,5 @@
 import { PEP, type Dec } from '../engine/decimal';
-import { parseDecimalField, isPositiveDivisor } from '../engine/parse';
+import { parseDecimalField, isPositiveDivisor, isValidOpeningCount } from '../engine/parse';
 import { grossWallArea, ceilingArea, netWallArea, quickOpeningArea, detailedOpeningArea } from '../engine/geometry';
 import { aggregateProjectSurfaces, type ProjectSurface, type ProjectAggregateResult, type VariantPricing, type SurfaceGeometryInput } from '../engine/estimate';
 import { materialsTotal, otherMaterialCost, otherExpensesTotal, directCost, overheadAmount, estimatedJobCost, suppliesAllowance } from '../engine/cost';
@@ -55,11 +55,20 @@ function roomDerivedGeometry(room: Room, kind: 'wall' | 'ceiling'): { state: 'mi
 
   let openingArea: Dec;
   if (room.openingMode === 'quick') {
+    // V6-04: doorCount/windowCount were passed directly into the area
+    // formula with no range check at all -- a negative count (reachable
+    // via a direct object mutation, or any future code path that isn't
+    // the interactive UI) SUBTRACTED area from the deduction, inflating
+    // net wall area and the resulting price instead of being rejected.
+    // Only the import validator (checkRequiredInt) enforced this; the
+    // calculation engine did not independently guard itself.
+    if (!isValidOpeningCount(room.quick.doorCount) || !isValidOpeningCount(room.quick.windowCount)) return { state: 'invalid' };
     const doorArea = parseDecimalField(room.quick.doorAreaEach);
     const windowArea = parseDecimalField(room.quick.windowAreaEach);
     if (doorArea.kind !== 'valid' || windowArea.kind !== 'valid') return { state: 'invalid' };
     openingArea = quickOpeningArea(room.quick.doorCount, doorArea.value, room.quick.windowCount, windowArea.value);
   } else {
+    if (room.openings.some((o) => !isValidOpeningCount(o.count))) return { state: 'invalid' };
     const parsed = room.openings.map((o) => ({ widthFt: parseDecimalField(o.widthFt), heightFt: parseDecimalField(o.heightFt), count: o.count }));
     if (parsed.some((o) => o.widthFt.kind !== 'valid' || o.heightFt.kind !== 'valid')) return { state: 'invalid' };
     openingArea = detailedOpeningArea(parsed.map((o) => ({ widthFt: (o.widthFt as { kind: 'valid'; value: Dec }).value, heightFt: (o.heightFt as { kind: 'valid'; value: Dec }).value, count: o.count })));
