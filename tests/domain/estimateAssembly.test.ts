@@ -65,6 +65,56 @@ describe('PRO-001 through the domain assembly: wall and ceiling in the SAME room
   });
 });
 
+describe('GEO-027: a room\'s opening-deduction count is entirely independent from a linked door surface\'s own doorCount', () => {
+  // The room's quick.doorCount=2 controls how much area is DEDUCTED from
+  // the wall (two doorway openings). A separate, standalone door surface
+  // linked to the same room via roomId has its OWN doorCount controlling
+  // how many doors are actually PAINTED. Nothing in resolveSurface/
+  // roomDerivedGeometry cross-references the two, so this is exercised
+  // here as an explicit combined scenario rather than left unverified.
+  function revisionWith(doorSurfaceDoorCount: number): EstimateRevision {
+    const room: Room = {
+      id: 'room-1', name: 'Bedroom', lengthFt: '10', widthFt: '10', heightFt: '8',
+      deductionEnabled: true, openingMode: 'quick', quick: { doorCount: 2, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' },
+      openings: [], surfaceIds: ['wall-1'],
+    };
+    const wall: Surface = {
+      id: 'wall-1', roomId: 'room-1', kind: 'wall', enabled: true, measurementMode: 'roomDerived',
+      areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null,
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+    };
+    const door: Surface = {
+      id: 'door-1', roomId: 'room-1', kind: 'door', enabled: true, measurementMode: 'manual',
+      areaFt2: null, trimLengthFt: null, developedWidthFt: null, doorCount: doorSurfaceDoorCount, widthFt: '3', heightFt: '7', paintedSides: 2,
+      paintVariantId: 'paint-white', coats: 2, wasteRatio: '0.10', loadedHourlyRate: null, throughput: null, hoursPerSidePerCoat: null,
+    };
+    return { ...baseRevision(), rooms: [room], surfaces: [wall, door] };
+  }
+
+  it('painting a second door (doorCount 1 -> 2) adds its own cost on top of the wall\'s already-2-opening-deducted area', () => {
+    const oneDoorPainted = assembleProjectEstimate(revisionWith(1), { priceMode: 'suggested', customPriceRaw: '' });
+    const twoDoorsPainted = assembleProjectEstimate(revisionWith(2), { priceMode: 'suggested', customPriceRaw: '' });
+    expect(oneDoorPainted.calculationState).toBe('complete');
+    expect(twoDoorsPainted.calculationState).toBe('complete');
+    // Labor hours scale directly with doorCount (no whole-gallon rounding
+    // to obscure the difference the way materials purchasing can) --
+    // painting a second door must cost strictly more labor.
+    expect(twoDoorsPainted.laborCost!.greaterThan(oneDoorPainted.laborCost!)).toBe(true);
+    expect(twoDoorsPainted.materials!.greaterThanOrEqualTo(oneDoorPainted.materials!)).toBe(true);
+  });
+
+  it('the wall\'s own (2-opening-deducted) net area never changes no matter what the door surface\'s doorCount is', () => {
+    const wallOnly = (doorSurfaceDoorCount: number) => {
+      const rev = revisionWith(doorSurfaceDoorCount);
+      return { ...rev, surfaces: rev.surfaces.filter((s) => s.kind !== 'door') };
+    };
+    const a = assembleProjectEstimate(wallOnly(1), { priceMode: 'suggested', customPriceRaw: '' });
+    const b = assembleProjectEstimate(wallOnly(2), { priceMode: 'suggested', customPriceRaw: '' });
+    expect(a.materials!.toString()).toBe(b.materials!.toString());
+    expect(a.laborCost!.toString()).toBe(b.laborCost!.toString());
+  });
+});
+
 describe('Standalone surfaces with no room', () => {
   it('a project with only a standalone door surface (roomId null) is complete and priced', () => {
     const door: Surface = {

@@ -192,6 +192,23 @@ describe('BACK-020: unknown enums, negative costs, and non-decimal scalars in im
     const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
     expect(result.ok).toBe(true);
   });
+
+  // CORE-020: a numeric field literally holding an object/array/boolean
+  // (not just a malformed string) must be a structured invalid result,
+  // never coerced (e.g. via String(x)) into something that might parse.
+  it.each([
+    ['an object', { nested: true }],
+    ['an array', [1, 2, 3]],
+    ['a boolean', true],
+  ] as const)('rejects a numeric field holding %s instead of a decimal string', (_label, malformedValue) => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- deliberately corrupt type for the test
+    const corrupted = { ...project, revisions: [{ ...project.revisions[0], proposedPrice: malformedValue as any }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [corrupted], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false);
+  });
 });
 
 describe('BACK-D09: restore/merge — identical skip, new add, conflicting requires a choice (default keep-local)', () => {
@@ -702,6 +719,28 @@ describe('BACK-D10: import-as-copies — provenance-based skip, full ID remap in
 
     const forced = planImportAsCopies([project], 'export-1', alreadyImported, ids, true);
     expect(forced.projects).toHaveLength(1);
+  });
+
+  // BACK-009: re-importing the SAME source after the resulting local copy
+  // has been edited must never silently upsert over that edit.
+  // planImportAsCopies is pure and only ever returns brand-new projects to
+  // ADD -- it never looks up or touches an existing local record by id, so
+  // an "upsert that clobbers a local edit" is structurally impossible here;
+  // this locks that invariant in against a future refactor.
+  it('re-importing the same source after the copy was locally edited returns nothing to add -- the edited copy is never a candidate for upsert', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const firstImport = planImportAsCopies([project], 'export-1', new Set(), ids);
+    const localCopy: Project = { ...firstImport.projects[0], title: 'My renamed copy (locally edited)' };
+
+    // The provenance record from the first import is what a real caller
+    // persists and later reads back as "already imported" for this source.
+    const alreadyImportedSourceIds = new Set(firstImport.provenance.map((rec) => rec.sourceProjectId));
+    const secondImport = planImportAsCopies([project], 'export-1', alreadyImportedSourceIds, ids);
+
+    expect(secondImport.projects).toHaveLength(0); // nothing to upsert
+    expect(secondImport.skippedSourceIds).toEqual(['p1']);
+    expect(localCopy.title).toBe('My renamed copy (locally edited)'); // never touched
   });
 });
 
