@@ -1142,3 +1142,95 @@ describe('V6-06 (import side): supplies allowance import validation matches the 
     expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
   });
 });
+
+describe('DOC-010/BACK-019/BACK-025 (import side): the business logo is validated as rigorously as any other field', () => {
+  const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  function pngDataUri(totalBytes: number): string {
+    const bytes = new Uint8Array(totalBytes);
+    bytes.set(PNG_MAGIC);
+    let binary = '';
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return `data:image/png;base64,${btoa(binary)}`;
+  }
+  function svgDataUri(): string {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>';
+    let binary = '';
+    for (const b of new TextEncoder().encode(svg)) binary += String.fromCharCode(b);
+    return `data:image/svg+xml;base64,${btoa(binary)}`;
+  }
+
+  it('accepts a well-formed small PNG logo on a draft revision', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withLogo = { ...project, revisions: [{ ...project.revisions[0], businessInfo: { ...project.revisions[0].businessInfo, logo: pngDataUri(100) } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withLogo], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+
+  it('rejects an SVG logo outright -- no script-capable format is ever accepted (DOC-010)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withLogo = { ...project, revisions: [{ ...project.revisions[0], businessInfo: { ...project.revisions[0].businessInfo, logo: svgDataUri() } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withLogo], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('rejects a logo larger than 1 MiB (BACK-019)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withLogo = { ...project, revisions: [{ ...project.revisions[0], businessInfo: { ...project.revisions[0].businessInfo, logo: pngDataUri(1024 * 1024 + 1) } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withLogo], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('rejects malformed logo data (not a real data URI at all)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const withLogo = { ...project, revisions: [{ ...project.revisions[0], businessInfo: { ...project.revisions[0].businessInfo, logo: 'not-a-data-uri' } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withLogo], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(false);
+  });
+
+  it('a malformed logo on ONE revision atomically rejects the entire import -- no partial write', () => {
+    const ids = sequentialIdSource();
+    const good = makeProject('p1', ids);
+    const bad = { ...makeProject('p2', ids), revisions: [{ ...makeProject('p2', ids).revisions[0], businessInfo: { name: '', contact: '', address: '', logo: svgDataUri() } }] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [good, bad], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(false); // the whole envelope is rejected, including project "p1" which was otherwise perfectly valid
+  });
+
+  it('a legitimately absent logo (no logo ever set) is still fully supported and accepted', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    expect(project.revisions[0].businessInfo.logo).toBeUndefined();
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [project], ids);
+    expect(validateBackupEnvelope(envelope, JSON.stringify(envelope).length).ok).toBe(true);
+  });
+
+  it('BACK-025: a logo embedded in an issued revision\'s frozen customerDocumentSnapshot survives export/import and resolves from the restored LOCAL data, no remote fetch required', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const logo = pngDataUri(200);
+    const issuedRevision = { ...project.revisions[0], state: 'issued' as const, customerDocumentSnapshot: { ...makeIssuedDocument(), businessInfo: { ...makeIssuedDocument().businessInfo, logo } } };
+    const withIssued = { ...project, revisions: [issuedRevision] };
+    const envelope = exportBackup('install-1', makeSettings(), [makeVariant()], [], [], [withIssued], ids);
+    const result = validateBackupEnvelope(envelope, JSON.stringify(envelope).length);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The restored record's logo is the exact same self-contained data URI
+    // -- no URL, no separate asset reference to resolve over the network.
+    const restoredLogo = result.envelope.projects[0].revisions[0].customerDocumentSnapshot!.businessInfo.logo;
+    expect(restoredLogo).toBe(logo);
+    expect(restoredLogo!.startsWith('data:image/')).toBe(true);
+  });
+
+  it('import-as-copy preserves the logo unchanged (it is plain data, not an id needing remap)', () => {
+    const ids = sequentialIdSource();
+    const project = makeProject('p1', ids);
+    const logo = pngDataUri(150);
+    const withLogo = { ...project, revisions: [{ ...project.revisions[0], businessInfo: { ...project.revisions[0].businessInfo, logo } }] };
+    const copy = planImportAsCopies([withLogo], 'export-1', new Set(), ids).projects[0];
+    expect(copy.revisions[0].businessInfo.logo).toBe(logo);
+  });
+});

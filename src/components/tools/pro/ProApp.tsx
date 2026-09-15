@@ -21,6 +21,22 @@ import {
 import { defaultIdSource } from '../../../domain/ids';
 import { readInteriorHandoff, clearInteriorHandoff, buildProjectFromInteriorHandoff, type InteriorHandoffPayload, type HandoffFieldNote } from '../../../domain/interiorHandoff';
 import { ConflictError } from '../../../storage/db';
+import { validateLogoBytes, MAX_LOGO_DIMENSION_PX } from '../../../domain/logo';
+
+/** DOC-010: dimension limits require an actual browser image decode
+ * (Image.onload), unlike the byte-level format/size checks in
+ * domain/logo.ts, which are pure. Kept as a standalone, mockable
+ * function so tests can simulate both a real decode's success and a
+ * "decode failure" (a payload that passed the magic-number check but
+ * isn't actually a valid image the browser can render). */
+function decodeImageDimensions(dataUri: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error('The image could not be decoded.'));
+    img.src = dataUri;
+  });
+}
 import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveImportedBackup, saveReplaceAllBackup, saveServiceDefinition, deleteServiceDefinition, deleteProject } from './proStore';
 
 const ids = defaultIdSource;
@@ -70,6 +86,8 @@ export default function ProApp() {
   const [tab, setTab] = useState<Tab>('projects');
   const [loading, setLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  // DOC-010: a rejected upload's reason -- never silently ignored.
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<BusinessSettings>(defaultSettings());
   const [catalog, setCatalog] = useState<PaintVariant[]>([]);
@@ -264,6 +282,41 @@ export default function ProApp() {
 
   function mutateDraft(fn: (r: EstimateRevision) => EstimateRevision) {
     setDraftEdit((r) => (r ? fn(r) : r));
+  }
+
+  // DOC-010: format/size are checked from the file's own BYTES before
+  // anything else happens (never trusts file.type or the filename);
+  // dimensions are checked only after that passes, via an actual decode,
+  // so a payload that sniffs as a valid PNG/JPEG/WebP but that the
+  // browser still can't render is caught as a decode failure rather than
+  // silently stored. Never writes anything to the draft on any failure.
+  async function handleLogoFileChange(file: File) {
+    setLogoError(null);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const result = validateLogoBytes(bytes);
+    if (!result.ok) {
+      setLogoError(result.error.message);
+      return;
+    }
+    try {
+      const { width, height } = await decodeImageDimensions(result.dataUri);
+      if (width > MAX_LOGO_DIMENSION_PX || height > MAX_LOGO_DIMENSION_PX) {
+        setLogoError(`Image is ${width}x${height}px; the maximum is ${MAX_LOGO_DIMENSION_PX}x${MAX_LOGO_DIMENSION_PX}px.`);
+        return;
+      }
+    } catch {
+      setLogoError('The image could not be decoded — the file may be corrupt.');
+      return;
+    }
+    mutateDraft((r) => ({ ...r, businessInfo: { ...r.businessInfo, logo: result.dataUri }, updatedAt: ids.now() }));
+  }
+
+  function removeLogo() {
+    setLogoError(null);
+    mutateDraft((r) => {
+      const { logo: _dropped, ...rest } = r.businessInfo;
+      return { ...r, businessInfo: rest, updatedAt: ids.now() };
+    });
   }
 
   // A draft's own frozen snapshot — not the live catalog — is the correct
@@ -1205,6 +1258,28 @@ export default function ProApp() {
                   <TextField label="Customer contact" value={draftEdit.customerInfo.contact} onChange={(v) => mutateDraft((r) => ({ ...r, customerInfo: { ...r.customerInfo, contact: v }, updatedAt: ids.now() }))} />
                   <TextField label="Job site / customer address" value={draftEdit.customerInfo.address} onChange={(v) => mutateDraft((r) => ({ ...r, customerInfo: { ...r.customerInfo, address: v }, updatedAt: ids.now() }))} />
                 </div>
+                <div className="mt-3">
+                  <label className="block text-sm">
+                    <span className="font-medium text-ink-soft">Business logo (PNG, JPEG, or WebP; max 1 MiB)</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="mt-1 block text-sm"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = ''; // allow re-selecting the same file after a rejection
+                        if (file) handleLogoFileChange(file);
+                      }}
+                    />
+                  </label>
+                  {logoError && <p className="mt-1 text-sm text-bad">{logoError}</p>}
+                  {draftEdit.businessInfo.logo && (
+                    <div className="mt-2 flex items-center gap-3">
+                      <img src={draftEdit.businessInfo.logo} alt={`${draftEdit.businessInfo.name || 'Business'} logo`} className="h-16 w-16 rounded-btn border border-line object-contain" />
+                      <button type="button" className="text-link text-xs text-bad" onClick={removeLogo}>Remove logo</button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1435,10 +1510,17 @@ export default function ProApp() {
               <div className="card p-6">
                 <p className="tag-preview mb-2 inline-block print:hidden">{previewDocument.status === 'issued' ? 'Customer-facing document' : 'Customer-facing document — draft preview'}</p>
                 <div className="mb-4 flex items-start justify-between gap-4">
-                  <div>
-                    {previewDocument.businessInfo.name && <p className="font-semibold">{previewDocument.businessInfo.name}</p>}
-                    {previewDocument.businessInfo.contact && <p className="text-sm text-ink-soft">{previewDocument.businessInfo.contact}</p>}
-                    {previewDocument.businessInfo.address && <p className="text-sm text-ink-soft">{previewDocument.businessInfo.address}</p>}
+                  <div className="flex items-start gap-3">
+                    {/* DOC-010/BACK-025: the logo is a self-contained data
+                        URI already embedded in this document -- it renders
+                        (and prints) directly from local data, with no
+                        network fetch, both live and after a restore. */}
+                    {previewDocument.businessInfo.logo && <img src={previewDocument.businessInfo.logo} alt={`${previewDocument.businessInfo.name || 'Business'} logo`} className="h-12 w-12 object-contain" />}
+                    <div>
+                      {previewDocument.businessInfo.name && <p className="font-semibold">{previewDocument.businessInfo.name}</p>}
+                      {previewDocument.businessInfo.contact && <p className="text-sm text-ink-soft">{previewDocument.businessInfo.contact}</p>}
+                      {previewDocument.businessInfo.address && <p className="text-sm text-ink-soft">{previewDocument.businessInfo.address}</p>}
+                    </div>
                   </div>
                   <button type="button" className="btn btn-primary print:hidden" onClick={() => window.print()}>Print / Save as PDF</button>
                 </div>

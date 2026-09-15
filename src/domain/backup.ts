@@ -18,6 +18,7 @@ import {
   type ParseOptions,
 } from '../engine/parse';
 import { readFrozenCalculatedOutputs } from './calculationSnapshot';
+import { parseLogoDataUri } from './logo';
 
 const REVISION_STATES = new Set(['draft', 'issued', 'superseded']);
 const PRICE_MODES = new Set(['suggested', 'custom']);
@@ -48,6 +49,23 @@ function checkRequiredString(path: string, v: unknown, issues: ValidationIssue[]
 function checkOptionalString(path: string, v: unknown, issues: ValidationIssue[]): void {
   if (v === null || v === undefined) return;
   checkRequiredString(path, v, issues);
+}
+
+/** DOC-010/BACK-019: a business logo is optional, but when present it
+ * must be a well-formed PNG/JPEG/WebP data URI within the size limit --
+ * re-verified from its OWN decoded bytes here (parseLogoDataUri), never
+ * trusted just because it was already accepted once before export.
+ * Malformed/oversized/unsupported-format logo data fails the WHOLE
+ * import before any write (validateBackupEnvelope's own atomicity), the
+ * same as every other field validated in this file. */
+function checkOptionalLogoDataUri(path: string, v: unknown, issues: ValidationIssue[]): void {
+  if (v === null || v === undefined) return;
+  if (typeof v !== 'string') {
+    issues.push({ path, message: `Expected a string at ${path}, got ${typeof v}.` });
+    return;
+  }
+  const result = parseLogoDataUri(v);
+  if (!result.ok) issues.push({ path, message: `Invalid logo at ${path}: ${result.error.message}` });
 }
 
 function checkRequiredBoolean(path: string, v: unknown, issues: ValidationIssue[]): void {
@@ -401,7 +419,7 @@ function validateCustomerDocumentSnapshot(path: string, raw: unknown, issues: Va
     checkRequiredString(`${path}.businessInfo.name`, raw.businessInfo.name, issues);
     checkRequiredString(`${path}.businessInfo.contact`, raw.businessInfo.contact, issues);
     checkRequiredString(`${path}.businessInfo.address`, raw.businessInfo.address, issues);
-    checkOptionalString(`${path}.businessInfo.logo`, raw.businessInfo.logo, issues);
+    checkOptionalLogoDataUri(`${path}.businessInfo.logo`, raw.businessInfo.logo, issues);
   }
   if (!isPlainObject(raw.customerInfo)) {
     issues.push({ path: `${path}.customerInfo`, message: `Expected an object at ${path}.customerInfo.` });
@@ -630,6 +648,7 @@ function validateRevisionStructure(
     checkRequiredString(`${revPath}.businessInfo.name`, rev.businessInfo.name, issues);
     checkRequiredString(`${revPath}.businessInfo.contact`, rev.businessInfo.contact, issues);
     checkRequiredString(`${revPath}.businessInfo.address`, rev.businessInfo.address, issues);
+    checkOptionalLogoDataUri(`${revPath}.businessInfo.logo`, rev.businessInfo.logo, issues);
   }
   if (!isPlainObject(rev.customerInfo)) issues.push({ path: `${revPath}.customerInfo`, message: `Expected an object at ${revPath}.customerInfo.` });
   else {
