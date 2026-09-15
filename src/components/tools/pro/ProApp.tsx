@@ -700,8 +700,15 @@ export default function ProApp() {
     if (pendingImport.mode === 'copies') {
       const { projects: toCopy, skippedSourceIds, provenance } = buildCopiesForConfirm(pendingImport);
       try {
-        await saveImportedBackup({ projects: toCopy.map((project) => ({ project, expectedVersion: null })), provenance });
-        setProjects((ps) => [...ps, ...toCopy]);
+        const { committedProjectVersions } = await saveImportedBackup({ projects: toCopy.map((project) => ({ project, expectedVersion: null })), provenance });
+        // independent-review R11: a copy's `version` field is carried over
+        // verbatim from whatever the SOURCE project happened to be at
+        // (e.g. 7) — the ACTUAL committed version is a fresh value from
+        // the global counter and is almost never the same number. Using
+        // the stale source version here means opening this copy and
+        // saving it immediately would conflict against its own
+        // just-written data.
+        setProjects((ps) => [...ps, ...toCopy.map((p) => ({ ...p, version: committedProjectVersions.get(p.id) ?? p.version }))]);
         setPendingImport(null);
         setImportMessage(`Import as copies complete: ${toCopy.length} project(s) copied${skippedSourceIds.length ? `, ${skippedSourceIds.length} already-imported source(s) skipped` : ''}.`);
       } catch {
