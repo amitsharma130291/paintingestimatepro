@@ -456,11 +456,19 @@ export default function ProApp() {
 
   function addService(kind: ServiceKind) {
     const t = now();
+    // V5-10: CALCULATION_SPEC.md §2 requires explicit user-entered geometry
+    // for trim (developedWidthFt) and door (widthFt/heightFt/paintedSides)
+    // services -- "no hidden defaults." A new service used to start with
+    // an INVENTED 4ft developed width or a 3x6.67 two-sided door already
+    // filled in, so a customer who never touched those fields still got a
+    // real, silently-assumed paint-consumption number. Every required
+    // geometry field now starts unset (null, matching every other
+    // required-with-no-default field in this app), leaving the service
+    // correctly 'incomplete' until the customer actually enters it.
     const service: ServiceDefinition = {
       id: ids.nextId(), name: `New ${kind} service`, unit: kind === 'door' ? 'door' : kind === 'trim' ? 'linearFt' : 'ft2', kind,
       paintVariantId: catalog[0]?.id ?? null, coats: null, wasteRatio: null, loadedHourlyRate: null, throughput: null,
-      hoursPerSidePerCoat: null, developedWidthFt: kind === 'trim' ? '4' : null, widthFt: kind === 'door' ? '3' : null,
-      heightFt: kind === 'door' ? '6.67' : null, paintedSides: kind === 'door' ? 2 : null,
+      hoursPerSidePerCoat: null, developedWidthFt: null, widthFt: null, heightFt: null, paintedSides: null,
       additionalLaborHoursPerUnit: '0', suppliesCostPerUnit: '0', directExpensePerUnit: '0', currentSellingPrice: null,
       createdAt: t, updatedAt: t,
     };
