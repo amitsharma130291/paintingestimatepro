@@ -115,3 +115,45 @@ describe('V6-01: buildCustomerDocument scope lines include every enabled priced 
     expect(doc.scopeLines).toHaveLength(1);
   });
 });
+
+describe('DOC-003: an issued price is ONE exact project total, never distributed/invented across multiple scope descriptions', () => {
+  it('a multi-room, multi-surface scope (several description lines) still carries exactly one proposedPrice field, set to the full $1000.00', () => {
+    const revision = {
+      ...baseRevision(),
+      rooms: [room({ id: 'room-1', name: 'Bedroom', surfaceIds: ['wall-1'] }), room({ id: 'room-2', name: 'Kitchen', surfaceIds: ['wall-2'] })],
+      surfaces: [wallSurface({ id: 'wall-1', roomId: 'room-1' }), wallSurface({ id: 'wall-2', roomId: 'room-2' }), doorSurface({ id: 'door-1' })],
+      proposedPrice: '1000.00',
+    };
+    const doc = buildCustomerDocument(revision, meta);
+    expect(doc.scopeLines.length).toBeGreaterThan(1); // multiple descriptions
+    expect(doc.proposedPrice).toBe('1000.00'); // one exact total, unchanged by how many lines describe the scope
+    // CustomerDocumentSnapshot has no per-line price field at all -- a
+    // per-description breakdown is structurally impossible to invent here.
+    expect(() => assertOnlyAllowedFields(doc as unknown as Record<string, unknown>)).not.toThrow();
+    expect('lineItems' in doc || 'perLinePrice' in doc || 'scopePrices' in doc).toBe(false);
+  });
+});
+
+describe('DOC-006: a Pro customer document always carries a pre-tax notice, and never computes any sales tax', () => {
+  it('taxNotice is always the fixed exact disclosure text, regardless of price', () => {
+    const revision = { ...baseRevision(), surfaces: [wallSurface()], proposedPrice: '500.00' };
+    const doc = buildCustomerDocument(revision, meta);
+    expect(doc.taxNotice).toBe('Prices exclude taxes; taxes are not calculated by this tool.');
+    // The allow-list proves there is no separate "tax" field anywhere in
+    // the customer-facing shape -- proposedPrice IS the final total.
+    expect('tax' in doc || 'salesTax' in doc || 'taxAmount' in doc).toBe(false);
+  });
+});
+
+describe('DOC-011: an issued document snapshot carries no engineVersion field at all, so it cannot be silently re-derived by a version check', () => {
+  it('buildCustomerDocument\'s output shape has no engineVersion field -- an engine upgrade has nothing to key a recalculation on', () => {
+    const revision = { ...baseRevision(), title: 'Kitchen', surfaces: [wallSurface()], proposedPrice: '750.00', calculationState: 'complete' as const };
+    const doc = buildCustomerDocument(revision, meta);
+    expect('engineVersion' in doc).toBe(false);
+    // The full end-to-end proof that an ISSUED revision's document preview
+    // is never recalculated after an engine-version change (ProApp.tsx's
+    // previewDocument memo returns the stored customerDocumentSnapshot
+    // directly, never re-deriving it) is in
+    // tests/browser/issuedDocumentEngineUpgrade.test.tsx.
+  });
+});
