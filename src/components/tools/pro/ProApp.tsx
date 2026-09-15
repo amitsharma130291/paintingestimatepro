@@ -665,6 +665,7 @@ export default function ProApp() {
         otherMaterials: resolved.finalOtherMaterials,
         serviceDefinitions: resolved.finalServiceDefinitions,
         projects: resolved.projectWrites,
+        provenance: resolved.provenance,
       });
       const writtenById = new Map(resolved.projectWrites.map((w) => [w.project.id, w.project]));
       const keptProjects = projects.filter((p) => !writtenById.has(p.id));

@@ -717,6 +717,13 @@ export interface RestoreResolutionResult {
    * change landed by another tab after the preview is caught, not
    * silently overwritten — item 8). */
   projectWrites: { project: Project; expectedVersion: number | null }[];
+  /** Provenance for every "keep both" project copy created during this
+   * merge, keyed the same way `planImportAsCopies` records it — so a
+   * later "import as copies" of the SAME export can still recognize this
+   * source project as already imported (independent-review §5's
+   * secondary finding: this was previously silently dropped for the
+   * merge path's keep-both copies). */
+  provenance: ImportProvenanceRecord[];
 }
 
 /**
@@ -748,6 +755,15 @@ export function applyFullRestoreResolutions(
   let finalSettings = existing.businessSettings;
   if (resolutionFor('businessSettings', existing.businessSettings.id) === 'replaceImported') finalSettings = envelope.businessSettings;
 
+  // "Keep both" mints a fresh ID for the imported record — every entry
+  // here maps that ORIGINAL incoming ID to the NEW one, so any other
+  // incoming record referencing it (e.g. a service definition's
+  // `paintVariantId`) can be corrected to point at the copy actually
+  // committed, not the original ID that now belongs only to the kept
+  // LOCAL record (independent-review R05: keep-both silently broke every
+  // service-to-paint-variant relationship it touched).
+  const keepBothIdRemap = new Map<string, string>();
+
   function mergeArray<T extends { id: string }>(kind: ImportConflict['kind'], local: T[], incoming: T[], toAdd: T[]): T[] {
     const conflictIds = new Set(plan.conflicts.filter((c) => c.kind === kind).map((c) => c.id));
     let result = local.map((item) => {
@@ -758,7 +774,11 @@ export function applyFullRestoreResolutions(
     for (const id of conflictIds) {
       if (resolutionFor(kind, id) === 'keepBoth') {
         const source = incoming.find((i) => i.id === id);
-        if (source) result.push({ ...source, id: ids.nextId() });
+        if (source) {
+          const newId = ids.nextId();
+          keepBothIdRemap.set(id, newId);
+          result.push({ ...source, id: newId });
+        }
       }
     }
     return result;
@@ -766,7 +786,14 @@ export function applyFullRestoreResolutions(
 
   const finalPaintVariants = mergeArray('paintVariant', existing.paintVariants, envelope.paintVariants, plan.toAdd.paintVariants);
   const finalOtherMaterials = mergeArray('otherMaterial', existing.otherMaterials, envelope.otherMaterials, plan.toAdd.otherMaterials);
-  const finalServiceDefinitions = mergeArray('serviceDefinition', existing.serviceDefinitions, envelope.serviceDefinitions, plan.toAdd.serviceDefinitions);
+  const rawFinalServiceDefinitions = mergeArray('serviceDefinition', existing.serviceDefinitions, envelope.serviceDefinitions, plan.toAdd.serviceDefinitions);
+  // Rewrite every service definition's paintVariantId through the
+  // keep-both remap — a no-op for any ID that was never remapped (kept
+  // local, replaced in place, or untouched), and correct for the one
+  // case that actually changed identity.
+  const finalServiceDefinitions = rawFinalServiceDefinitions.map((svc) =>
+    svc.paintVariantId && keepBothIdRemap.has(svc.paintVariantId) ? { ...svc, paintVariantId: keepBothIdRemap.get(svc.paintVariantId)! } : svc
+  );
 
   const projectWrites: RestoreResolutionResult['projectWrites'] = plan.toAdd.projects.map((project) => ({ project, expectedVersion: null }));
   const projectConflicts = plan.conflicts.filter((c) => c.kind === 'project');
@@ -781,12 +808,14 @@ export function applyFullRestoreResolutions(
       if (incomingProject) keepBothSourceProjects.push(incomingProject);
     }
   }
+  let provenance: ImportProvenanceRecord[] = [];
   if (keepBothSourceProjects.length > 0) {
     const copies = planImportAsCopies(keepBothSourceProjects, envelope.exportId, new Set(), ids, true);
     for (const copy of copies.projects) projectWrites.push({ project: copy, expectedVersion: null });
+    provenance = copies.provenance;
   }
 
-  return { finalSettings, finalPaintVariants, finalOtherMaterials, finalServiceDefinitions, projectWrites };
+  return { finalSettings, finalPaintVariants, finalOtherMaterials, finalServiceDefinitions, projectWrites, provenance };
 }
 
 /** Import as copies: new IDs throughout each imported graph, remapping

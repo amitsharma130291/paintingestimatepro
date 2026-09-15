@@ -499,6 +499,47 @@ describe('applyFullRestoreResolutions: pure resolution-application logic (item 8
     expect(keepBothResult.finalPaintVariants).toHaveLength(3); // local paint-1 + new paint-2 + the keepBoth copy
     expect(keepBothResult.finalPaintVariants.filter((v) => v.pricePerGal === '99')).toHaveLength(1);
   });
+
+  it('REGRESSION (independent-review R05): "keep both" on a conflicting paint variant remaps every incoming service definition\'s paintVariantId to the copy, never leaving it pointing at the old local variant', () => {
+    const ids = sequentialIdSource();
+    const localVariant = makeVariant(); // id 'paint-1', pricePerGal '42'
+    const incomingVariant = { ...makeVariant(), pricePerGal: '99' }; // same id, different price -> conflict
+    const incomingService = {
+      id: 'service-1', name: 'Custom wall service', unit: 'ft2' as const, kind: 'wall' as const, paintVariantId: 'paint-1',
+      coats: 2, wasteRatio: '0.1', loadedHourlyRate: '32', throughput: '150', hoursPerSidePerCoat: null, developedWidthFt: null,
+      widthFt: null, heightFt: null, paintedSides: null, additionalLaborHoursPerUnit: '0', suppliesCostPerUnit: '0',
+      directExpensePerUnit: '0', currentSellingPrice: '1.80', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const envelope = exportBackup('install-1', makeSettings(), [incomingVariant], [], [incomingService], [], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [], projects: [] },
+      { businessSettings: makeSettings(), paintVariants: [incomingVariant], otherMaterials: [], serviceDefinitions: [incomingService], projects: [] }
+    );
+    const result = applyFullRestoreResolutions(
+      { businessSettings: makeSettings(), paintVariants: [localVariant], otherMaterials: [], serviceDefinitions: [] },
+      envelope, plan, { 'paintVariant:paint-1': 'keepBoth' }, {}, ids
+    );
+    const copiedVariant = result.finalPaintVariants.find((v) => v.pricePerGal === '99')!;
+    expect(copiedVariant.id).not.toBe('paint-1'); // a genuinely new copy
+    expect(result.finalServiceDefinitions[0].paintVariantId).toBe(copiedVariant.id); // remapped, not left at 'paint-1'
+  });
+
+  it('a "keep both" project copy returns real provenance, not silently dropped (independent-review §5 secondary finding)', () => {
+    const ids = sequentialIdSource();
+    const localProject = makeProject('p1', ids);
+    const incoming = { ...structuredClone(localProject), title: 'Imported title' };
+    const envelope = exportBackup('install-1', makeSettings(), [], [], [], [incoming], ids);
+    const plan = planFullRestoreMerge(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [localProject] },
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [], projects: [incoming] }
+    );
+    const result = applyFullRestoreResolutions(
+      { businessSettings: makeSettings(), paintVariants: [], otherMaterials: [], serviceDefinitions: [] },
+      envelope, plan, { 'project:p1': 'keepBoth' }, { p1: localProject.version }, ids
+    );
+    expect(result.provenance).toHaveLength(1);
+    expect(result.provenance[0]).toMatchObject({ exportId: envelope.exportId, sourceProjectId: 'p1' });
+  });
 });
 
 describe('BACK-D10: import-as-copies — provenance-based skip, full ID remap including actual baselines', () => {
