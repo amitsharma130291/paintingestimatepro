@@ -1,5 +1,59 @@
 # Tool Bug Fix Log — v5, v6, and v7 sessions
 
+## v7 session, follow-up pass: DECISIONS.md #9 aggregate-output limits (AGG-001..006) + dependency advisories
+
+A follow-up review correctly rejected the 357/357 "complete" state below:
+`docs/tdd/DECISIONS.md` item 9 (aggregate-output limits — e.g. a
+required price or job cost that overflows practical display/storage
+bounds even though every individual field passed its own bound) had
+never been promoted to a matrix requirement and was dismissed in this
+log's prior entries as "un-built by design choice." That dismissal was
+wrong: the item was part of the approved contract independent of matrix
+membership. Six new requirement IDs (AGG-001..006) were added, tests
+written first, then the policy implemented. Two genuine pre-existing
+gaps were found in the process (not just missing coverage):
+
+1. **Suggested-price derivation could silently null out a "complete"
+   result.** `assembleProjectEstimate`'s suggested-price path could
+   report `calculationState: 'complete'` with `price`/`effectivePrice`
+   both `null` whenever `requiredPriceRaw` alone exceeded the
+   pre-existing `MAX_REQUIRED_PRICE` ceiling at an extreme (but
+   individually valid, `<1`) target margin — even with every other
+   aggregate safely under the new cap. This is exactly the
+   "disguised-invalid complete state" DECISIONS.md #9 forbids. Found
+   only because the review's instruction to test "every calculation
+   route that can create an aggregate beyond the supported range" forced
+   systematic testing of the price-derivation route, not just the
+   cost-summation routes. Fix: `assembleProjectEstimate` now returns a
+   structured `outOfSupportedRange: true` invalid result instead.
+2. **No upper bound on individual actual-cost review fields.** Actual
+   amount, labor hours, and labor rate in the Pro app's actuals form had
+   no ceiling at all before this pass. Fix: applied the same
+   `MAX_AGGREGATE_MONETARY`/`MAX_AGGREGATE_HOURS`/`MAX_RATE` constants
+   already used elsewhere.
+3. **`saveActuals` could persist `state: 'final'` while the live
+   evaluation was blocked.** It computed "final" from
+   `genuinelyCompleteCount === 4` alone, never checking whether
+   `evaluateActualReview`'s own result was `'out_of_supported_range'`.
+   Fix: added an explicit `actualResult?.state === 'final'` condition.
+
+Implementation: `src/domain/estimateAssembly.ts` (new
+`outOfSupportedRange` flag, checked at every aggregation point) and
+`src/engine/actuals.ts` (new `'out_of_supported_range'` state).
+Evidence: `tests/domain/aggregateLimits.test.ts` (13 cases, written
+before the implementation),
+`tests/browser/aggregateLimitsDisplay.test.tsx` (real-component render).
+Full detail, including the exact ceilings and all ten required
+behavioral facets, is recorded directly under DECISIONS.md item 9.
+
+Dependency advisories were reviewed the same pass (`npm audit`: 3 high,
+all one CVE — GHSA-9wv6-86v2-598j, ReDoS in `path-to-regexp` — reached
+only through `@astrojs/vercel`'s build-time routing-config generation,
+never live request handling). Fix: `package.json` `overrides` pinning
+`path-to-regexp` to the already-vetted `6.3.0`, resolving all 3 to 0
+vulnerabilities with no adapter version change. Full advisory-by-advisory
+analysis: `DEPENDENCY_RISK_ASSESSMENT.md`.
+
 ## v7 session: closed the entire remaining unverified backlog (114 -> 0 rows) plus 5 named features
 
 All fixes below were developed test-first (RED confirmed before the fix,

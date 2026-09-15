@@ -1,18 +1,70 @@
 # Tools Completeness Report — v7 session (supersedes the v6 report below)
 
-## Current status: 357/357 in-scope requirements verified
+## Current status: 363/363 in-scope requirements verified
 
-`TOOL_REQUIREMENTS_MATRIX.csv` now shows **357 verified, 0 unverified, 0
+`TOOL_REQUIREMENTS_MATRIX.csv` now shows **363 verified, 0 unverified, 0
 missing, 0 failed, 0 deferred, 0 decision_required** — every in-scope row
 (CORE, GEO, COST, TPL, JOB, INT, CAT, PRO, HEALTH, DOC, ACT, LIFE, BACK,
-UX, BOUND) carries a real implementation location, a specific automated
-test reference, and evidence describing exactly what that test proves.
-Three tests remain individually `.skip`'d (`tests/audit/independent-
+UX, BOUND, AGG) carries a real implementation location, a specific
+automated test reference, and evidence describing exactly what that test
+proves. Three tests remain individually `.skip`'d (`tests/audit/independent-
 contract.test.ts` R01, R02, R14) — confirmed by direct reading to concern
 payment/checkout retry and purchaser-domain recovery, both explicitly
 out of scope for this tools-only contract. No other `.skip`, `.only`,
 `.todo`, `xit`, or `xdescribe` exists anywhere in the test tree (repo-wide
 grep, zero matches).
+
+### Post-review addendum: DECISIONS.md #9 (aggregate-output limits) resolved
+
+A follow-up review correctly rejected the 357/357 state as incomplete:
+`docs/tdd/DECISIONS.md` item 9 ("calculated aggregate limits... define
+how aggregates beyond practical display/storage limits are reported")
+had never been promoted to a matrix requirement, and was flagged in the
+prior version of this report only as a "documented simplification" —
+which the review correctly identified as dismissing an approved-contract
+item rather than resolving it. That framing has been retracted; see the
+superseded paragraph struck through near the end of this section for
+what it said before.
+
+Six new requirement IDs (**AGG-001** through **AGG-006**) were added to
+`TOOL_REQUIREMENTS_MATRIX.csv`, each `verified`, bringing the total from
+357 to 363. The full resolution — supported maximums per aggregate,
+behavior below/at/above each boundary, draft-saving, issue-gating,
+display, storage/backup, imported-data validation, and frozen-issued-
+output compatibility — is recorded in `docs/tdd/DECISIONS.md` directly
+under item 9 (the authoritative source) and summarized per-row in the
+matrix. Implementation: `src/domain/estimateAssembly.ts` (new
+`outOfSupportedRange` flag on `ProjectEstimateAssembly`, checked at every
+aggregation point: raw paint demand/gallons, labor hours, materials
+cost, labor cost, direct cost + overhead + job cost, and the derived
+required/suggested price) and `src/engine/actuals.ts` (new
+`'out_of_supported_range'` state on `evaluateActualReview` for the
+actual-cost total). Tests: `tests/domain/aggregateLimits.test.ts` (13
+cases, written before the implementation per the review's explicit
+"write failing tests first" instruction) and
+`tests/browser/aggregateLimitsDisplay.test.tsx` (real-component render
+confirming the on-screen `role="alert"` message, no "Estimated job cost"
+row, a still-savable draft, and a disabled Issue button).
+
+Writing these tests first surfaced two genuine pre-existing gaps, not
+just missing coverage: (1) the suggested-price derivation path could
+report `calculationState: 'complete'` with `price`/`effectivePrice`
+silently `null` whenever `requiredPriceRaw` alone exceeded its own
+pre-existing `MAX_REQUIRED_PRICE` ceiling at an extreme (but individually
+valid) target margin — a "disguised-invalid complete state" the new
+policy explicitly forbids; (2) individual actual-cost review fields
+(amount, labor hours, labor rate) had no upper bound at all. Both are
+fixed as part of AGG-001..006, not left as follow-up items.
+
+Dependency advisories were also reviewed per the same follow-up (see
+`DEPENDENCY_RISK_ASSESSMENT.md`): all 3 `npm audit` high-severity
+findings trace to one CVE (GHSA-9wv6-86v2-598j, ReDoS in
+`path-to-regexp`) reached only through `@astrojs/vercel`'s build-time
+routing-config generation, never from live request handling or any
+customer-controlled input. A nonbreaking `package.json` `overrides`
+entry (`path-to-regexp` pinned to the patched `6.3.0`) resolved all 3 to
+0 vulnerabilities with no adapter version change and no test/build
+regression — no breaking upgrade was needed.
 
 This session's work, on top of the v6 state below (which itself already
 closed 6 confirmed defects): resolved 5 named features (INT-010 detailed
@@ -99,14 +151,19 @@ parity, price and save it in Pro) and
 -> issue -> edit -> reorder -> rate refresh -> undo -> partial actuals
 -> export backup, one continuous session).
 
-One item remains a deliberately documented simplification, not a matrix
+~~One item remains a deliberately documented simplification, not a matrix
 gap: `IMPLEMENTATION_DECISIONS.md` item 9 ("aggregate/display limits
 beyond individual field bounds," e.g. summing 2,000 surfaces' costs
 against a project-level display-range cap) was never promoted to a
 numbered requirement in `TOOL_REQUIREMENTS_MATRIX.csv` and remains
 un-built by original design choice ("building an untested guess felt
 worse than leaving it as a named gap") — flagged here for visibility,
-not newly discovered.
+not newly discovered.~~ **Superseded — see the addendum at the top of
+this section.** This framing was wrong: the item was part of the
+approved contract regardless of whether it had a matrix row, and
+"leaving it as a named gap" was not an acceptable resolution for a
+requirement whose own text forbids overflow/NaN/silent saturation. It
+is now built, tested, and verified as AGG-001..006.
 
 ---
 
