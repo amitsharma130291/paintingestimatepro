@@ -15,6 +15,7 @@
 import type { PaintVariant, Room, Surface, EstimateRevision, RateSnapshot } from './entities';
 import type { IdSource } from './ids';
 import { createDraftRevision } from './project';
+import { parseDecimalField } from '../engine/parse';
 
 export const INTERIOR_HANDOFF_STORAGE_KEY = 'pep_interior_handoff_v1';
 
@@ -34,6 +35,9 @@ export interface InteriorHandoffPayload {
   coverageFt2PerGal: string;
   pricePerGal: string;
   wasteRatioPercent: string;
+  // V5-09: optional, for backward compatibility with payloads written
+  // before the free calculator had a prep/cleanup hours field (INT-014).
+  prepHours?: string;
 }
 
 export function writeInteriorHandoff(payload: InteriorHandoffPayload): void {
@@ -154,11 +158,31 @@ export function buildProjectFromInteriorHandoff(payload: InteriorHandoffPayload,
     surfaceIds,
   };
 
-  const revision = { ...createDraftRevision(ids.nextId(), snapshot, ids), rooms: [room], surfaces };
+  let revision = { ...createDraftRevision(ids.nextId(), snapshot, ids), rooms: [room], surfaces };
 
   const unsupportedFieldNotes: HandoffFieldNote[] = [
     { field: 'Labor rate / production throughput', note: "Not transferred — Pro uses your business settings' rates instead of the free calculator's, so estimates stay consistent across every project." },
   ];
+
+  // V5-09: the free calculator's own hourly rate is intentionally never
+  // transferred (see the note above — Pro uses its own consistent
+  // business rate instead), but the ENTERED HOURS themselves are a real
+  // scope input that must not simply vanish. Preserve them as a named
+  // additionalLabor line costed at the destination Pro business's own
+  // loaded rate; if that rate isn't configured yet, disclose the omission
+  // explicitly instead of inventing a rate or silently dropping the hours.
+  const prepHoursField = payload.prepHours ? parseDecimalField(payload.prepHours) : { kind: 'missing' as const };
+  if (prepHoursField.kind === 'valid' && prepHoursField.value.greaterThan(0)) {
+    const destinationRate = snapshot.businessSettings.loadedHourlyRate;
+    if (destinationRate) {
+      revision = {
+        ...revision,
+        additionalLabor: [...revision.additionalLabor, { id: ids.nextId(), description: 'Prep/cleanup (from free calculator)', hours: payload.prepHours!, loadedHourlyRate: destinationRate }],
+      };
+    } else {
+      unsupportedFieldNotes.push({ field: 'Prep/cleanup hours', note: `Entered as ${payload.prepHours} hours in the free calculator, but not transferred — set a loaded hourly rate in Business settings, then add this as an additional labor line yourself.` });
+    }
+  }
 
   return { variant, room, surfaces, revision, unsupportedFieldNotes };
 }

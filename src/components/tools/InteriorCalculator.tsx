@@ -257,7 +257,7 @@ export default function InteriorCalculator() {
                 type="button"
                 className="btn btn-secondary mt-2"
                 onClick={() => {
-                  writeInteriorHandoff({ lengthFt: length, widthFt: width, heightFt: height, includeWalls, includeCeiling, deductOpenings, doorCount, windowCount, coats, coverageFt2PerGal: coverage, pricePerGal: pricePerGal, wasteRatioPercent: wastePercent });
+                  writeInteriorHandoff({ lengthFt: length, widthFt: width, heightFt: height, includeWalls, includeCeiling, deductOpenings, doorCount, windowCount, coats, coverageFt2PerGal: coverage, pricePerGal: pricePerGal, wasteRatioPercent: wastePercent, prepHours: calculateLabor ? prepHours : undefined });
                   window.open('/app?handoff=interior', '_blank');
                 }}
               >

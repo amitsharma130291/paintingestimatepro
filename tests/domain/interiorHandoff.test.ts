@@ -9,14 +9,16 @@ import { sequentialIdSource } from '../../src/domain/ids';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { buildProjectFromInteriorHandoff, type InteriorHandoffPayload } from '../../src/domain/interiorHandoff';
 import { assembleProjectEstimate } from '../../src/domain/estimateAssembly';
+import { PEP } from '../../src/engine/decimal';
 import type { BusinessSettings } from '../../src/domain/entities';
 
-function settings(): BusinessSettings {
+function settings(overrides: Partial<BusinessSettings> = {}): BusinessSettings {
   const now = '2026-01-01T00:00:00.000Z';
   return {
     id: 's1', loadedHourlyRate: '32', overheadRatio: '0.15', targetMarginRatio: '0.35', defaultCoats: 2, defaultWasteRatio: '0.10',
     wallThroughput: '150', ceilingThroughput: '120', trimThroughput: '40', doorHoursPerSidePerCoat: '0.75', defaultTravelAmount: '0',
     defaultSuppliesAllowance: { mode: 'none', amount: '0', ratio: '0' }, sampleAssumptionsConfirmed: true, createdAt: now, updatedAt: now,
+    ...overrides,
   };
 }
 
@@ -100,5 +102,45 @@ describe('buildProjectFromInteriorHandoff', () => {
     const payloadCopy = { ...fixturePayload };
     buildProjectFromInteriorHandoff(fixturePayload, snapshot, ids);
     expect(fixturePayload).toEqual(payloadCopy);
+  });
+
+  describe('V5-09: prep/cleanup hours are preserved as an additionalLabor line, or explicitly disclosed', () => {
+    it('preserves entered prep hours as a named additionalLabor line, costed at the DESTINATION business rate (32/hr from settings())', () => {
+      const ids = sequentialIdSource();
+      const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');
+      const result = buildProjectFromInteriorHandoff({ ...fixturePayload, prepHours: '3' }, snapshot, ids);
+      const line = result.revision.additionalLabor.find((l) => l.hours === '3');
+      expect(line).toBeTruthy();
+      expect(line!.loadedHourlyRate).toBe('32'); // settings()'s loadedHourlyRate — the Pro business's own rate, never the free tool's
+      expect(result.unsupportedFieldNotes.some((n) => /prep|cleanup/i.test(n.field))).toBe(false); // preserved, not disclosed as omitted
+    });
+
+    it('the transferred hours contribute real labor cost through the actual Pro assembly pipeline', () => {
+      const ids = sequentialIdSource();
+      const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');
+      const result = buildProjectFromInteriorHandoff({ ...fixturePayload, prepHours: '3' }, snapshot, ids);
+      const revisionWithVariant = { ...result.revision, activeRateSnapshot: { ...result.revision.activeRateSnapshot, paintVariants: [result.variant] } };
+      const out = assembleProjectEstimate(revisionWithVariant, { priceMode: 'suggested', customPriceRaw: '' });
+      expect(out.calculationState).toBe('complete');
+      // additionalLaborCost = 3 hours * $32/hr = $96, on top of whatever surface production labor applies.
+      expect(out.laborCost!.greaterThanOrEqualTo(new PEP('96'))).toBe(true);
+    });
+
+    it('discloses prep hours as explicitly omitted when the destination business has no configured loaded hourly rate', () => {
+      const ids = sequentialIdSource();
+      const snapshot = createSnapshot(settings({ loadedHourlyRate: null }), [], [], ids, 'rev-1');
+      const result = buildProjectFromInteriorHandoff({ ...fixturePayload, prepHours: '3' }, snapshot, ids);
+      expect(result.revision.additionalLabor).toHaveLength(0);
+      expect(result.unsupportedFieldNotes.some((n) => /prep|cleanup/i.test(n.field) && /3/.test(n.note))).toBe(true);
+    });
+
+    it('a blank/zero prepHours adds no line and no disclosure note — nothing was actually entered', () => {
+      const ids = sequentialIdSource();
+      const snapshot = createSnapshot(settings(), [], [], ids, 'rev-1');
+      const zeroResult = buildProjectFromInteriorHandoff({ ...fixturePayload, prepHours: '0' }, snapshot, ids);
+      expect(zeroResult.revision.additionalLabor).toHaveLength(0);
+      const blankResult = buildProjectFromInteriorHandoff({ ...fixturePayload, prepHours: undefined }, snapshot, ids);
+      expect(blankResult.revision.additionalLabor).toHaveLength(0);
+    });
   });
 });
