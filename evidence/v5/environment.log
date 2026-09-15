@@ -1,0 +1,8 @@
+v24.13.1
+11.8.0
+    "astro": "astro",
+    "test:watch": "vitest"
+    "astro": "^7.3.1",
+    "decimal.js": "^10.6.0",
+    "react": "^19.3.0",
+    "vitest": "^5.0.0"
