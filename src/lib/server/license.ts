@@ -7,8 +7,8 @@
 // is the simplified single-tier variant of that same established pattern.
 import nodemailer, { type Transporter } from 'nodemailer';
 
-const SITE_URL = 'https://paintingestimatepro.com';
-const SITE_NAME = 'Painting Estimate Pro';
+const SITE_URL = 'https://paintingpricingcalculator.com';
+const SITE_NAME = 'PaintingPricing Calculator';
 // Falls back to a literal so nothing breaks if OWNER_EMAIL isn't set — but
 // set it in the real deployment env so this is the one place it's defined.
 export const OWNER_EMAIL = import.meta.env.OWNER_EMAIL || '';

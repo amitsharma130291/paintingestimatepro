@@ -5,8 +5,7 @@ import sitemap from '@astrojs/sitemap';
 import react from '@astrojs/react';
 import vercel from '@astrojs/vercel';
 
-// Configure the real production domain before deploying.
-const SITE_URL = 'https://paintingestimatepro.com';
+const SITE_URL = 'https://paintingpricingcalculator.com';
 
 export default defineConfig({
   site: SITE_URL,
