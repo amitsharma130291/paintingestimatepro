@@ -10,26 +10,38 @@ numerically-critical calculation core — `pricing.ts`, `decimal.ts`,
 `NUMERICAL_BUG_FIX_LOG.md`'s mutation-testing entries; this report is the
 consolidated final-numbers deliverable.
 
-## Final totals
+## Final totals (reconciled against the raw `reports/mutation/mutation.json` artifact)
+
+An earlier version of this report stated 374 total / 334 killed / 14
+ignored / 2 no-coverage. That was **wrong** — it was computed before a
+scoped Stryker rerun of `src/engine/parse.ts` (made necessary by 3
+`// Stryker disable next-line StringLiteral` comments added to that file
+after the original full-campaign run, which the original raw artifact
+predated). The corrected totals below are read directly from the current
+`reports/mutation/mutation.json`, not recomputed by hand.
 
 | | Count |
 |---|---|
-| Total mutants | 374 |
+| Total mutant records | 375 |
 | Killed | 334 |
 | Timeout | 0 |
+| Survived | 21 |
 | No coverage | 2 |
-| Ignored (Stryker-disable, justified) | 14 |
+| Ignored (Stryker-disable, justified) | 18 |
 | Errors | 0 |
-| **Genuine unexplained survivors** | **0** |
-| Raw mutation score | 92.78% |
+| **Genuine unexplained survivors** | **0** (all 21 Survived + 2 NoCoverage classified in `MUTATION_SURVIVOR_CLASSIFICATION.csv`) |
+| Mutation score | 93.56% |
 
-Per-file breakdown (final run): `cost.ts` 100%, `document.ts` 100%,
-`geometry.ts` 100%, `paint.ts` 100%, `pricing.ts` 100%, `serviceHealth.ts`
-100%, `actuals.ts` 96.67% (1 equivalent mutant), `decimal.ts` 80% (1
-survivor, proven killed by the excluded-for-runtime property suite —
-see below), `parse.ts` 86.42% (documented equivalent mutants +
-message-prose-only mutants sharing a line with an already-tested code
-value).
+### What each number means (all mutation records vs. scored mutants vs. ignored vs. the score denominator)
+
+- **All mutation records (375)** — every mutant Stryker generated and recorded a final status for, across all 11 mutated files. This is `total` in the table above and the row count of every file's `mutants` array summed.
+- **Ignored mutants (18)** — mutants explicitly suppressed via a `// Stryker disable` comment in the source (13 inside the `catch`/`non_finite` dead-branch block in `parse.ts`, 1 on `pricing.ts`'s unreachable-message guard, 3 newly added and confirmed working by this rerun on `parse.ts`'s `malformed_number`/`too_many_fraction_digits`/`negative_not_allowed` message lines — up from 15 before this rerun, +3). Ignored mutants are excluded from Stryker's score entirely — they are not attempted, not "passed," just not counted.
+- **Active/scored mutants (355 = 334 killed + 21 survived + 0 timeout)** — every mutant that was actually run against the test suite and produced a Killed/Survived/Timeout verdict. This is the "did the suite catch a real behavioral change" population.
+- **Stryker's score denominator** — this project's Stryker config (default) computes the mutation score as `killed / (killed + survived + timeout + noCoverage)`, i.e. it counts NoCoverage mutants against the score (as unproven, not as passing) but excludes Ignored mutants entirely. Denominator = 334 + 21 + 0 + 2 = 357. Score = 334 / 357 = **93.56%**.
+
+Correcting the previous report's arithmetic error directly: 334 killed / (334 + 24 + 2) = 92.78% was the number from the *stale* artifact (24 survived, before the 3-mutant rerun correction); 334 / (334 + 21 + 2) = 93.56% is the number from the *current, non-stale* artifact. The 3-point difference is exactly the 3 mutants that moved from Survived to Ignored once the scoped rerun picked up the disable-comment source change — not a change in test coverage or a loosened acceptance criterion.
+
+Per-file breakdown (from the current raw artifact): `cost.ts` 100% (17/17), `document.ts` 100% (8/8), `estimate.ts` 100% (51/51), `geometry.ts` 100% (17/17), `paint.ts` 100% (10/10), `pricing.ts` 100% (44/44 scored, 1 ignored), `serviceHealth.ts` 100% (9/9), `actuals.ts` 96.67% (29/30, 1 equivalent mutant), `decimal.ts` 80% (4/5, 1 survivor proven killed by the excluded-for-runtime property suite — see below), `labor.ts` 71.43% (5/7 scored, 2 no-coverage proven killed by the excluded-for-runtime differential suite — see below), `parse.ts` 88.05% (140/159 scored, 17 ignored, 19 survivors — 4 mathematically equivalent + 15 confirmed tool-error, all in `MUTATION_SURVIVOR_CLASSIFICATION.csv`).
 
 ## Upstream Stryker/Vitest-5 tooling bug (disclosure)
 
@@ -116,11 +128,30 @@ counterexample) and `labor.ts`'s `additionalLaborCost()` (killed by
 `tests/differential/oracleFixtures.test.ts`, confirmed by hand: breaking
 it to `return undefined` fails `DIFF-01` immediately).
 
+## Machine-readable survivor classification
+
+Every one of the 21 `Survived` and 2 `NoCoverage` records in the current
+`reports/mutation/mutation.json` is classified in
+`MUTATION_SURVIVOR_CLASSIFICATION.csv` (columns: `mutant_id, file,
+location, mutator, status, classification, test_reference,
+justification`), using only the four allowed classifications:
+mathematically equivalent (5 records), killed by excluded exhaustive
+suite and independently demonstrated (3 records), confirmed
+Stryker/Vitest tool error (15 records), genuine gap fixed and superseded
+by a later rerun (0 records remaining unexplained — the gaps in this
+category were already fixed in the TDD pass above and are no longer
+Survived/NoCoverage in the current artifact). 5 + 3 + 15 = 23, matching
+21 + 2 exactly.
+
 ## Exit criteria
 
 - Genuine unexplained non-equivalent survivors: **0**
-- Every survivor classified: **genuine gap (fixed) / equivalent (proven) /
-  confirmed tool error (documented)** — no "unknown" category
+- Every one of the 23 current Survived/NoCoverage records classified in
+  `MUTATION_SURVIVOR_CLASSIFICATION.csv` with one of the 4 allowed
+  classifications — no "unknown" category, no record left out
 - Tool errors never counted as killed: **confirmed** (they appear in the
-  raw Stryker output as Survived/Timeout/NoCoverage, not Killed; this
-  report explicitly separates them rather than inflating the score)
+  raw Stryker output as Survived/NoCoverage, not Killed; this report
+  explicitly separates them rather than inflating the score)
+- Reported totals match the raw artifact exactly: **confirmed** — 375
+  total / 334 killed / 21 survived / 18 ignored / 2 no-coverage / 0
+  timeout / 0 errors, read directly from `reports/mutation/mutation.json`

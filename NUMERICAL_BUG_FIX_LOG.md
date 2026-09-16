@@ -496,6 +496,25 @@ anything touched in this pass; an immediate rerun with full logging was
 clean, matching this project's long-documented shared-machine contention
 pattern, not a regression).
 
+**Addendum (later correction pass):** the 92.78% figure and the mutant
+IDs cited above (`id=249,275,288,309,312-323`) reflect the raw
+`mutation.json` artifact as it stood *at this point in the session* —
+that artifact predated the addition of the 3 `// Stryker disable
+next-line StringLiteral` comments described just above
+(`malformed_number`/`too_many_fraction_digits`/`negative_not_allowed`),
+so it was stale by the time a later correction pass inspected it: those
+3 mutants still showed `Survived` in the raw file instead of `Ignored`.
+A scoped Stryker rerun of `src/engine/parse.ts` alone (176 mutants,
+non-static ids renumbered by Stryker on that rerun — they no longer
+match the ids quoted above) confirmed the disable comments work
+(19 survivors, down from 22) and was merged into the full 11-file
+artifact, replacing only `parse.ts`'s entry. Corrected, current totals
+(375 total / 334 killed / 21 survived / 18 ignored / 2 no-coverage) and
+a full per-mutant machine-readable classification live in
+`MUTATION_TESTING_REPORT.md` and `MUTATION_SURVIVOR_CLASSIFICATION.csv`;
+this section is left as an accurate historical record of the state at
+the time, not restated with the new ids.
+
 ## Test-infrastructure gap (not a production defect) — the differential suite can vacuously pass on missing fixtures
 
 **Found by:** fresh-extraction verification (numerical-hardening section
