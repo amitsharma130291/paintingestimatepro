@@ -6,7 +6,7 @@ import { PEP, type Dec } from '../../src/engine/decimal';
 import { aggregateRawDemandByVariant, purchasedGallons, resolvePurchasesByVariant } from '../../src/engine/paint';
 
 const SEED = 20260914;
-const NUM_RUNS = 200;
+const NUM_RUNS = 9000;
 
 function toDec(n: number): Dec {
   return new PEP(n).dividedBy(1000); // 3-decimal granularity demand values

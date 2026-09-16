@@ -6,7 +6,7 @@ import { PEP } from '../../src/engine/decimal';
 import { computeDocumentTotals, reconcileDisplayedComponents } from '../../src/engine/document';
 
 const SEED = 20260914;
-const NUM_RUNS = 200;
+const NUM_RUNS = 9000;
 
 describe('PROPERTY 15: free-document ledger reconciliation', () => {
   it('sum of rounded line cents + rounded tax === document total, exactly, for any line set', () => {

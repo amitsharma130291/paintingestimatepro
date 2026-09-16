@@ -8,7 +8,7 @@ import { wallOrCeilingHours } from '../../src/engine/labor';
 import { rawDemandGal } from '../../src/engine/paint';
 
 const SEED = 20260914;
-const NUM_RUNS = 200;
+const NUM_RUNS = 9000;
 const toDec = (n: number) => new PEP(n);
 
 describe('PROPERTY 10: opening deduction', () => {

@@ -9,7 +9,7 @@ import { PEP, type Dec } from '../../src/engine/decimal';
 import { evaluatePrice, requiredPriceRaw, minimumTargetPrice, margin } from '../../src/engine/pricing';
 
 const SEED = 20260914; // recorded seed — TEST_EXECUTION_REPORT.md cites this run
-const NUM_RUNS = 200;
+const NUM_RUNS = 9000;
 
 // Bounded generators within v2.1's supported ranges, expressed as cents
 // integers to avoid generating float-noise decimal strings.
