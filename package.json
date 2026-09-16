@@ -13,6 +13,14 @@
     "check": "astro check",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:numerical:deterministic": "vitest run tests/engine tests/domain",
+    "test:numerical:property": "vitest run tests/property",
+    "test:numerical:differential": "vitest run tests/differential",
+    "test:numerical:parity": "vitest run tests/parity",
+    "test:numerical:pairwise": "vitest run tests/pairwise",
+    "test:numerical:state": "vitest run tests/domain/stateTransitions.test.ts",
+    "test:numerical:mutation": "stryker run",
+    "test:numerical:full": "vitest run tests/engine tests/domain tests/property tests/differential tests/parity tests/pairwise",
     "postinstall": "patch-package"
   },
   "dependencies": {
