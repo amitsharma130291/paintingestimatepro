@@ -5,10 +5,10 @@
 // one paid tier ($99 lifetime), so unlike sibling sites (QR Workbench,
 // BarcodeFlow) there's no tier segment or per-purchase job-scoping — this
 // is the simplified single-tier variant of that same established pattern.
-import nodemailer, { type Transporter } from 'nodemailer';
+import { getTransporter, escapeHtml } from './mailer';
 
-const SITE_URL = 'https://paintingpricingcalculator.com';
-const SITE_NAME = 'PaintingPricing Calculator';
+export const SITE_URL = 'https://paintingpricingcalculator.com';
+export const SITE_NAME = 'PaintingPricing Calculator';
 // Falls back to a literal so nothing breaks if OWNER_EMAIL isn't set — but
 // set it in the real deployment env so this is the one place it's defined.
 export const OWNER_EMAIL = import.meta.env.OWNER_EMAIL || '';
@@ -37,17 +37,6 @@ export function buildRecoveryUrl({ sessionId, paymentId }: { sessionId?: string 
   if (sessionId) url.searchParams.set('sessionId', sessionId);
   else if (paymentId) url.searchParams.set('paymentId', paymentId);
   return url.toString();
-}
-
-function getTransporter(): { transporter: Transporter; gmailUser: string } | null {
-  const gmailUser = import.meta.env.GMAIL_USER?.trim();
-  const gmailPass = import.meta.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, '');
-  if (!gmailUser || !gmailPass) return null;
-  return { transporter: nodemailer.createTransport({ service: 'gmail', auth: { user: gmailUser, pass: gmailPass } }), gmailUser };
-}
-
-function escapeHtml(str: unknown): string {
-  return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
 }
 
 function customerHtml({ licenseKey, recoveryUrl, isResend }: { licenseKey: string; recoveryUrl: string; isResend: boolean }): string {

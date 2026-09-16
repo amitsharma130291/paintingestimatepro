@@ -8,6 +8,7 @@ export const NAV_LINKS = [
   { href: "#how-it-works", label: "How it works" },
   { href: "#free-tools", label: "Free tools" },
   { href: "#faq", label: "FAQ" },
+  { href: "/contact", label: "Contact" },
 ] as const;
 
 // "View Pro preview" always points at the static product demonstration —
