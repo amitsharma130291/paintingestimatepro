@@ -113,8 +113,14 @@ export default function ProGate() {
         $99 one-time · lifetime access. Multi-room projects, per-surface materials, Price Book Health, customer documents, and actual-cost review — everything computes and saves locally in your browser.
       </p>
       {state.note && <p className="mt-3 text-sm text-warn">{state.note}</p>}
-      <div className="mt-6 flex flex-col items-center">
+      <div className="mt-6 flex flex-col items-center gap-3">
         <LicenseActions returnTo="/app/welcome" onUnlocked={() => setState({ status: 'unlocked' })} />
+        <a href="/help" className="text-link text-sm">
+          See exactly what's inside, with screenshots
+        </a>
+        <a href="/#pricing" className="text-link text-xs">
+          Back to full pricing details
+        </a>
       </div>
     </div>
   );

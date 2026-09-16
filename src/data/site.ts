@@ -3,37 +3,46 @@
 
 export const SITE_NAME = "Painting Estimate Pro";
 
+// NAV-LINK-FIX: every one of these hash anchors only exists on the
+// homepage (index.astro). Header.astro and Footer.astro render NAV_LINKS
+// on every page site-wide, so a bare "#anchor" (no leading "/") is a dead
+// link on the other 10+ pages -- it just tries to scroll to an element
+// that isn't there, instead of navigating home first. Namespacing with a
+// leading "/" makes each link work correctly both from the homepage
+// itself (still a same-page scroll) and from anywhere else (navigates to
+// "/" and lands on the anchor).
 export const NAV_LINKS = [
-  { href: "#price-book-health", label: "Pro preview" },
-  { href: "#how-it-works", label: "How it works" },
-  { href: "#free-tools", label: "Free tools" },
-  { href: "#faq", label: "FAQ" },
+  { href: "/#price-book-health", label: "Pro preview" },
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/#free-tools", label: "Free tools" },
+  { href: "/#faq", label: "FAQ" },
   { href: "/help", label: "Help" },
+  { href: "/app", label: "Open Pro" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
 // "View Pro preview" always points at the static product demonstration —
 // used by the header and the hero's primary action — never at a working
 // app, checkout, or signup.
-export const HEADER_CTA = { label: "View Pro preview", href: "#price-book-health" };
+export const HEADER_CTA = { label: "View Pro preview", href: "/#price-book-health" };
 
-export const FREE_TOOLS_LINK = { label: "Explore free painting tools", href: "#free-tools" };
+export const FREE_TOOLS_LINK = { label: "Explore free painting tools", href: "/#free-tools" };
 
 // A modest way out of the Price Book Health demo toward the offer, instead
 // of looping every CTA back to the same static preview.
 export const PRICE_BOOK_TO_PRICING_LINK = {
   label: "See the planned features and price",
-  href: "#pricing",
+  href: "/#pricing",
 };
 
 // The offer card's own action forwards to objection-handling FAQ content
 // rather than repeating the preview link — kept as secondary styling so it
 // never reads like a purchase button.
-export const PRICING_FAQ_LINK = { label: "Read questions about Pro", href: "#faq" };
+export const PRICING_FAQ_LINK = { label: "Read questions about Pro", href: "/#faq" };
 
 export const CLOSING_CTA_PRIMARY = {
   label: "Review the planned Pro offer",
-  href: "#pricing",
+  href: "/#pricing",
 };
 
 export const HERO_OFFER_LINE = "Planned at $99 one-time · No monthly subscription";

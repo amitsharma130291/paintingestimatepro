@@ -40,12 +40,12 @@ const STEPS = [
 ];
 
 const DASHBOARD_TABS = [
-  { name: "Business settings", benefit: "Your rates and defaults, set once and reused by every estimate." },
-  { name: "Paint catalog", benefit: "The paint products every estimate and service draws from." },
-  { name: "Projects", benefit: "Where you build, save, and issue estimates for real jobs." },
-  { name: "Price Book Health", benefit: "Sanity-check your standing menu prices against their real modeled cost." },
-  { name: "Actual review", benefit: "Compare what a job actually cost against what you quoted." },
-  { name: "Backup", benefit: "Export everything to a file, or restore/import from one." },
+  { name: "Business settings", helpId: "business-settings", benefit: "Your rates and defaults, set once and reused by every estimate." },
+  { name: "Paint catalog", helpId: "paint-catalog", benefit: "The paint products every estimate and service draws from." },
+  { name: "Projects", helpId: "projects", benefit: "Where you build, save, and issue estimates for real jobs." },
+  { name: "Price Book Health", helpId: "price-book-health", benefit: "Sanity-check your standing menu prices against their real modeled cost." },
+  { name: "Actual review", helpId: "actual-review", benefit: "Compare what a job actually cost against what you quoted." },
+  { name: "Backup", helpId: "backup", benefit: "Export everything to a file, or restore/import from one." },
 ];
 ---
 
@@ -88,7 +88,9 @@ const DASHBOARD_TABS = [
           {
             DASHBOARD_TABS.map((t) => (
               <div class="rounded-btn border border-line p-4">
-                <dt class="font-semibold text-ink">{t.name}</dt>
+                <dt class="font-semibold text-ink">
+                  <a href={`/help#${t.helpId}`} class="text-link">{t.name}</a>
+                </dt>
                 <dd class="mt-1 text-sm text-ink-soft">{t.benefit}</dd>
               </div>
             ))
