@@ -458,6 +458,39 @@ guard against this exact failure mode recurring silently.
 
 ### Final state after fixes
 
-Re-ran the full-engine baseline (all 374 mutants) after the above fixes.
+Re-ran the full-engine baseline after the above fixes: **92.78% (334
+killed, 0 timeout, 24 survived, 2 no-coverage, 0 errors)** — up from 86.90%
+(316/9/30/19/0). Every remaining non-killed mutant was cross-checked
+against the classification above and matched exactly, with no new
+unexpected survivors:
+
+- 13 `Ignored` mutants (the `catch`/`non_finite` block) — the `// Stryker
+  disable all` suppression from this same pass works correctly.
+- `actuals.ts`'s 1 survivor is exactly `id=4`, the mathematically-proven
+  equivalent mutant identified above.
+- `decimal.ts`'s 1 survivor is exactly the `PEP` precision mutant, already
+  proven killed by the excluded property suite.
+- `labor.ts`'s 2 no-coverage mutants are exactly `additionalLaborCost`,
+  already proven killed by the excluded differential suite.
+- `parse.ts`'s 22 remaining survivors are exactly the confirmed false
+  survivors (`id=249,275,288,309` — structural conditions with existing
+  tests proven to kill them by hand; `id=312,313,314,315,316,317,318,319,
+  320,321,323` — the module-load-time-crash constants) plus 7 pure-message
+  `StringLiteral` mutants on lines where `code:` and `message:` share one
+  line with the already-tested `code`. Added `// Stryker disable
+  next-line StringLiteral: message prose only` for the 3 of those 7 where
+  `message` sits on its own line (`malformed_number`, `too_many_
+  fraction_digits`, `negative_not_allowed`); the other 4
+  (`below_minimum`×2, `above_maximum`×2) have `code` and `message` on the
+  literal same source line as a single-line return statement, so Stryker's
+  line-scoped disable directive cannot suppress the message mutant without
+  also suppressing the already-tested, already-killed `code` mutant on
+  that same line — left undisabled and documented here instead of
+  reformatting working code purely to appease the mutation-testing tool.
+
 Full normal suite (`npm test`) re-confirmed green throughout this pass —
-see the final run recorded at the end of this document.
+102/102 files, 964 passed, 3 skipped, 0 failed (one earlier run showed 41
+failures across 25 unrelated UI/browser test files with zero overlap with
+anything touched in this pass; an immediate rerun with full logging was
+clean, matching this project's long-documented shared-machine contention
+pattern, not a regression).

@@ -44,6 +44,8 @@ export function parseDecimalField(raw: string | null | undefined, opts: ParseOpt
     return {
       kind: 'invalid',
       code: 'malformed_number',
+      // Stryker disable next-line StringLiteral: message prose only -- the
+      // code above is what tests/engine/parse.test.ts asserts on.
       message: `"${raw}" is not a plain decimal number. Whole/decimal digits only — no units, commas, or scientific notation.`,
       rawText: raw,
     };
@@ -55,6 +57,7 @@ export function parseDecimalField(raw: string | null | undefined, opts: ParseOpt
     return {
       kind: 'invalid',
       code: 'too_many_fraction_digits',
+      // Stryker disable next-line StringLiteral: message prose only.
       message: `"${raw}" has more than ${maxFractionDigits} digits after the decimal point.`,
       rawText: raw,
     };
@@ -65,6 +68,7 @@ export function parseDecimalField(raw: string | null | undefined, opts: ParseOpt
     return {
       kind: 'invalid',
       code: 'negative_not_allowed',
+      // Stryker disable next-line StringLiteral: message prose only.
       message: `"${raw}" must not be negative.`,
       rawText: raw,
     };
