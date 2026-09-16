@@ -44,10 +44,25 @@ const FIXTURES_DIR = process.env.ORACLE_FIXTURES_DIR
 
 function readNdjson(filename: string): any[] {
   const path = join(FIXTURES_DIR, filename);
-  if (!existsSync(path)) return [];
+  // Fail loudly, not silently: a missing fixture file used to return []
+  // here, which let every DIFF-* test below trivially "pass" against zero
+  // real comparisons (discovered via fresh-extraction verification, where
+  // these gitignored/regenerable fixtures are absent until explicitly
+  // regenerated -- see NUMERICAL_BUG_FIX_LOG.md). A hard, actionable error
+  // is strictly better than a green result that proved nothing.
+  if (!existsSync(path)) {
+    throw new Error(
+      `Missing differential fixture file: ${path}\n` +
+      `Generate it first: python docs/generate_fuzz_fixtures.py tests/fixtures/oracle-fuzz --seed 20260916 --counts "valid_project=100000,incomplete=25000,invalid=25000,boundary_adjacent=25000,loss_zero_unpriced=10000,price_book_health=10000,actual_cost=10000"`
+    );
+  }
   const text = readFileSync(path, 'utf-8');
   const lines = text.split('\n').filter((l) => l.trim().length > 0);
-  return lines.map((l) => JSON.parse(l));
+  const fixtures = lines.map((l) => JSON.parse(l));
+  if (fixtures.length === 0) {
+    throw new Error(`Fixture file ${path} exists but contains zero fixtures -- this would silently pass without exercising anything.`);
+  }
+  return fixtures;
 }
 
 function d(s: string | null): Dec {

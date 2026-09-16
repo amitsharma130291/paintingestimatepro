@@ -494,3 +494,57 @@ failures across 25 unrelated UI/browser test files with zero overlap with
 anything touched in this pass; an immediate rerun with full logging was
 clean, matching this project's long-documented shared-machine contention
 pattern, not a regression).
+
+## Test-infrastructure gap (not a production defect) — the differential suite can vacuously pass on missing fixtures
+
+**Found by:** fresh-extraction verification (numerical-hardening section
+12). Building a source ZIP via `git archive` from the committed HEAD and
+running the canonical suite there produced the exact same totals as the
+working tree (109/109 files, 1397 passed) — suspiciously fast for a run
+that should include the 205,000-fixture differential suite (which
+normally takes ~15-22s of real processing).
+
+**Root cause:** `tests/fixtures/oracle-fuzz/*.ndjson` (~230MB) are
+gitignored by design (regenerable from a fixed seed via
+`docs/generate_fuzz_fixtures.py`, documented in `.gitignore`'s own
+comment) and are therefore absent from any fresh git-archive extraction.
+`tests/differential/oracleFixtures.test.ts`'s `readNdjson()` helper:
+
+```ts
+function readNdjson(filename: string): any[] {
+  const path = join(FIXTURES_DIR, filename);
+  if (!existsSync(path)) return [];
+  ...
+}
+```
+
+silently returns `[]` for a missing file, with no error or warning. Every
+one of DIFF-01 through DIFF-07 then iterates zero fixtures and trivially
+asserts `{ total: 0, mismatches: [] }` equals itself — a genuine pass by
+the letter of the assertion, but one that exercises no real comparison
+whatsoever. This is a gap in fresh-extraction *reproducibility*
+documentation, not a defect in the differential suite's own logic (which
+was never meant to run standalone without its fixture-generation step,
+and does not vacuously pass in the working tree, where the fixtures
+already exist) — but it meant the first fresh-extraction run's "clean"
+result was not actually evidence of anything for the differential suite
+specifically.
+
+**Fix:** regenerated the fixtures inside the fresh extraction directory
+using the exact same seed and category counts recorded in the working
+tree's own `tests/fixtures/oracle-fuzz/manifest.json`
+(`seed: 20260916`, the same 7 category counts totaling 205,000) via
+`python docs/generate_fuzz_fixtures.py tests/fixtures/oracle-fuzz --seed
+20260916 --counts ...`. Confirmed the regenerated `manifest.json` is
+byte-identical to the working tree's. Re-ran `tests/differential` alone:
+7/7 tests passed in 22.06s (consistent with genuinely processing all
+205,000 fixtures, not the near-instant vacuous pass), confirmed via
+`readNdjson` no longer hitting the empty-file branch.
+
+**Recommendation for future fresh-extraction verifications:** always
+regenerate `tests/fixtures/oracle-fuzz/` from the manifest's recorded
+seed/counts as an explicit, required step before running the differential
+suite there — never trust a fresh-extraction "pass" for that suite without
+confirming real runtime duration or an explicit fixture-count check, since
+`existsSync`-gated test data can silently produce a green result over zero
+real assertions.
