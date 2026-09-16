@@ -135,6 +135,9 @@ function computeProjectResult(input: any) {
 }
 
 describe('Differential fuzzing: production TS engine vs. independent Python oracle', () => {
+  // Explicit 60s per-test timeout: DIFF-01 alone processes 100,000 fixtures
+  // and has taken up to ~22s even without contention; the project's default
+  // 15000ms testTimeout is fine for ordinary tests, not for this scale.
   it('DIFF-01: valid complete projects -- full assembly pipeline agrees exactly with the oracle', () => {
     const fixtures = readNdjson('valid_project.ndjson');
     const mismatches: Mismatch[] = [];
@@ -161,7 +164,7 @@ describe('Differential fuzzing: production TS engine vs. independent Python orac
       console.error(`${mismatches.length} mismatches (showing up to 20):`, JSON.stringify(mismatches.slice(0, 20), null, 2));
     }
     expect({ total: fixtures.length, mismatches }).toEqual({ total: fixtures.length, mismatches: [] });
-  });
+  }, 60000);
 
   it('DIFF-02: incomplete projects (zero enabled surfaces) are correctly reported invalid', () => {
     const fixtures = readNdjson('incomplete.ndjson');
@@ -172,7 +175,7 @@ describe('Differential fuzzing: production TS engine vs. independent Python orac
       if (agg.valid !== false) mismatches.push({ id: fx.id, field: 'valid', expected: false, actual: agg.valid });
     }
     expect({ total: fixtures.length, mismatches }).toEqual({ total: fixtures.length, mismatches: [] });
-  });
+  }, 60000);
 
   it('DIFF-03: invalid projects (an enabled+invalid surface) block the WHOLE project', () => {
     const fixtures = readNdjson('invalid.ndjson');
@@ -182,7 +185,7 @@ describe('Differential fuzzing: production TS engine vs. independent Python orac
       if (r.valid !== false) mismatches.push({ id: fx.id, field: 'valid', expected: false, actual: r.valid });
     }
     expect({ total: fixtures.length, mismatches }).toEqual({ total: fixtures.length, mismatches: [] });
-  });
+  }, 60000);
 
   it('DIFF-04: boundary-adjacent paint-purchase quantities match exactly (no epsilon slop)', () => {
     const fixtures = readNdjson('boundary_adjacent.ndjson');
@@ -204,7 +207,7 @@ describe('Differential fuzzing: production TS engine vs. independent Python orac
       console.error(`${mismatches.length} mismatches (showing up to 20):`, JSON.stringify(mismatches.slice(0, 20), null, 2));
     }
     expect({ total: fixtures.length, mismatches }).toEqual({ total: fixtures.length, mismatches: [] });
-  });
+  }, 60000);
 
   it('DIFF-05: loss / zero-price / unpriced states agree exactly, including signed profit and null margin', () => {
     const fixtures = readNdjson('loss_zero_unpriced.ndjson');
@@ -231,7 +234,7 @@ describe('Differential fuzzing: production TS engine vs. independent Python orac
       console.error(`${mismatches.length} mismatches (showing up to 20):`, JSON.stringify(mismatches.slice(0, 20), null, 2));
     }
     expect({ total: fixtures.length, mismatches }).toEqual({ total: fixtures.length, mismatches: [] });
-  });
+  }, 60000);
 
   it('DIFF-06: Price Book Health unit costing agrees exactly (fractional, never whole-can rounded)', () => {
     const fixtures = readNdjson('price_book_health.ndjson');
@@ -273,7 +276,7 @@ describe('Differential fuzzing: production TS engine vs. independent Python orac
       console.error(`${mismatches.length} mismatches (showing up to 20):`, JSON.stringify(mismatches.slice(0, 20), null, 2));
     }
     expect({ total: fixtures.length, mismatches }).toEqual({ total: fixtures.length, mismatches: [] });
-  });
+  }, 60000);
 
   it('DIFF-07: actual-cost review state machine and variance agree exactly across confirmed/partial/out-of-range', () => {
     const fixtures = readNdjson('actual_cost.ndjson');
@@ -310,5 +313,5 @@ describe('Differential fuzzing: production TS engine vs. independent Python orac
       console.error(`${mismatches.length} mismatches (showing up to 20):`, JSON.stringify(mismatches.slice(0, 20), null, 2));
     }
     expect({ total: fixtures.length, mismatches }).toEqual({ total: fixtures.length, mismatches: [] });
-  });
+  }, 60000);
 });
