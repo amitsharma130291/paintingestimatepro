@@ -112,40 +112,91 @@ final gate logs).
 | Import-as-copy passes through the actual UI | Yes — confirmed non-colliding remapped IDs |
 | Browser evidence reproducible and matches its metadata | Yes — one metadata table, two trace files, one screenshot set each |
 | Three consecutive full test runs pass | Yes — `logs/07`, `08`, `09`, all clean, no retries |
-| Clean extracted-source verification passes | Yes — clean install, typecheck, oracle, audit, and build all clean on the first attempt; full suite clean after resolving unrelated machine contention (see extracted-package verification note above; `logs/10`-`15`) |
-| Typecheck / oracle / build / audit all clean | Yes — 0 errors / 20 fixtures, 106 fields / 0 vulnerabilities / clean build, both in this repository and in the extracted copy |
-| Working tree clean at the reported commit | Yes — `git status --short` empty at `b10dd54` |
+| Clean extracted-source verification passes | Yes — see the four-part breakdown below; the delivered result is two genuinely fresh, back-to-back, first-attempt-clean full-suite runs (`logs/26`, `27`) plus clean install/typecheck/oracle/audit/build (`logs/20`-`23`, `28`) |
+| Two consecutive clean extracted-package full-suite runs (mandatory) | Yes — Run A and Run B, both 99/99 files / 935 total / 932 passed / 3 skipped / 0 failed / exit 0, run back-to-back with zero file changes between them |
+| Typecheck / oracle / build / audit all clean | Yes — 0 errors / 20 fixtures, 106 fields / 0 vulnerabilities / clean build, in this repository and in both extracted copies |
+| Working tree clean at the reported commit | Yes — `git status --short` empty at `91571b4` (`logs/16`) |
+| Commit difference `b10dd54..91571b4` is documentation-only | Yes — `git diff --name-status` names exactly one file, `FINAL_TOOLS_VERDICT.md` (`logs/16`) |
 | Every report claim has an attached artifact | Yes |
 
 ## Extracted-package verification note
 
-The packaged source (`painting-pricing-calculator-v7.2-source.zip`) was
-extracted into a brand-new directory, installed clean (`npm ci`, 0
-vulnerabilities), and every gate rerun from that extracted copy alone --
-no reuse of this repository's `node_modules`, build output, caches, or
-untracked files. Typecheck, the numerical oracle, `npm audit`, and the
-production build (including the pro-harness 404 recheck) were clean on
-the first attempt.
+This section distinguishes four separate things. See `logs/GATE_LOG_INDEX.md`
+for the full log-by-log breakdown; every number below traces to a specific
+preserved log file, none is asserted without one.
 
-The extracted-copy full test suite was **not** clean on the first
-attempt: 4 files failed with `waitFor`-timeout errors while this shared
-machine was running substantial unrelated concurrent work (several
-sibling-project dev servers plus a ~10-worker Stryker mutation-testing
-run on an unrelated project). Every one of those files passed
-immediately when rerun in isolation, and the failure count tracked the
-unrelated load exactly as it wound down across repeated reruns (4 -> 15
--> 10 -> 2 -> 0 failures) -- see `logs/14a` through `logs/14g` for the
-full investigation. The suite passed fully clean (99/99 files, 932
-passed, 3 skipped, 0 failed) once that unrelated load subsided. No test
-or product code was changed to reach this result; this is the same
-CPU-contention-under-full-parallelism class already documented in
-`vitest.config.ts`, now directly demonstrated rather than inferred. The
-original (un-extracted) repository's three consecutive full-suite runs
-were clean on every run with no retries needed.
+**1. Original repository, three consecutive full-suite runs.** Run from
+this repository's own working tree at the final commit -- `logs/07`, `08`,
+`09`. All three clean on the first attempt, identical counts each time
+(99/99 files, 935 total, 932 passed, 3 skipped, 0 failed), no retries
+needed.
+
+**2. First extracted-package pass -- contention-affected, superseded.** The
+source archive was extracted into a fresh directory and every gate rerun
+from that copy alone (no reuse of this repository's `node_modules`, build
+output, caches, or untracked files). `npm ci`, typecheck, the numerical
+oracle, `npm audit`, and the production build (including the pro-harness
+404 recheck) were clean on the first attempt (`logs/10`-`13`, `15`). The
+full suite was **not** clean on its first attempt: 4 files failed with
+`waitFor`-timeout errors (`logs/14`). This is diagnosed, not merely
+asserted, as unrelated machine contention, on two independent lines of
+evidence: (a) every one of the 6 distinct files that failed across 4
+full-suite attempts passed immediately, every time, when rerun alone
+(`logs/14b`: 13/13, `logs/14f`: 2/2) -- a test that only fails under full
+99-file parallelism and always passes standalone is the exact failure
+signature `vitest.config.ts`'s own `testTimeout` comment already documents;
+and (b) direct process inspection (`tasklist`/`Get-CimInstance`) confirmed
+an unrelated ~10-worker Stryker mutation-testing run on a different project
+(`hvacestimatepro`) was active and winding down (10 -> 4 workers) across
+these exact attempts, and the failure count tracked it precisely: 4 -> 15
+-> 10 -> 2 -> 0 (`logs/14c`-`14g`). No test or product file was changed at
+any point in this investigation.
+
+**3. Isolated diagnostic reruns.** `logs/14b` and `logs/14f` above -- rerunning
+only the files that had just failed, alone, with nothing else changed.
+Used solely to distinguish "fails only under contention" from "fails
+outright"; not treated as a substitute for a full-suite pass anywhere in
+this document.
+
+**4. Final two consecutive clean extracted-package runs (the delivered
+result).** For final delivery, a **second, genuinely fresh** extraction
+("extractA") was made from the final source archive -- a brand-new
+directory never used for any prior extraction, install, build, or test run.
+Its own content was verified to match `HEAD` exactly (264/264 tracked
+files, 0 mismatches after normalizing the benign CRLF line-ending
+conversion Windows `git archive` applies to text files, 0 missing, 0
+extra -- `logs/18`). `npm ci`, typecheck, oracle, audit, and the skip/only/
+todo sweep were all clean on the first attempt (`logs/20`-`24`). Resource
+snapshots taken immediately before the full-suite runs (`logs/19`, `25`)
+recorded materially *tighter* conditions than the first pass -- as little
+as 1.08GB of 15.69GB RAM free, and an unrelated Stryker mutation run active
+again. Despite that, **both required consecutive full-suite runs passed
+clean on their first and only attempt each, back-to-back, with zero file
+changes between them**: Run A (`logs/26`) -- 99/99 files, 935 total, 932
+passed, 3 skipped, 0 failed, exit 0; Run B (`logs/27`, run immediately
+after) -- identical: 99/99 files, 935 total, 932 passed, 3 skipped, 0
+failed, exit 0. No reduced worker count, no retry, no test or config
+change was needed to obtain this result. The production build and
+pro-harness route were reverified from this same extraction (`logs/28`):
+build clean, and `dist/client/dev/pro-harness/index.html` confirmed
+byte-for-byte identical to the original repository's build output and to
+the first extraction's build output.
+
+The commit difference between the fully-gated commit (`b10dd54`) and the
+final reported commit (`91571b4`) was proven, not assumed, to be
+documentation-only: `git diff --name-status b10dd54..91571b4` names exactly
+one file, `FINAL_TOOLS_VERDICT.md` (`logs/16`). The final source archive
+was independently confirmed to correspond to `91571b4`, with `HEAD`
+unchanged immediately before and after the archive was built (`logs/17`).
 
 ## Verdict
 
 **GO.** Every requirement in this document's scope has been verified
-against the final commit, including the extracted-package rerun above.
-No requirement is deferred, caveated, or contingent on work not yet
-done.
+against the final commit `91571b4`, including two independent,
+genuinely-fresh extracted-package passes and the two mandatory consecutive
+clean full-suite runs from the second of those passes. No requirement is
+deferred, caveated, or contingent on work not yet done. The one earlier
+extracted-package attempt that did not pass cleanly on its first try is
+disclosed above in full, with the diagnostic evidence for why it is
+attributed to unrelated machine contention rather than a product or test
+defect -- it is not hidden, and it is not the run this verdict relies on.
