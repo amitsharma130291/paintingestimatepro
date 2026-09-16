@@ -24,3 +24,7 @@ tests/fixtures/oracle-fuzz/
 # Python bytecode cache from running docs/*.py locally
 __pycache__/
 *.pyc
+
+# Stryker mutation-testing temp instrumentation output
+.stryker-tmp/
+reports/mutation/
