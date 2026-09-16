@@ -1,0 +1,185 @@
+---
+import LegalLayout from "../layouts/LegalLayout.astro";
+import { PRICE } from "../data/site";
+
+const title = "Terms of Service | PaintingPricing Calculator";
+const description = "The terms that apply to using PaintingPricing Calculator's free tools and Pro workspace.";
+---
+
+<LegalLayout
+  title={title}
+  description={description}
+  eyebrow="Legal"
+  heading="Terms of Service"
+  updated="September 17, 2026"
+>
+  <section>
+    <p>
+      These terms apply to your use of PaintingPricing Calculator ("we,"
+      "us," "the Site") at paintingpricingcalculator.com, including the
+      free tools and the paid Pro workspace. By using the Site, you agree
+      to these terms. If you don't agree, don't use the Site.
+    </p>
+  </section>
+
+  <section>
+    <h2>What the Site is</h2>
+    <p>
+      PaintingPricing Calculator is a set of estimating and pricing tools
+      for painting contractors: free job-cost, interior, and estimate
+      template calculators, plus an optional paid Pro workspace with
+      reusable rates, multi-surface projects, and profitability tracking.
+      It's a calculation aid, not professional, financial, legal, or
+      business advice — see the <a href="/disclaimer">Disclaimer</a> for
+      the full scope of that.
+    </p>
+  </section>
+
+  <section>
+    <h2>Who can use it</h2>
+    <p>
+      The Site is intended for painting contractors and small painting
+      businesses acting in a professional or business capacity. You must
+      be able to form a legally binding contract to purchase Pro.
+    </p>
+  </section>
+
+  <section>
+    <h2>Accounts</h2>
+    <p>
+      There are no user accounts, usernames, or passwords on the Site.
+      Free tools require nothing to use. Pro access is unlocked by a
+      license key tied to your Dodo Payments purchase — see "Purchases and
+      license keys" below.
+    </p>
+  </section>
+
+  <section>
+    <h2>Purchases and license keys</h2>
+    <p>
+      Pro is a one-time purchase ({PRICE.amount}, lifetime access — no
+      subscription) processed by our payment provider, Dodo Payments. When
+      your payment succeeds, we generate a license key from that payment
+      and email it to you. That key is what unlocks Pro in your browser —
+      keep it somewhere safe, since we have no account system to look it
+      up other than by re-verifying it against your original payment.
+    </p>
+    <p>
+      Prices are shown in the currency displayed at checkout and may
+      change for future purchases; a change in price never affects a
+      purchase you've already made.
+    </p>
+  </section>
+
+  <section>
+    <h2>Refunds</h2>
+    <p>
+      You can request a full refund of your Pro purchase within{" "}
+      <strong>7 days</strong> of the original payment date — just{" "}
+      <a href="/contact">contact us</a> with the email you paid with. If we
+      approve a refund and Dodo Payments processes it, your Pro license is
+      deactivated automatically the next time it's checked; your local
+      project data is never deleted as part of a refund. Requests made
+      after the 7-day window are considered at our discretion.
+    </p>
+  </section>
+
+  <section>
+    <h2>Your data, your responsibility</h2>
+    <p>
+      All estimate and project data you create lives in your own browser's
+      local storage — we never receive or store a copy of it (see the{" "}
+      <a href="/privacy">Privacy Policy</a>). This means:
+    </p>
+    <ul>
+      <li>
+        We can't recover your data if you clear your browser, switch
+        devices, or lose access to the device you used.
+      </li>
+      <li>
+        Backing up your own data (via the tool's export feature) is your
+        responsibility.
+      </li>
+      <li>
+        A refund, license issue, or account dispute has no effect on your
+        locally-stored data either way — we have no ability to touch it
+        remotely, for better or worse.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Acceptable use</h2>
+    <p>You agree not to:</p>
+    <ul>
+      <li>
+        Attempt to circumvent, reverse-engineer, or defeat the license/
+        payment verification system.
+      </li>
+      <li>
+        Use the contact form or any part of the Site to send spam, abuse,
+        or unlawful content.
+      </li>
+      <li>
+        Interfere with the Site's normal operation (e.g. attempting to
+        overload or attack it).
+      </li>
+      <li>Resell, sublicense, or redistribute a Pro license key.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Intellectual property</h2>
+    <p>
+      The Site's design, code, calculators, and branding belong to us. Your
+      own estimate/project data, and anything you type into the tools,
+      belongs to you — we don't claim any ownership of it, and (as covered
+      above) we don't even have a copy of it.
+    </p>
+  </section>
+
+  <section>
+    <h2>No warranty; limitation of liability</h2>
+    <p>
+      The Site is provided "as is," without warranties of any kind,
+      express or implied, including accuracy, fitness for a particular
+      purpose, or uninterrupted availability. See the{" "}
+      <a href="/disclaimer">Disclaimer</a> for the specific limits on the
+      calculations themselves.
+    </p>
+    <p>
+      To the fullest extent permitted by law, our total liability to you
+      for any claim relating to the Site is limited to the amount you
+      actually paid us in the 12 months before the claim (i.e. up to
+      {PRICE.amount} for a Pro purchase, or $0 if you only used the free
+      tools). We aren't liable for indirect, incidental, or consequential
+      damages, including lost profits or lost business, arising from your
+      use of the Site.
+    </p>
+  </section>
+
+  <section>
+    <h2>Termination</h2>
+    <p>
+      You can stop using the Site at any time. We may suspend or revoke
+      Pro access if your payment is refunded or reversed, or if we
+      reasonably believe you've violated the acceptable-use section above.
+    </p>
+  </section>
+
+  <section>
+    <h2>Changes to these terms</h2>
+    <p>
+      If these terms change, we'll update the date at the top of this
+      page. Continued use of the Site after a change means you accept the
+      updated terms.
+    </p>
+  </section>
+
+  <section>
+    <h2>Contact</h2>
+    <p>
+      Questions about these terms? <a href="/contact">Get in touch</a>.
+    </p>
+  </section>
+</LegalLayout>

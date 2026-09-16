@@ -1,0 +1,152 @@
+---
+import LegalLayout from "../layouts/LegalLayout.astro";
+
+const title = "Privacy Policy | PaintingPricing Calculator";
+const description = "How PaintingPricing Calculator handles your data: what we collect, what we don't, and where it goes.";
+---
+
+<LegalLayout
+  title={title}
+  description={description}
+  eyebrow="Legal"
+  heading="Privacy Policy"
+  updated="September 17, 2026"
+>
+  <section>
+    <p>
+      This policy describes what happens to your data when you use
+      PaintingPricing Calculator ("we," "us," "the Site") at
+      paintingpricingcalculator.com — the free tools, the Pro workspace, the
+      contact form, and license recovery. In short: your estimates and
+      project data never leave your browser, we don't use cookies or
+      tracking of any kind, and there is no user account or password
+      anywhere on the Site.
+    </p>
+  </section>
+
+  <section>
+    <h2>What we collect, and where it's stored</h2>
+    <p>
+      <strong>Estimates and project data (job costs, rooms, surfaces, your
+      business info, your customer's name/address/contact info if you enter
+      it).</strong> This is stored entirely in your own browser, using
+      IndexedDB — a local database built into your browser, not a server we
+      run. We never receive a copy of it, we cannot see it, and we cannot
+      recover it if you clear your browser's storage or switch devices. If
+      you want a copy elsewhere, use the export/backup feature inside the
+      tool itself.
+    </p>
+    <p>
+      <strong>Contact form submissions</strong> (name, email, subject,
+      message). When you submit the contact form, that information is sent
+      as a one-time email to our own inbox so we can read and reply to it.
+      It is not written to any database — there isn't one — and we don't
+      use it for anything other than responding to your message.
+    </p>
+    <p>
+      <strong>License recovery requests</strong> (the email address you
+      paid with). If you use "Forgot your key?" to recover a lost Pro
+      license, the email address you enter is used only to look up a
+      matching completed payment with our payment processor, Dodo Payments,
+      and — if a match is found — to send that one recovery email. We don't
+      store the email address you type into that form.
+    </p>
+    <p>
+      <strong>Payment information.</strong> We never see or store your card
+      details at all — Dodo Payments' own hosted checkout page collects
+      that directly. When a payment succeeds, Dodo tells us the payment id
+      and, for the purchase-confirmation email, the name and email you
+      checked out with. We use that only to send you your license key; we
+      don't keep a customer database of our own.
+    </p>
+  </section>
+
+  <section>
+    <h2>What we don't do</h2>
+    <ul>
+      <li>No cookies, of any kind.</li>
+      <li>
+        No analytics, tracking scripts, ad networks, or third-party
+        pixels — the Site currently runs none.
+      </li>
+      <li>No user accounts, passwords, or logins.</li>
+      <li>We never sell or rent your information to anyone.</li>
+      <li>
+        We don't share your data with anyone except the third-party
+        services below, and only as needed to run the Site.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Third-party services we use</h2>
+    <ul>
+      <li>
+        <strong>Dodo Payments</strong> — processes the one-time Pro
+        purchase and hosts the checkout page. See Dodo's own privacy
+        policy for how they handle payment data.
+      </li>
+      <li>
+        <strong>Google (Gmail)</strong> — we send license-key, license
+        recovery, and contact-form emails through a Gmail account.
+      </li>
+      <li>
+        <strong>Vercel</strong> — hosts the Site. Standard web server logs
+        (like IP address and request timing) may be retained by Vercel as
+        part of normal hosting infrastructure; we don't access these for
+        tracking purposes.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How long we keep things</h2>
+    <p>
+      Your local project data stays on your device for as long as you keep
+      it there — we have no way to delete it remotely, because we never
+      had a copy. Emails you send us (contact form, license recovery, order
+      confirmations) live in our email inbox subject to normal email
+      retention; contact us if you'd like an email you sent us deleted.
+    </p>
+  </section>
+
+  <section>
+    <h2>Your choices</h2>
+    <ul>
+      <li>
+        Clear your browser's site data for paintingpricingcalculator.com
+        at any time to permanently delete all local project data.
+      </li>
+      <li>
+        Export a backup from inside the tool before clearing storage or
+        switching browsers/devices, if you want to keep it.
+      </li>
+      <li>Contact us to ask what, if anything, we hold about you.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Children's privacy</h2>
+    <p>
+      The Site is a professional tool for painting contractors and small
+      businesses and isn't directed at children. We don't knowingly collect
+      information from children.
+    </p>
+  </section>
+
+  <section>
+    <h2>Changes to this policy</h2>
+    <p>
+      If this policy changes, we'll update the date at the top of this
+      page. Continued use of the Site after a change means you accept the
+      updated policy.
+    </p>
+  </section>
+
+  <section>
+    <h2>Contact</h2>
+    <p>
+      Questions about this policy or your data? <a href="/contact">Get in touch</a>.
+    </p>
+  </section>
+</LegalLayout>
