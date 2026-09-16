@@ -1,0 +1,11 @@
+suite,category,framework_level_tests,internal_case_count,status,notes
+tests/engine + tests/domain (deterministic),Deterministic,1004,1004,passed,"Fixed explicit inputs, independently-derived expected results (exact BigInt-fraction arithmetic for the price/purchase boundary matrices)"
+tests/parity,Cross-tool parity,12,12,passed,"12/12 scenarios, each a genuinely independent comparison; see CROSS_TOOL_PARITY_REPORT.md"
+tests/pairwise,Pairwise mode coverage,71,71,passed,794/794 valid pairs covered across 4 sub-models; see PAIRWISE_COVERAGE_REPORT.md
+tests/domain/stateTransitions.test.ts,State-transition,10,10,passed,All 12 required sequences exercised (2 as sub-sequences of existing tests); see STATE_TRANSITION_REPORT.md
+tests/property/*,Property-based,26,257000,passed,"25 required properties, 257,000 seeded comparisons; see PROPERTY_TEST_REPORT.md"
+tests/differential/oracleFixtures.test.ts,Differential fuzzing,7,205000,passed,"205,000 fixtures across 7 categories, 0 mismatches; see DIFFERENTIAL_FIXTURE_SUMMARY.md"
+docs/verify_reference.py + docs/numerical_oracle.py,Independent oracle self-tests,n/a (script),106,passed,"20 known-good fixtures, 106 field assertions; see ORACLE_CROSS_VALIDATION_REPORT.md"
+Stryker (src/engine/*.ts),Mutation testing,374,374,92.78% (334 killed),"Every non-killed mutant classified (genuine gap fixed, equivalent, or confirmed tool error); see MUTATION_TESTING_REPORT.md"
+345-case design backlog (tests/fixtures/test-cases.json),Backlog reconciliation,345,345,reconciled,"313 uniquely-required-and-passed, 20 true-duplicates, 12 out-of-scope with documented reasons; see DESIGNED_CASE_RECONCILIATION.csv"
+Canonical full suite (npm test),Canonical,109 files,"1400 (1397 passed, 3 skipped)",passed,3 consecutive clean runs at commit f3b6768; see THREE_RUN_STABILITY_LOG.md
