@@ -15,3 +15,12 @@ npm-debug.log*
 
 # macOS-specific files
 .DS_Store
+
+# generated differential-fuzzing fixtures (reproducible from a fixed seed via
+# docs/generate_fuzz_fixtures.py -- not source, not committed; see
+# NUMERICAL_TEST_RESULTS.csv / FINAL_NUMERICAL_VERDICT.md for how to regenerate)
+tests/fixtures/oracle-fuzz/
+
+# Python bytecode cache from running docs/*.py locally
+__pycache__/
+*.pyc

@@ -1,6 +1,6 @@
 import { PEP, type Dec } from './decimal';
 import { trimPaintableArea, doorPaintableArea } from './geometry';
-import { wallOrCeilingHours, trimHours, doorHours, surfaceApplicationLaborCost, type SurfaceLaborLine } from './labor';
+import { wallOrCeilingHours, trimHours, doorHours } from './labor';
 import { rawDemandGal, resolvePurchasesByVariant, type SurfaceDemand } from './paint';
 
 /**
@@ -66,6 +66,33 @@ export function surfaceLaborHours(g: SurfaceGeometryInput, coats: number, rateOr
   }
 }
 
+/** NUM-DEC-002: computes a surface's OWN labor cost directly from its
+ * geometry/rate inputs, in one fused multiply-then-divide, rather than by
+ * multiplying the separately-computed `surfaceLaborHours` value by the
+ * hourly rate. For wall/ceiling/trim, `hours = area*coats/throughput` can
+ * be a repeating decimal (e.g. 6277/30) that a later multiply by rate
+ * would have exactly cancelled (e.g. rate=39=3*13 exactly cancels the 3 in
+ * 30) — but only if that cancellation happens in ONE division, not after
+ * `hours` has already been rounded to the engine's precision. Found via
+ * 205,000-fixture differential fuzzing against an independent Python
+ * decimal oracle: two fixtures still diverged by a cent from the true
+ * (exact-rational) total even after NUM-DEC-001 raised precision from 50
+ * to 100 — no fixed precision fully eliminates this, since it's about
+ * *order of operations*, not headroom. Door has no such division in the
+ * first place (hoursPerSidePerCoat is a flat multiplier), so its cost is
+ * unaffected either way. */
+export function surfaceLaborCost(g: SurfaceGeometryInput, coats: number, rateOrThroughput: Dec, loadedHourlyRate: Dec): Dec {
+  switch (g.kind) {
+    case 'wall':
+    case 'ceiling':
+      return g.wallOrCeilingAreaFt2.times(coats).times(loadedHourlyRate).dividedBy(rateOrThroughput);
+    case 'trim':
+      return g.trimLengthFt.times(coats).times(loadedHourlyRate).dividedBy(rateOrThroughput);
+    case 'door':
+      return doorHours(g.doorCount, g.paintedSides, coats, rateOrThroughput).times(loadedHourlyRate);
+  }
+}
+
 export interface ProjectSurfacePurchase {
   paintVariantId: string;
   rawGal: Dec;
@@ -98,17 +125,18 @@ export function aggregateProjectSurfaces(surfaces: ProjectSurface[], variantPric
   if (enabled.some((s) => !s.valid)) return { valid: false, result: null };
 
   const demands: SurfaceDemand[] = [];
-  const laborLines: SurfaceLaborLine[] = [];
   let laborHours = new PEP(0);
+  let laborCost = new PEP(0);
 
   for (const s of enabled) {
     const area = surfacePaintableArea(s.geometry);
     const hours = surfaceLaborHours(s.geometry, s.coats, s.rateOrThroughput);
+    const cost = surfaceLaborCost(s.geometry, s.coats, s.rateOrThroughput, s.loadedHourlyRate);
     const pricing = variantPricing.get(s.paintVariantId);
     const coverage = pricing?.coveragePerGal ?? new PEP(350);
     demands.push({ paintVariantId: s.paintVariantId, rawGal: rawDemandGal(area, s.coats, s.wasteRatio, coverage) });
     laborHours = laborHours.plus(hours);
-    laborLines.push({ hours, loadedHourlyRate: s.loadedHourlyRate });
+    laborCost = laborCost.plus(cost);
   }
 
   const pricePerGal = new Map<string, Dec>();
@@ -116,7 +144,6 @@ export function aggregateProjectSurfaces(surfaces: ProjectSurface[], variantPric
   const resolved = resolvePurchasesByVariant(demands, pricePerGal);
   const purchases: ProjectSurfacePurchase[] = resolved.map((p) => ({ paintVariantId: p.paintVariantId, rawGal: p.rawGal, purchasedGal: p.purchasedGal, cost: p.cost }));
   const materialsCost = purchases.reduce((sum, p) => sum.plus(p.cost), new PEP(0));
-  const laborCost = surfaceApplicationLaborCost(laborLines);
 
   return { valid: true, result: { purchases, materialsCost, laborHours, laborCost } };
 }

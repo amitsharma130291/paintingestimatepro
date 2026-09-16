@@ -128,3 +128,43 @@ describe('No enabled surfaces', () => {
     expect(result).toBeNull();
   });
 });
+
+describe('NUM-DEC-002: summed labor cost must not lose precision when one surface\'s hours is a repeating decimal that a later multiply would exactly cancel', () => {
+  it('wall (1255.4 sqft, 2 coats, 12 ft2/hr, $39/hr) + trim (287ft, 5 coats, 40 ft/hr, $31/hr): each surface\'s own labor cost is exact (8160.1 and 1112.125 respectively -- confirmed independently with Python fractions.Fraction), and their exact sum, 9272.225, is itself a HALF_UP tie that must round UP to 9272.23', () => {
+    // Found via 205,000-fixture differential fuzzing against an independent
+    // Python decimal oracle -- 2 fixtures still diverged from the oracle by
+    // exactly one cent even after raising Decimal.js precision from 50 to
+    // 100 (NUM-DEC-001's fix), because the underlying failure mode isn't
+    // "not enough precision" so much as "premature rounding of an
+    // intermediate that a later operation would have exactly cancelled" --
+    // no fixed precision can fully rule this out. `hours = area*coats/
+    // throughput` for the wall surface is 6277/30, a REPEATING decimal (30
+    // has a factor of 3 with no matching factor in 1255.4*2) -- but
+    // multiplying by rate=39 (which has a hidden factor of 3) exactly
+    // cancels it down to 8160.1. The OLD code computed `hours` FIRST
+    // (necessarily truncating the repeating quotient), THEN multiplied by
+    // rate -- so the cancellation was already lost by the time the
+    // multiply ran, leaving a tiny residual that (once summed with the
+    // trim surface's own exact 1112.125) lands just under the true
+    // 9272.225 tie and wrongly rounds down to 9272.22.
+    const wall: ProjectSurface = wallSurface({
+      id: 'wall-1',
+      geometry: { kind: 'wall', wallOrCeilingAreaFt2: new PEP('1255.4') },
+      coats: 2,
+      loadedHourlyRate: new PEP('39'),
+      rateOrThroughput: new PEP('12'),
+      wasteRatio: new PEP('0.2'),
+    });
+    const trim: ProjectSurface = wallSurface({
+      id: 'trim-1',
+      geometry: { kind: 'trim', trimLengthFt: new PEP('287'), developedWidthFt: new PEP('0.52') },
+      coats: 5,
+      loadedHourlyRate: new PEP('31'),
+      rateOrThroughput: new PEP('40'),
+      wasteRatio: new PEP('0'),
+    });
+    const { valid, result } = aggregateProjectSurfaces([wall, trim], pricing);
+    expect(valid).toBe(true);
+    expect(result!.laborCost.toFixed(2)).toBe('9272.23');
+  });
+});
