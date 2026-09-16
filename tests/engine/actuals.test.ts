@@ -150,5 +150,8 @@ describe('ACT: actual-cost review', () => {
     expect(r.state).toBe('in_progress'); // never finalizes just because every field happens to be filled
     expect(r.confirmedCategories).toBe(3); // the unconfirmed category, despite having an amount, does not count
     expect(r.actualCost).toBeNull();
+    // recordedCostSoFar must also exclude the unconfirmed category's amount,
+    // not just confirmedCategories -- 700+1200+150 = 2050, NOT +135 = 2185.
+    expect(r.recordedCostSoFar.toNumber()).toBe(2050);
   });
 });

@@ -70,6 +70,15 @@ export function parseDecimalField(raw: string | null | undefined, opts: ParseOpt
     };
   }
 
+  // Stryker disable all: unreachable in practice for any GRAMMAR-matched
+  // input. GRAMMAR only admits an optional sign, digits, and an optional
+  // decimal point -- decimal.js parses such a string without throwing and
+  // without ever producing a non-finite value regardless of digit COUNT
+  // (verified empirically: a 9,000,001-digit all-digit string still parses
+  // to a finite Decimal; decimal.js's own exponent ceiling, which would be
+  // the only way to get Infinity/a throw here, is ~9e15 -- reachable only
+  // by a string with quadrillions of digits, far beyond any realistic form
+  // input). This is defensive, not a documented reachable branch.
   let value: Dec;
   try {
     value = new PEP(trimmed);
@@ -79,6 +88,7 @@ export function parseDecimalField(raw: string | null | undefined, opts: ParseOpt
   if (!value.isFinite()) {
     return { kind: 'invalid', code: 'non_finite', message: `"${raw}" is not a finite number.`, rawText: raw };
   }
+  // Stryker restore all
 
   // "-0" / "-0.00" normalize to 0 rather than a signed zero.
   if (value.isZero()) value = new PEP(0);

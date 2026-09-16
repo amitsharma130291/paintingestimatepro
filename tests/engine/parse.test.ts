@@ -96,4 +96,56 @@ describe('CORE-parse: missing vs invalid vs valid-zero', () => {
     expect(isPositiveDivisor(new PEP('150'))).toBe(true);
     expect(isPositiveDivisor(new PEP('0'))).toBe(false);
   });
+
+  it('parseDecimalField: below_minimum is enforced and reported with its own distinct code (opts.min has no current production caller, but is part of this function\'s own public contract)', () => {
+    const r = parseDecimalField('5', { min: '10' });
+    expect(r.kind).toBe('invalid');
+    if (r.kind === 'invalid') expect(r.code).toBe('below_minimum');
+    // exactly-at-the-boundary is valid, not invalid (inclusive)
+    expect(parseDecimalField('10', { min: '10' }).kind).toBe('valid');
+  });
+
+  it('parseDecimalField: above_maximum is reported with its own distinct code', () => {
+    const r = parseDecimalField('20', { max: '10' });
+    expect(r.kind).toBe('invalid');
+    if (r.kind === 'invalid') expect(r.code).toBe('above_maximum');
+    expect(parseDecimalField('10', { max: '10' }).kind).toBe('valid'); // inclusive
+  });
+
+  it('parseDecimalField: each distinct invalid reason reports its own code, not a shared/generic one', () => {
+    const malformed = parseDecimalField('12abc');
+    expect(malformed.kind).toBe('invalid');
+    if (malformed.kind === 'invalid') expect(malformed.code).toBe('malformed_number');
+
+    const tooManyDigits = parseDecimalField('1.12345678901'); // 11 digits, default max 10
+    expect(tooManyDigits.kind).toBe('invalid');
+    if (tooManyDigits.kind === 'invalid') expect(tooManyDigits.code).toBe('too_many_fraction_digits');
+  });
+
+  it('parseCountField: each distinct invalid reason reports its own code, not a shared/generic one', () => {
+    const malformed = parseCountField('3.5');
+    expect(malformed.kind).toBe('invalid');
+    if (malformed.kind === 'invalid') expect(malformed.code).toBe('malformed_integer');
+
+    const belowMin = parseCountField('2', { min: 5 });
+    expect(belowMin.kind).toBe('invalid');
+    if (belowMin.kind === 'invalid') expect(belowMin.code).toBe('below_minimum');
+    expect(parseCountField('5', { min: 5 }).kind).toBe('valid'); // inclusive
+
+    const aboveMax = parseCountField('10', { max: 5 });
+    expect(aboveMax.kind).toBe('invalid');
+    if (aboveMax.kind === 'invalid') expect(aboveMax.code).toBe('above_maximum');
+    expect(parseCountField('5', { max: 5 }).kind).toBe('valid'); // inclusive
+  });
+
+  it('parseCountField: surrounding whitespace is trimmed, same as parseDecimalField', () => {
+    expect(parseCountField('  5  ').kind).toBe('valid');
+    if (parseCountField('  5  ').kind === 'valid') {
+      expect((parseCountField('  5  ') as { kind: 'valid'; value: number }).value).toBe(5);
+    }
+  });
+
+  it('parseCountField: a whitespace-only string is missing, not invalid -- same missing/invalid distinction parseDecimalField makes', () => {
+    expect(parseCountField('   ')).toEqual({ kind: 'missing' });
+  });
 });

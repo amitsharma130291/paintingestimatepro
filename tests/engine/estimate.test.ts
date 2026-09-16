@@ -168,3 +168,30 @@ describe('NUM-DEC-002: summed labor cost must not lose precision when one surfac
     expect(result!.laborCost.toFixed(2)).toBe('9272.23');
   });
 });
+
+describe('aggregateProjectSurfaces: unresolved paint-variant pricing falls back to 350 sqft/gal, not a crash', () => {
+  it('a surface whose paintVariantId has no entry in the variantPricing map still computes, assuming exactly 350 coverage', () => {
+    // aggregateProjectSurfaces is an independently-exported, directly-called
+    // engine function (its own contract, not just an internal helper of
+    // estimateAssembly.ts) -- its ONE current caller already guarantees every
+    // enabled surface's paintVariantId exists in variantPricing (resolveSurface
+    // rejects an unknown id as 'invalid' before this function is ever
+    // reached), but that upstream guarantee is not part of THIS function's
+    // own contract, so its own fallback deserves its own direct test.
+    // paint-white's coverage here (300) deliberately differs from the 350
+    // fallback so the two cannot be confused with each other.
+    const localPricing = new Map<string, VariantPricing>([
+      ['paint-white', { coveragePerGal: new PEP(300), pricePerGal: new PEP(40) }],
+    ]);
+    const surface = wallSurface({
+      paintVariantId: 'variant-not-in-map',
+      geometry: { kind: 'wall', wallOrCeilingAreaFt2: new PEP(350) },
+      coats: 1,
+      wasteRatio: new PEP(0),
+    });
+    const { valid, result } = aggregateProjectSurfaces([surface], localPricing);
+    expect(valid).toBe(true);
+    // raw demand = 350 * 1 * (1+0) / 350 (the fallback, NOT 300) = exactly 1 gal
+    expect(result!.purchases[0].purchasedGal).toBe(1);
+  });
+});

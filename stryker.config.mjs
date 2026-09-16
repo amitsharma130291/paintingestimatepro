@@ -10,13 +10,27 @@ export default {
 	// stryker.config.mjs, which uses the identical setting for the identical
 	// reason.
 	coverageAnalysis: 'all',
-	// Numerical-hardening initiative, Part 19: start with a small, high-value
-	// subset (the two modules already the subject of NUM-DEC-001/002) to
-	// validate the setup before scaling to the full target list (decimal
-	// helpers, parsing, geometry, paint purchasing/pooling, labor, cost,
-	// pricing, service health, actuals, estimate assembly, snapshot/refresh,
-	// customer-document totals).
-	mutate: ['src/engine/pricing.ts', 'src/engine/decimal.ts'],
+	// Numerical-hardening initiative, Part 19. Validated the setup on a small
+	// high-value subset first (pricing.ts + decimal.ts, the two modules
+	// already the subject of NUM-DEC-001/002 -- see NUMERICAL_BUG_FIX_LOG.md
+	// for the Stryker/Vitest-5 tooling bug found and fixed during that
+	// validation), now scaled to the full numerically-significant engine
+	// surface. `types.ts` (type-only, no runtime logic) and `index.ts` (a
+	// pure re-export barrel) are omitted -- Stryker generates zero mutants
+	// for either regardless, so listing them would only add dead scan time.
+	mutate: [
+		'src/engine/pricing.ts',
+		'src/engine/decimal.ts',
+		'src/engine/geometry.ts',
+		'src/engine/paint.ts',
+		'src/engine/labor.ts',
+		'src/engine/cost.ts',
+		'src/engine/serviceHealth.ts',
+		'src/engine/actuals.ts',
+		'src/engine/estimate.ts',
+		'src/engine/document.ts',
+		'src/engine/parse.ts',
+	],
 	// Baseline run #3 (against the default vitest.config.ts, whole suite
 	// included) produced a mutation.json where every dynamic (function-body)
 	// mutant showed testsCompleted: 0 and status: "Survived" -- i.e. the

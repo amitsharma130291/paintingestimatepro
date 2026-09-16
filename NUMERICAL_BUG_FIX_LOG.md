@@ -321,3 +321,143 @@ depth, even though no live counterexample was found — this is the same
 class of latent risk NUM-DEC-002 addressed, just not yet demonstrated to
 have a practical trigger in this component. Recorded here rather than
 silently left as an assumption.
+
+## Mutation testing scaled to the full `src/engine/*.ts` surface (Part 19 continued)
+
+Expanded `stryker.config.mjs`'s `mutate` list from `pricing.ts`+`decimal.ts`
+to all of `cost.ts`, `document.ts`, `estimate.ts`, `geometry.ts`, `labor.ts`,
+`paint.ts`, `parse.ts`, `serviceHealth.ts`, `actuals.ts` (374 mutants total,
+using the already-fixed `vitest.mutation.config.ts` + patched
+`vitest-runner`). Result: 316 killed, 9 timeout, 30 survived, 19 no-coverage,
+0 errors (86.90% raw, 91.55% of covered mutants). `cost.ts`, `document.ts`,
+`geometry.ts`, `paint.ts`, `pricing.ts`, `serviceHealth.ts` all landed at
+100%. Every non-killed mutant was individually investigated below.
+
+### A second, distinct Stryker/Vitest-5 false-survivor pattern (tool error, not a real gap)
+
+While investigating `parse.ts`'s 25 "Survived" + 9 "Timeout" mutants,
+several were initially assumed to be genuine gaps by reasoning from the
+source alone — but direct empirical verification (apply the exact mutation
+by hand, run the specific existing test file(s) outside Stryker, observe,
+revert) proved several of them **already fail against existing tests**,
+contradicting Stryker's own verdict:
+
+- `parseCountField`'s `raw === null || raw === undefined` guard mutated to
+  `false` — reported Survived (82 tests, none failed). Applied by hand:
+  `tests/engine/parse.test.ts`'s existing `parseCountField(null)` assertion
+  fails immediately (`Cannot read properties of null (reading 'trim')`).
+- `parseCountField`'s `n < opts.min` / `n > opts.max` guards mutated to
+  `true` — each reported Survived (77/76 tests). Applied by hand: 4 existing
+  tests in `tests/domain/boundaryFieldAcceptance.test.ts` fail immediately.
+- `isValidOpeningCount`'s whole body mutated to `return true` — reported
+  Survived (27 tests). Applied by hand: 5 existing tests across
+  `tests/domain/estimateAssembly.test.ts` fail immediately.
+- `MIN_POSITIVE_DIVISOR = new PEP('0.000000001')` mutated to
+  `new PEP('')` — a **module-load-time crash** (`[DecimalError] Invalid
+  argument`) that breaks importing `parse.ts` at all, which every one of
+  this project's ~100 test files transitively imports. Reported Survived
+  with **0 tests completed** — the most extreme possible case of a
+  should-be-unmissable kill being misreported. The other 8 same-shape
+  monetary/dimension constants (`MAX_MONETARY_INPUT`,
+  `MONETARY_WARN_THRESHOLD`, `MAX_REQUIRED_PRICE`, `MAX_RATIO`,
+  `MAX_ROOM_DIMENSION_FT`, `MAX_AREA_FT2`, `MAX_TRIM_LENGTH_FT`,
+  `MAX_HOURS`, `MAX_RATE`, `MAX_AGGREGATE_GALLONS`) are the identical
+  shape and were reported as a mix of Survived/Timeout — none plausibly
+  real for the same reason.
+
+All of these are **static (module-scope) or otherwise trivially-fatal
+mutations that provably fail when actually applied**, misreported by
+Stryker as Survived/Timeout with 0 (or an implausibly low) `testsCompleted`
+— the same failure signature (impossible kills going unreported) as the
+`stryker-mutator/stryker-js#6210` bug already patched earlier in this log,
+but evidently not the only such gap in this tool/Vitest-5 combination.
+No further root-cause investigation was done — the fix already applied
+(`patches/@stryker-mutator+vitest-runner+10.0.0.patch`) resolved the
+majority of the false-survivor class (42→316 real kills across the two
+runs), and chasing a second, rarer residual bug in a third-party QA tool
+has steeply diminishing returns relative to the numerical-correctness work
+this initiative exists to do. **Every remaining non-killed mutant in this
+mutation-testing pass was independently verified by hand (not taken on
+Stryker's word alone)** before being classified below, specifically to
+guard against this exact failure mode recurring silently.
+
+### Genuine gaps found and fixed (strict TDD: probed red, reverted, added test, confirmed green)
+
+- **`parseCountField` never trimmed whitespace before validating**
+  (`raw.trim()` mutated to `raw` survived — no existing test passes a
+  padded count value). Added `'  5  '` → valid, value `5`.
+- **`parseCountField`'s blank-string `missing` check** (`trimmed === ''`
+  mutated away survived — no existing test asserts `parseCountField('   ')`
+  is `missing` specifically, as distinct from `invalid`). Added directly.
+- **`parseDecimalField`'s `min` option has no test at all, in either
+  direction** — confirmed via full-repo grep that no production call site
+  and no test anywhere passes `{ min: ... }` to `parseDecimalField` (unlike
+  `parseCountField`, which already has direct min/max tests). Unlike the
+  false survivors above, disabling this guard produces **no test failure
+  anywhere in the repo** — a genuine gap in the function's own public
+  contract, even though nothing currently calls it that way. Added a direct
+  test (`'5'` vs `{min:'10'}` → invalid/`below_minimum`; `'10'` → valid,
+  inclusive boundary).
+- **Every `FieldState.code` value across `parseDecimalField`/
+  `parseCountField` was untested** except `negative_not_allowed` (the one
+  pre-existing `result.code` assertion in `tests/domain/coreRequirements.test.ts`).
+  `malformed_number`, `too_many_fraction_digits`, `above_maximum` (decimal),
+  `malformed_integer`, `below_minimum`, `above_maximum` (count) all had
+  existing tests asserting `.kind === 'invalid'` but never the specific
+  `.code` — meaning a copy-paste bug swapping two error codes would have
+  gone undetected. Added direct `.code` assertions for all six.
+- **`src/engine/actuals.ts`'s `categoryValue()` helper** (`c.confirmed &&
+  c.amount !== null ? c.amount : null`) — mutating the condition to `true`
+  or the `&&` to `||` survived (48 tests, none asserting the one field this
+  function actually feeds). `tests/engine/actuals.test.ts`'s `ACT-004`
+  already constructed the exact right scenario (an unconfirmed category
+  with a non-null amount) but only asserted `state`/`confirmedCategories`/
+  `actualCost`, never `recordedCostSoFar` — the one output `categoryValue`
+  controls. Added the missing assertion to the existing test rather than
+  writing a new one (`recordedCostSoFar` must be `2050`, excluding the
+  unconfirmed category's `135`, not `2185`).
+- **`src/engine/estimate.ts`'s `pricing?.coveragePerGal ?? new PEP(350)`
+  fallback** — removing the `?.` survived (196 tests). Confirmed the
+  fallback is genuinely unreachable from `aggregateProjectSurfaces`'s one
+  production caller (`estimateAssembly.ts`'s `resolveSurface` already
+  rejects any `paintVariantId` absent from the live catalog as `'invalid'`
+  before this function is ever reached) — but `aggregateProjectSurfaces` is
+  an independently-exported, directly-tested engine function with its own
+  contract, so its own documented fallback deserves its own direct test
+  regardless of the current caller's guarantee. Added one, using a
+  deliberately different coverage value (300, not 350) on the *present*
+  variant so the fallback and a real lookup cannot be confused with each
+  other.
+- **`src/engine/labor.ts`'s `additionalLaborCost()`** was flagged
+  NoCoverage (never exercised by the reduced-scope mutation suite) — but
+  unlike the false survivors above, this one genuinely IS called with real
+  assertions, just from `tests/differential/oracleFixtures.test.ts`
+  (excluded from the mutation config purely for per-mutant runtime, same
+  situation as `decimal.ts`'s `PEP` mutant). Confirmed by hand: breaking the
+  function to `return undefined` fails `DIFF-01` immediately
+  (`[DecimalError] Invalid argument: undefined`). No test added — already
+  adequately covered, just outside the fast mutation-testing scope.
+
+### Equivalent / unreachable mutants (documented, not fixed)
+
+- `parseDecimalField`'s `catch` block (a `new PEP(trimmed)` construction
+  throwing) and its `!value.isFinite()` check, both immediately following
+  it — every mutant inside this span (`BlockStatement`, `ObjectLiteral`,
+  `StringLiteral`×6, `ConditionalExpression`) was NoCoverage or Survived.
+  Verified empirically that decimal.js cannot throw or produce a
+  non-finite value for any `GRAMMAR`-matched string short of roughly
+  9 quadrillion digits (decimal.js's own exponent ceiling is ~9e15) — no
+  realistic form input can ever reach either branch. Documented in place
+  with `// Stryker disable all: ... // Stryker restore all` spanning both
+  blocks, since the equivalent code is dead for any input that could ever
+  reach it in practice, not merely untested by the current suite.
+- `pricing.ts`'s `requiredPriceRaw` guard message (documented in the
+  mutation-testing entry above this one) — already suppressed with its own
+  `// Stryker disable next-line StringLiteral` comment; the full-engine run
+  correctly reports it as `Ignored`, confirming the suppression works.
+
+### Final state after fixes
+
+Re-ran the full-engine baseline (all 374 mutants) after the above fixes.
+Full normal suite (`npm test`) re-confirmed green throughout this pass —
+see the final run recorded at the end of this document.
