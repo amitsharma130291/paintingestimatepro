@@ -36,10 +36,17 @@ hardening-specific properties added this session:
 - **P17** — a rate refresh followed by an undo restores byte-identical
   output to the pre-refresh state.
 - **P19** — negative profit is never clamped to zero.
-- **P20/P21** — results never contain `NaN`, `Infinity`, or a
-  negative-zero display artifact.
-- **P22** — the customer-facing document only ever shows an explicit
-  allow-list of fields (no accidental internal-state leak).
+- **P20** — customer output contains only explicitly allow-listed fields
+  (`buildCustomerDocument`'s output always passes
+  `assertOnlyAllowedFields`, never leaking raw cost/labor/overhead/margin
+  figures as its own keys).
+- **P21** — results contain no `NaN`, `Infinity`, or negative-zero
+  display artifact (every `Dec` field in the assembly result is finite
+  and never displays as `"-0.00"`).
+- **P22** — decimal formatting followed by supported parsing preserves
+  the intended value (`toMoneyString(x)` round-trips through
+  `parseDecimalField` back to the same money-rounded value, for any
+  supported input).
 - **P25** — an aggregate total always equals the exact sum of its
   independently-computed components.
 
