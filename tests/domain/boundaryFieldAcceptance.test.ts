@@ -36,6 +36,9 @@ describe('BOUND-006/007: a target margin ratio field accepts the boundary values
   it('exactly 1 (the excluded upper bound) is rejected, confirming 0.999 is genuinely inside the accepted range, not an arbitrary value', () => {
     expect(() => requiredPriceRaw(new PEP('100'), new PEP('1'))).toThrow();
   });
+  it('BOUND-008: just below the floor (-0.001) is rejected, confirming 0 is a genuine floor, not an arbitrary accepted value', () => {
+    expect(() => requiredPriceRaw(new PEP('100'), new PEP('-0.001'))).toThrow();
+  });
 });
 
 describe('BOUND-010/011: an overhead ratio field accepts the boundary values 0 and 1 (CALCULATION_SPEC\'s "overheadRatio 0..1" inclusive range)', () => {
