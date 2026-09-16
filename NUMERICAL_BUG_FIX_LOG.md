@@ -244,3 +244,80 @@ from the fast mutation-testing config purely for per-mutant runtime, not
 because no test catches it. Full normal suite (`npm test`, includes
 `tests/property/**` and `tests/differential/**`) re-run after all fixes:
 102/102 files, 957 passed, 3 skipped, 0 failed — no regressions.
+
+## NUM-DEC-001 necessity re-audit — precision 100 is still required, for a reason NUM-DEC-002 did not address
+
+**Question:** after NUM-DEC-002's fused `surfaceLaborCost()` fix, is the
+NUM-DEC-001 precision bump (50 → 100) now redundant for the Pro pipeline, or
+does something else still depend on it?
+
+**Method:** in an isolated `git worktree` (not the working tree — this ran
+concurrently with the Stryker full-engine baseline below, which must not see
+`src/engine/*.ts` change mid-run), reverted `PEP`'s precision to 50 while
+keeping NUM-DEC-002's fused-calculation fix in `estimate.ts` untouched, then
+ran `tests/engine/decimal.test.ts`, the full 205,000-fixture differential
+suite (reusing the existing deterministic fixture set — seeded, so identical
+either way), and the pricing/actuals/service-health/document/cost test
+files.
+
+**Result:** the differential suite and all other files still passed (they
+all exercise `aggregateProjectSurfaces`, which NUM-DEC-002 already fixed).
+But `decimal.test.ts`'s own NUM-DEC-001 regression test — which calls
+`wallOrCeilingHours()` directly and multiplies by rate manually, rather than
+going through `aggregateProjectSurfaces` — still failed at precision 50
+(`862.63` instead of `862.64`), proving NUM-DEC-002's fix did **not**
+subsume NUM-DEC-001's.
+
+**Root cause:** `wallOrCeilingHours()`/`trimHours()`/`doorHours()`
+(`src/engine/labor.ts`) were never removed — only `aggregateProjectSurfaces`
+was rewired to bypass them via the new fused function. They are still called
+directly, unfused, by:
+- `src/components/tools/InteriorCalculator.tsx:206-209` (the free interior
+  tool: sums wall hours + ceiling hours [each its own division] + prep
+  hours, *then* multiplies the sum by one hourly rate) — a live, reachable,
+  user-facing computation with the identical "sum-of-divisions-then-
+  multiply" shape as NUM-DEC-002.
+- `src/domain/serviceHealthAssembly.ts:49,59,73` (Price Book Health) → feeds
+  a single unfused hours value into `computeServiceUnitCost`, which
+  multiplies by rate — the original single-division NUM-DEC-001 shape.
+- `src/engine/estimate.ts`'s own `laborHoursForSurface` (used only to
+  produce the *displayed* per-surface hours figure, kept deliberately
+  separate from the fused cost calculation used for the dollar total).
+
+**Searched for a live counterexample in the highest-risk of these**
+(`InteriorCalculator.tsx`'s two-division-sum shape, structurally the closest
+to NUM-DEC-002's proven bug): a targeted script
+(`scratchpad/numerical_hardening/search_int003.js`) comparing decimal.js
+(at precision 50 and 100, exactly as the component computes it) against
+exact BigInt-fraction arithmetic, over 8,000,000 randomly seeded
+(wallArea, ceilingArea, coats, wallThroughput, ceilingThroughput, prep,
+rate) tuples spanning the component's realistic input ranges (1–3000ft²
+wall, 1–1500ft² ceiling, 1–5 coats, 50–400 throughput, $0–5 prep, $20–150
+rate). **Zero mismatches found at either precision.** This is a documented
+negative result, not a proof of absence — the bug class requires a
+coincidental relationship between a throughput's prime factorization and
+the rate's decimal representation (as `187 = 11×17` / `$139.23 = 17×819/100`
+did for NUM-DEC-001), and 8,000,000 attempts is necessarily finite — but it
+is strong enough evidence that this specific shape, over this input range,
+is not exhibiting the bug at any practical rate, unlike the ~1-in-40,000
+rate NUM-DEC-002 was found at in the original differential fuzzing corpus.
+
+**Decision: keep `PEP`'s precision at 100 in the main tree** (do not revert
+to 50). It is proven still load-bearing for the still-unfused call sites
+above via the direct regression-test failure, independent of whether the
+`InteriorCalculator.tsx` search would have found a live counterexample.
+Precision alone is not a complete fix for this bug *class* (NUM-DEC-002
+already established that no fixed precision can be, only fused
+multiply-then-divide order can) — but for the single-division shapes
+(`serviceHealthAssembly.ts`, the displayed-hours calculation) it is a
+materially effective mitigation, and for `InteriorCalculator.tsx`'s
+two-division-sum shape it is the only mitigation currently in place at all.
+
+**Follow-up flagged, not yet fixed:** `InteriorCalculator.tsx`'s labor-cost
+calculation should eventually receive the same structural fix as
+NUM-DEC-002 (fuse each component's `area×coats×rate÷throughput` into one
+division before summing, rather than summing hours first) as defense in
+depth, even though no live counterexample was found — this is the same
+class of latent risk NUM-DEC-002 addressed, just not yet demonstrated to
+have a practical trigger in this component. Recorded here rather than
+silently left as an assumption.
