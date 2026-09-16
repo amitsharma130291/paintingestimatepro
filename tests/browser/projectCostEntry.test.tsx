@@ -112,7 +112,7 @@ describe('Completing the paid costing interface: prep labor, itemized materials,
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
-    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Full cost entry job/ }));
     expect(await screen.findByText('$170.50')).toBeTruthy();
     expect(screen.getByDisplayValue('Wall prep and caulking')).toBeTruthy();
     expect(screen.getByDisplayValue('Caulk')).toBeTruthy();

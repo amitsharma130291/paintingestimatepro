@@ -76,7 +76,7 @@ describe('ACT-015: a negative actual expense is invalid, never silently zeroed/c
     await openActuals();
     fireEvent.click(screen.getByRole('checkbox', { name: 'materials' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'labor' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: 'otherExpenses' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'other expenses' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'overhead' }));
     fireEvent.change(screen.getAllByPlaceholderText('0.00')[0], { target: { value: '-50' } });
     // The other three categories are validly confirmed-blank; only the

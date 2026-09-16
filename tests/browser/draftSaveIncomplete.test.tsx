@@ -86,11 +86,9 @@ describe('V6-05: "Save draft" persists incomplete/invalid work-in-progress input
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
-    // The PROJECT-level list label stays "New project" (set once at
-    // creation; saveDraft() never renames it) even though the revision's
-    // own title field holds what was typed -- matching the same pattern
-    // already used by tests/browser/projectCostEntry.test.tsx.
-    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    // PRO-BUG-001 fix: saveDraft() now copies the typed "Project title"
+    // onto the list-displayed Project.title.
+    fireEvent.click(await screen.findByRole('button', { name: /^Partial room job/ }));
     expect((await screen.findByLabelText('Length (ft)') as HTMLInputElement).value).toBe('12');
     expect((screen.getByLabelText('Width (ft)') as HTMLInputElement).value).toBe('');
   });
@@ -182,7 +180,7 @@ describe('V6-05: "Save draft" persists incomplete/invalid work-in-progress input
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
-    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Correction after reopen job/ }));
     fireEvent.change(await screen.findByLabelText('Width (ft)'), { target: { value: '10' } });
     fireEvent.change(screen.getByLabelText('Height (ft)'), { target: { value: '8' } });
 

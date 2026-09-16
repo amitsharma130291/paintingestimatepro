@@ -100,7 +100,7 @@ describe('Pro room editor: quick/detailed opening entry mode', () => {
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
-    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Detailed openings job/ }));
     expect(await screen.findByText('$168.00')).toBeTruthy();
     expect((screen.getByLabelText('Opening entry') as HTMLSelectElement).value).toBe('detailed');
     expect((lastLabeled('Width (ft)') as HTMLInputElement).value).toBe('3');

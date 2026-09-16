@@ -122,7 +122,7 @@ describe('ACT-010: actual-cost overhead has two explicit modes (baselineAllocati
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
-    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Kitchen estimate/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
 
     expect(screen.getByRole('radio', { name: /enter actual amount/i })).toHaveProperty('checked', true);

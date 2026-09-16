@@ -53,7 +53,10 @@ async function createProjectNamed(title: string) {
 describe('LIFE-014: deleting a project requires explicit confirmation and is atomic/scoped to that project', () => {
   it('clicking Delete alone does not remove the project -- a second, explicit confirmation is required', async () => {
     await createProjectNamed('Job to keep for now');
-    await screen.findByText(/^New project/); // list row still shows "New project" per the project-level title convention
+    // PRO-BUG-001 fix: saveDraft() now copies the typed "Project title"
+    // onto the list-displayed Project.title (previously it stayed stuck
+    // at the creation-time default "New project" no matter what was typed).
+    await screen.findByText(/^Job to keep for now/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(await screen.findByText(/cannot be undone/i)).toBeTruthy();

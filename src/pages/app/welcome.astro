@@ -1,0 +1,106 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import Header from "../../components/Header.astro";
+import Footer from "../../components/Footer.astro";
+
+const title = "Welcome to Pro | PaintingPricing Calculator";
+const description = "How to get started with the Pro workspace: set up your catalog, create your first project, and issue an estimate.";
+
+const STEPS = [
+  {
+    n: 1,
+    title: "Add your paint products",
+    body: "Open Paint catalog and add each paint you actually buy — name, price per gallon, coverage, and sheen. Every estimate and every Price Book Health service draws from this list, so it's the one thing you need before anything else will work.",
+    tab: "Paint catalog",
+  },
+  {
+    n: 2,
+    title: "Check your business settings",
+    body: "Business settings holds your loaded hourly rate, overhead, target margin, and production throughputs. Sensible defaults are already filled in — adjust them to match your real numbers now, since a project only picks up new rates when you explicitly refresh it.",
+    tab: "Business settings",
+  },
+  {
+    n: 3,
+    title: "Create your first project",
+    body: "Go to Projects and click \"+ New project.\" Fill in your business and customer info, then add each room (length, width, height, and any doors/windows to deduct) or a standalone trim/door surface.",
+    tab: "Projects",
+  },
+  {
+    n: 4,
+    title: "Review the estimate summary",
+    body: "As you add rooms, the Estimate summary fills in live — materials, labor, overhead, job cost, and a suggested price with your target margin. Switch to a custom price any time; \"Save draft\" works even if the estimate isn't finished yet.",
+    tab: "Projects",
+  },
+  {
+    n: 5,
+    title: "Issue it to your customer",
+    body: "Once the estimate is complete, click \"Issue estimate.\" That freezes this revision and produces a clean customer-facing document — with no cost, overhead, or margin figures on it — ready to print or save as a PDF.",
+    tab: "Projects",
+  },
+];
+
+const DASHBOARD_TABS = [
+  { name: "Business settings", benefit: "Your rates and defaults, set once and reused by every estimate." },
+  { name: "Paint catalog", benefit: "The paint products every estimate and service draws from." },
+  { name: "Projects", benefit: "Where you build, save, and issue estimates for real jobs." },
+  { name: "Price Book Health", benefit: "Sanity-check your standing menu prices against their real modeled cost." },
+  { name: "Actual review", benefit: "Compare what a job actually cost against what you quoted." },
+  { name: "Backup", benefit: "Export everything to a file, or restore/import from one." },
+];
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <main id="main-content" class="section-pad">
+    <div class="content-shell max-w-3xl">
+      <p class="eyebrow">Pro</p>
+      <h1 class="mt-4 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        Welcome to Pro
+      </h1>
+      <p class="mt-3 text-lg text-ink-soft">
+        Five steps from an empty workspace to your first issued estimate.
+        Everything below runs and saves locally in your browser — no
+        account, no setup on our end.
+      </p>
+
+      <ol class="mt-10 space-y-6">
+        {
+          STEPS.map((step) => (
+            <li class="flex gap-4 rounded-btn border border-line bg-card p-5">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-ink">
+                {step.n}
+              </span>
+              <div>
+                <h2 class="font-semibold text-ink">{step.title}</h2>
+                <p class="mt-1 text-sm leading-relaxed text-ink-soft">{step.body}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+
+      <div class="mt-12">
+        <h2 class="text-xl font-semibold tracking-tight text-ink">Your dashboard, at a glance</h2>
+        <p class="mt-2 text-sm text-ink-soft">
+          Pro is one workspace with six tabs along the top. Here's what each one is for.
+        </p>
+        <dl class="mt-5 grid gap-3 sm:grid-cols-2">
+          {
+            DASHBOARD_TABS.map((t) => (
+              <div class="rounded-btn border border-line p-4">
+                <dt class="font-semibold text-ink">{t.name}</dt>
+                <dd class="mt-1 text-sm text-ink-soft">{t.benefit}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </div>
+
+      <div class="mt-12 flex flex-wrap items-center gap-4 rounded-btn border border-line bg-card p-6">
+        <a href="/app" class="btn btn-primary">Go to your dashboard</a>
+        <a href="/help" class="text-link text-sm">Read the full help &amp; guide →</a>
+      </div>
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>

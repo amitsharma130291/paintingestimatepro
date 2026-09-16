@@ -245,7 +245,7 @@ describe('v7.2: the REAL approved logo asset survives the full lifecycle byte-fo
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
-    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Real logo lifecycle job/ }));
     const reopenedImages = await screen.findAllByRole('img', { name: /logo/i });
     expect(reopenedImages[0].getAttribute('src')).toBe(REAL_LOGO_DATA_URI); // persistence did not drop or alter it
 

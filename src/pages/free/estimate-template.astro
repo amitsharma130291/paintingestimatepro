@@ -22,7 +22,15 @@ const description =
         useful document without registering or paying.
       </p>
       <div class="mt-8">
-        <EstimateTemplate client:load />
+        {/* client:only, not client:load: EstimateTemplate's initial state
+            (newDraft()) bakes in a crypto.randomUUID()-based estimate
+            number, which server-render and client-hydration would each
+            generate independently -- a guaranteed React hydration mismatch
+            on the very first render. client:only skips SSR for this
+            component entirely, matching the same pattern already used for
+            ProApp/ProGate (identical non-deterministic-initial-state
+            situation). */}
+        <EstimateTemplate client:only="react" />
       </div>
       <p class="mt-6 text-sm text-ink-soft">
         Want this generated automatically from a project you've already

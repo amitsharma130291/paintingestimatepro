@@ -91,7 +91,7 @@ describe('ACT-011: actual labor can be entered as hours × rate, not only a flat
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
-    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Labor breakdown job/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
 
     expect(screen.getByRole('radio', { name: /hours × rate/i })).toHaveProperty('checked', true);

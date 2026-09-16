@@ -446,7 +446,18 @@ export default function ProApp() {
       calculationState: summary?.calculationState ?? 'incomplete',
       proposedPrice: draftEdit.priceMode === 'custom' ? (customPriceRaw.trim() === '' ? null : customPriceRaw) : summary?.effectivePrice?.toFixed(2) ?? null,
     };
-    const nextProject: Project = { ...upsertRevision(activeProject, revisionToSave), activeRevisionId: revisionToSave.id, updatedAt: now() };
+    // PRO-BUG-001: the "Project title" field edits the revision's own
+    // title, but the Projects list displays Project.title -- without this,
+    // saveDraft() never copied the two together, so every project stayed
+    // labeled "New project" in the list no matter what was typed. Mirrors
+    // the same `revision.title || project.title` fallback issueEstimate()
+    // already uses, so a blank title never wipes out an existing name.
+    const nextProject: Project = {
+      ...upsertRevision(activeProject, revisionToSave),
+      title: revisionToSave.title || activeProject.title,
+      activeRevisionId: revisionToSave.id,
+      updatedAt: now(),
+    };
     try {
       const committedVersion = await saveProjectSafely(nextProject, draftBaselineVersion);
       setProjects((ps) => ps.map((p) => (p.id === nextProject.id ? { ...nextProject, version: committedVersion } : p)));
@@ -600,8 +611,12 @@ export default function ProApp() {
     // alongside the new one instead of being marked superseded.
     const previouslyIssued = activeProject.revisions.find((r) => r.state === 'issued' && r.id !== issued.id);
     const projectWithIssued = upsertRevision(activeProject, issued);
+    // PRO-BUG-001: same fix as saveDraft() -- `ready.title` above already
+    // resolves the right name, but nothing previously copied it onto the
+    // top-level Project record the Projects list actually displays.
     const nextProject: Project = {
       ...(previouslyIssued ? upsertRevision(projectWithIssued, supersede(previouslyIssued, ids)) : projectWithIssued),
+      title: issued.title,
       activeRevisionId: issued.id,
       updatedAt: now(),
     };
@@ -1108,12 +1123,18 @@ export default function ProApp() {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2 border-b border-line pb-3 print:hidden">
-        {(['settings', 'catalog', 'projects', 'health', 'actuals', 'backup'] as Tab[]).map((t) => (
-          <button key={t} type="button" onClick={() => setTab(t)} className={`btn ${tab === t ? 'btn-primary' : 'btn-secondary'}`}>
-            {t === 'settings' ? 'Business settings' : t === 'catalog' ? 'Paint catalog' : t === 'projects' ? 'Projects' : t === 'health' ? 'Price Book Health' : t === 'actuals' ? 'Actual review' : 'Backup'}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3 print:hidden">
+        <div className="flex flex-wrap gap-2">
+          {(['settings', 'catalog', 'projects', 'health', 'actuals', 'backup'] as Tab[]).map((t) => (
+            <button key={t} type="button" onClick={() => setTab(t)} className={`btn ${tab === t ? 'btn-primary' : 'btn-secondary'}`}>
+              {t === 'settings' ? 'Business settings' : t === 'catalog' ? 'Paint catalog' : t === 'projects' ? 'Projects' : t === 'health' ? 'Price Book Health' : t === 'actuals' ? 'Actual review' : 'Backup'}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-4 text-xs">
+          <a href="/app/welcome" className="text-link">Getting started</a>
+          <a href="/help" className="text-link">Help &amp; guide</a>
+        </div>
       </div>
       {saveMessage && (
         <div className="mt-3 print:hidden">
@@ -1829,7 +1850,15 @@ export default function ProApp() {
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-2 text-sm capitalize">
                         <input type="checkbox" checked={actuals[cat].confirmed} onChange={(e) => setActuals((a) => ({ ...a, [cat]: { ...a[cat], confirmed: e.target.checked } }))} />
-                        {cat}
+                        {/* PRO-BUG-002: `capitalize` only affects the first
+                            letter of a single word -- "otherExpenses" has
+                            no space for it to find, so it rendered
+                            "OtherExpenses" with no space at all. Render an
+                            actual space for that one case; materials/
+                            labor/overhead are already single words and are
+                            deliberately left exactly as they were (several
+                            tests assert their lowercase accessible name). */}
+                        {cat === 'otherExpenses' ? 'other expenses' : cat}
                       </label>
                       {cat === 'overhead' ? (
                         <input

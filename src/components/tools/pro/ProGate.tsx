@@ -114,7 +114,7 @@ export default function ProGate() {
       </p>
       {state.note && <p className="mt-3 text-sm text-warn">{state.note}</p>}
       <div className="mt-6 flex flex-col items-center">
-        <LicenseActions returnTo="/app" onUnlocked={() => setState({ status: 'unlocked' })} />
+        <LicenseActions returnTo="/app/welcome" onUnlocked={() => setState({ status: 'unlocked' })} />
       </div>
     </div>
   );

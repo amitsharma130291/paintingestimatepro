@@ -63,7 +63,7 @@ describe('ACT-008: a missing (null) baseline proposedPrice never computes a revi
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
-    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Kitchen estimate/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
     expect(screen.queryByText('Actual cost')).toBeNull();
     expect(screen.queryByText(/In progress/)).toBeNull(); // no review computed at all, not even a "0/4" in-progress one
@@ -128,7 +128,7 @@ describe('ACT-016: the profit label is explicit that this is against the origina
     for (const [i] of ['materials', 'labor', 'otherExpenses'].entries()) {
       fireEvent.change(screen.getAllByPlaceholderText('0.00')[i], { target: { value: '100' } });
     }
-    for (const cat of ['materials', 'labor', 'otherExpenses', 'overhead']) fireEvent.click(screen.getByRole('checkbox', { name: cat }));
+    for (const cat of ['materials', 'labor', 'other expenses', 'overhead']) fireEvent.click(screen.getByRole('checkbox', { name: cat }));
     fireEvent.click(screen.getByRole('button', { name: 'Save actuals' }));
     expect(await screen.findByText('Profit vs. original quote')).toBeTruthy();
     expect(screen.queryByText(/cash received/i)).toBeNull();

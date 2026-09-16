@@ -1,0 +1,317 @@
+---
+import BaseLayout from "../layouts/LegalLayout.astro";
+
+const title = "Help & Guide | PaintingPricing Calculator";
+const description = "A complete walkthrough of every part of the Pro workspace, with screenshots, and how each one helps you price and run real jobs.";
+
+const SECTIONS = [
+  { id: "business-settings", label: "Business settings" },
+  { id: "paint-catalog", label: "Paint catalog" },
+  { id: "projects", label: "Projects" },
+  { id: "customer-document", label: "Customer document" },
+  { id: "price-book-health", label: "Price Book Health" },
+  { id: "actual-review", label: "Actual review" },
+  { id: "revisions", label: "Revisions" },
+  { id: "backup", label: "Backup & restore" },
+];
+---
+
+<BaseLayout
+  title={title}
+  description={description}
+  eyebrow="Help"
+  heading="Help & guide"
+  updated="September 17, 2026"
+>
+  <section>
+    <p>
+      This is a complete walkthrough of the Pro workspace — every tab, what
+      it does, and why it's there. New to Pro? The{" "}
+      <a href="/app/welcome">Welcome page</a> is a faster five-step version
+      of just the "how do I start" part. This page goes deeper, section by
+      section, with real screenshots.
+    </p>
+    <nav aria-label="Sections" class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      {
+        SECTIONS.map((s) => (
+          <a href={`#${s.id}`} class="text-link">
+            {s.label}
+          </a>
+        ))
+      }
+    </nav>
+  </section>
+
+  <section id="business-settings">
+    <h2>Business settings</h2>
+    <p>
+      This is where you set the numbers every estimate is built from: your
+      loaded hourly rate, overhead ratio, target margin, and how fast you
+      cover a wall, ceiling, trim run, or door (per coat). Sensible defaults
+      are pre-filled so you can start immediately — but the sooner you set
+      these to your real numbers, the less re-work later.
+    </p>
+    <p>
+      <strong>Why it helps you:</strong> every project starts from a
+      snapshot of these settings, so you only enter your rates once instead
+      of re-typing them into every estimate. Changing a setting here never
+      silently rewrites an estimate you've already saved — a project only
+      picks up new numbers when you explicitly run a rate refresh on it, so
+      an old quote can't drift out from under you.
+    </p>
+    <img
+      src="/guide/business-settings.png"
+      alt="The Business settings tab, showing loaded hourly rate, overhead, target margin, and per-surface throughput fields"
+      width="1200"
+      height="700"
+      loading="lazy"
+    />
+  </section>
+
+  <section id="paint-catalog">
+    <h2>Paint catalog</h2>
+    <p>
+      Your list of paint products — name, price per gallon, coverage, and
+      sheen. Every room, surface, and Price Book Health service picks its
+      paint from this list, so it's the one thing you need before you can
+      build an estimate or add a service.
+    </p>
+    <p>
+      <strong>Why it helps you:</strong> enter a product's real price once
+      and every estimate that uses it stays accurate — update a price here
+      when your supplier's prices change, rather than hunting down every
+      estimate that used it.
+    </p>
+    <img
+      src="/guide/paint-catalog.png"
+      alt="The Paint catalog tab with three paint products, each with name, price per gallon, coverage, and sheen"
+      width="1200"
+      height="700"
+      loading="lazy"
+    />
+  </section>
+
+  <section id="projects">
+    <h2>Projects</h2>
+    <p>
+      This is the actual estimate-building workspace — one entry per real
+      job. An empty workspace looks like this:
+    </p>
+    <img
+      src="/guide/projects-empty.png"
+      alt="The empty Projects tab, showing the '+ New project' button and a note that project data is stored only in this browser"
+      width="1200"
+      height="700"
+      loading="lazy"
+    />
+    <p>
+      Click <strong>"+ New project"</strong> and fill in your business info
+      and your customer's info — this is exactly what appears on the
+      customer-facing document later, so it's worth getting right up front.
+    </p>
+    <img
+      src="/guide/project-info.png"
+      alt="The Business & customer info card, filled in with a business name, contact, address, and the customer's name, contact, and job-site address"
+      width="1160"
+      height="290"
+      loading="lazy"
+    />
+    <p>
+      Then add each room — length, width, height, and how many doors/windows
+      to deduct (a quick estimate, or exact measured openings). Each room
+      automatically gets a wall surface, with an optional ceiling. Need a
+      standalone trim run or door outside any room? Add those separately,
+      right below the room list.
+    </p>
+    <img
+      src="/guide/project-rooms.png"
+      alt="A room editor showing a 16 by 13 by 9 foot Living Room with opening deduction enabled for 1 door and 2 windows, and its auto-created Wall surface"
+      width="1160"
+      height="610"
+      loading="lazy"
+    />
+    <p>
+      <strong>Why it helps you:</strong> the geometry math (gross wall area,
+      minus openings, times coats, divided by coverage, plus waste) is
+      exactly the kind of arithmetic that's easy to get wrong by hand on a
+      real job with several rooms — here it's automatic and consistent
+      every time.
+    </p>
+    <p>
+      As you add rooms and surfaces, the <strong>Estimate summary</strong>{" "}
+      fills in live: materials, labor, direct cost, overhead, and your
+      estimated job cost, followed by a suggested price at your target
+      margin (or your own custom price) with profit, margin, and a
+      pricing-status badge.
+    </p>
+    <img
+      src="/guide/estimate-summary.png"
+      alt="The Estimate summary card showing Materials, Labor, Direct cost, Overhead, Estimated job cost, and a Proposed price with Profit, Margin, and an 'Above target' status badge"
+      width="1160"
+      height="470"
+      loading="lazy"
+    />
+    <p>
+      <strong>Why it helps you:</strong> you see your real margin on this
+      specific job before you send the quote — not after the job is done
+      and it's too late to change the price. "Save draft" works at any
+      point, even on an incomplete estimate; "Issue estimate" is only
+      enabled once the calculation is complete, so you can't accidentally
+      send a customer an estimate built on missing information.
+    </p>
+    <p>Once you've saved a project, it shows up back in your Projects list:</p>
+    <img
+      src="/guide/projects-list.png"
+      alt="The Projects list showing one saved project, '123 Oak Street — Exterior Repaint', marked issued, revision 1"
+      width="1200"
+      height="700"
+      loading="lazy"
+    />
+  </section>
+
+  <section id="customer-document">
+    <h2>Customer document</h2>
+    <p>
+      Once you issue an estimate, a clean customer-facing document appears
+      below it — ready to print or save as a PDF. Here's exactly what your
+      customer sees:
+    </p>
+    <img
+      src="/guide/customer-document.png"
+      alt="The customer-facing document: business info, project title and address, customer name, estimate number and date, a line item, and a total price -- with no cost, overhead, or margin figures anywhere on it"
+      width="1160"
+      height="330"
+      loading="lazy"
+    />
+    <p>
+      <strong>Why it helps you:</strong> this view never shows your cost,
+      overhead, labor rate, or margin — only what the customer needs to see
+      (the job, the price, your business info). You never have to remember
+      to hide your numbers or build a separate quote template by hand.
+    </p>
+  </section>
+
+  <section id="price-book-health">
+    <h2>Price Book Health</h2>
+    <p>
+      A separate concept from project estimating: your own standing list of
+      named services (like "interior wall painting" or "standard door,
+      2 sides") each priced per unit — per square foot, per linear foot, or
+      per door — independent of any specific job.
+    </p>
+    <img
+      src="/guide/price-book-health.png"
+      alt="A Price Book Health service card for 'Interior wall painting' showing modeled cost per unit, current price, status 'Above target', margin, and required price for target margin"
+      width="1200"
+      height="700"
+      loading="lazy"
+    />
+    <p>
+      <strong>Why it helps you:</strong> this is where you sanity-check your
+      standing menu prices, not a one-off job quote. If you've been
+      charging the same per-square-foot rate for a while, Price Book Health
+      shows whether that rate still covers your real modeled cost and target
+      margin — catching a price that's quietly gone underwater as your
+      material or labor costs changed, before it costs you money on the
+      next ten jobs that use it.
+    </p>
+  </section>
+
+  <section id="actual-review">
+    <h2>Actual review</h2>
+    <p>
+      Once you've issued an estimate and finished the job, come back here to
+      record what it actually cost — materials, labor (entered directly or
+      as hours × rate), other expenses, and overhead (either the amount
+      already allocated in the estimate, or a real measured figure).
+    </p>
+    <img
+      src="/guide/actual-review.png"
+      alt="The Actual review tab with Materials, Labor, Other expenses, and Overhead all confirmed, showing Actual cost, Profit vs. original quote, Margin, and Total variance vs. estimate"
+      width="1200"
+      height="700"
+      loading="lazy"
+    />
+    <p>
+      <strong>Why it helps you:</strong> this closes the loop between what
+      you quoted and what the job really cost — profit vs. your original
+      quote, your real margin, and the total variance, all in one place.
+      Over time, this is how you learn whether your rates and throughput
+      assumptions actually hold up on real jobs, not just on paper.
+    </p>
+  </section>
+
+  <section id="revisions">
+    <h2>Revisions</h2>
+    <p>
+      Every estimate you issue becomes a frozen revision — its numbers are
+      locked in exactly as sent, even if you later change your business
+      settings or catalog prices. Need to change something after issuing?
+      Click "Edit," which creates a new draft revision without touching the
+      one you already sent. Issuing that new draft automatically supersedes
+      the old one, so there's always exactly one active revision per
+      project. If a project has more than one revision, a row of buttons
+      lets you look back at any earlier one — viewing an old revision never
+      changes which one is currently active.
+    </p>
+    <p>
+      <strong>Why it helps you:</strong> you can always answer "what did I
+      actually quote this customer, and when" — even after your rates have
+      changed since then — without worrying that reviewing an old quote
+      might accidentally reactivate it.
+    </p>
+  </section>
+
+  <section id="backup">
+    <h2>Backup &amp; restore</h2>
+    <p>
+      Everything in Pro — every project, revision, actual-cost review, your
+      catalog, your services, your settings — lives only in this browser.
+      The Backup tab is how you protect that.
+    </p>
+    <img
+      src="/guide/backup.png"
+      alt="The Backup tab with an 'Export backup (.json)' button and a 'Restore from backup' section with an import-mode dropdown and file picker"
+      width="1200"
+      height="700"
+      loading="lazy"
+    />
+    <p><strong>Export backup (.json)</strong> downloads everything in one file. Keep it somewhere safe — it's the only way to recover your data if you ever clear your browser's storage or switch devices.</p>
+    <p>Restoring from a backup file gives you three modes:</p>
+    <ul>
+      <li>
+        <strong>Merge with existing (default)</strong> — previews exactly
+        what would change (new projects, variants, services to add;
+        identical records to skip) and lets you choose, per conflict, to
+        keep your local version, use the imported one, or keep both.
+        Nothing is written until you confirm.
+      </li>
+      <li>
+        <strong>Import as copies</strong> — brings in every project from
+        the file as a fresh copy, so you can pull data from an old backup
+        without disturbing what's already here.
+      </li>
+      <li>
+        <strong>Replace everything</strong> — a full wipe-and-restore from
+        the file, for starting over from a known-good backup. It forces
+        you to download a backup of your current data first, so this is
+        never a one-click accident.
+      </li>
+    </ul>
+    <p>
+      <strong>Why it helps you:</strong> your data has nowhere else to live
+      — there's no server copy — so a regular export is the difference
+      between "I switched laptops" being a non-event and being a real
+      loss. The three import modes mean moving data between devices,
+      recovering from a mistake, or starting fresh are all deliberate,
+      previewed actions, never a silent overwrite.
+    </p>
+  </section>
+
+  <section>
+    <h2>Still have a question?</h2>
+    <p>
+      <a href="/contact">Get in touch</a> — we're happy to help.
+    </p>
+  </section>
+</BaseLayout>

@@ -112,10 +112,13 @@ describe('ProApp harness: new project -> add room -> save -> reload persists (re
     });
 
     const savedProjects = await readProjectsFromStorage();
-    // saveDraft() updates the REVISION's own title, not the project's
-    // top-level title (that only changes on issue) — verified against the
-    // real saveDraft() implementation, not assumed.
+    // PRO-BUG-001 fix: saveDraft() now copies the revision's title onto
+    // the project's own top-level title too (previously only the revision
+    // got it, leaving the project-list row permanently stuck on "New
+    // project" no matter what was typed) — verified against the real
+    // saveDraft() implementation, not assumed.
     expect(savedProjects[0].revisions[0].title).toBe('Kitchen repaint');
+    expect(savedProjects[0].title).toBe('Kitchen repaint');
     expect(savedProjects[0].revisions[0].rooms[0].name).toBe('Kitchen');
 
     // Full remount — a fresh component instance re-reading from storage,
@@ -123,7 +126,7 @@ describe('ProApp harness: new project -> add room -> save -> reload persists (re
     unmount();
     render(<ProApp />);
     await waitForLoaded();
-    fireEvent.click(screen.getByRole('button', { name: /^New project/ })); // the project-list entry, not the "+ New project" creation button
+    fireEvent.click(screen.getByRole('button', { name: /^Kitchen repaint/ })); // the project-list entry, not the "+ New project" creation button
     expect(await screen.findByDisplayValue('Kitchen repaint')).toBeTruthy();
     expect(await screen.findByDisplayValue('Kitchen')).toBeTruthy();
   });

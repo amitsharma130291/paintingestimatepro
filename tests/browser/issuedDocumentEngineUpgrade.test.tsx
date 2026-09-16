@@ -58,10 +58,9 @@ describe('DOC-011: an issued document is frozen and never recomputed, even after
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
-    // The project-list row shows Project.title (fixed at creation, e.g.
-    // "New project"), which is distinct from the per-revision title the
-    // user typed above -- match the list row, not the typed revision title.
-    fireEvent.click(await screen.findByRole('button', { name: /^New project/ }));
+    // PRO-BUG-001 fix: issueEstimate() now copies the issued revision's
+    // resolved title onto the list-displayed Project.title.
+    fireEvent.click(await screen.findByRole('button', { name: /^Old-engine kitchen/ }));
 
     // Never recalculated, never blocked -- the frozen customer document
     // shows the exact original values, and issued data is never subject to
