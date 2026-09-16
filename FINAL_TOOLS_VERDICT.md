@@ -111,13 +111,41 @@ final gate logs).
 | Backup export/restore pass through the actual UI | Yes — real download + real file input |
 | Import-as-copy passes through the actual UI | Yes — confirmed non-colliding remapped IDs |
 | Browser evidence reproducible and matches its metadata | Yes — one metadata table, two trace files, one screenshot set each |
-| Three consecutive full test runs pass | See final gate logs |
-| Clean extracted-source verification passes | See final gate logs |
-| Typecheck / oracle / build / audit all clean | See final gate logs |
-| Working tree clean at the reported commit | See final gate logs |
+| Three consecutive full test runs pass | Yes — `logs/07`, `08`, `09`, all clean, no retries |
+| Clean extracted-source verification passes | Yes — clean install, typecheck, oracle, audit, and build all clean on the first attempt; full suite clean after resolving unrelated machine contention (see extracted-package verification note above; `logs/10`-`15`) |
+| Typecheck / oracle / build / audit all clean | Yes — 0 errors / 20 fixtures, 106 fields / 0 vulnerabilities / clean build, both in this repository and in the extracted copy |
+| Working tree clean at the reported commit | Yes — `git status --short` empty at `b10dd54` |
 | Every report claim has an attached artifact | Yes |
 
-**Verdict: GO**, contingent on the final gate logs (delivered alongside
-this document) independently confirming the three-consecutive-run,
-extracted-package, typecheck/oracle/build/audit, and clean-working-tree
-criteria at the final reported commit hash.
+## Extracted-package verification note
+
+The packaged source (`painting-pricing-calculator-v7.2-source.zip`) was
+extracted into a brand-new directory, installed clean (`npm ci`, 0
+vulnerabilities), and every gate rerun from that extracted copy alone --
+no reuse of this repository's `node_modules`, build output, caches, or
+untracked files. Typecheck, the numerical oracle, `npm audit`, and the
+production build (including the pro-harness 404 recheck) were clean on
+the first attempt.
+
+The extracted-copy full test suite was **not** clean on the first
+attempt: 4 files failed with `waitFor`-timeout errors while this shared
+machine was running substantial unrelated concurrent work (several
+sibling-project dev servers plus a ~10-worker Stryker mutation-testing
+run on an unrelated project). Every one of those files passed
+immediately when rerun in isolation, and the failure count tracked the
+unrelated load exactly as it wound down across repeated reruns (4 -> 15
+-> 10 -> 2 -> 0 failures) -- see `logs/14a` through `logs/14g` for the
+full investigation. The suite passed fully clean (99/99 files, 932
+passed, 3 skipped, 0 failed) once that unrelated load subsided. No test
+or product code was changed to reach this result; this is the same
+CPU-contention-under-full-parallelism class already documented in
+`vitest.config.ts`, now directly demonstrated rather than inferred. The
+original (un-extracted) repository's three consecutive full-suite runs
+were clean on every run with no retries needed.
+
+## Verdict
+
+**GO.** Every requirement in this document's scope has been verified
+against the final commit, including the extracted-package rerun above.
+No requirement is deferred, caveated, or contingent on work not yet
+done.
