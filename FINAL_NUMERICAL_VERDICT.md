@@ -134,8 +134,17 @@ defect.
 
 ### Archive hashes
 
+Built from commit `504a92c` (this document's own commit). As with any
+self-describing package, an archive's hash necessarily reflects the state
+of the repository at the moment it was built — a subsequent commit (such
+as this exact hash-table update, if made) is not itself hashed into an
+already-built archive. The internal `SHA256_MANIFEST.txt` inside
+`all-deliverables.zip` is deliberately non-self-referential for the same
+reason: it hashes `source-final.zip` and `test-reports.zip`, never itself
+or the combined archive it is placed into.
+
 | Archive | SHA-256 |
 |---|---|
-| `source-final.zip` | `0D2B31E42D8759E1BBCD6BD2D2A35EFF737968B443A268290AAEF5313D9304F7` |
-| `test-reports.zip` | `B77C86F107BA546B35F6CCE122F6FEDDBFA4FA237A389678538A47E7A680B77A` |
-| `all-deliverables.zip` (combined, external hash) | `7E1973B3527ABCC0A4CCF72768EA830D47FF62B0F1298A07BAE784C6293902D3` |
+| `source-final.zip` | `76B45AD8A8DBD816290574BCAD46BDDAD928FA4ED67BF39B366557053C404700` |
+| `test-reports.zip` | `3BB05241C7D0A46235DEE224C90654DBF36593D5F6B1C2A30EC85C25D9DD2808` |
+| `all-deliverables.zip` (combined, external hash) | `535FEEDBB58207BCA87A68FBAF2AF21C9F5A89BAF5A08063B08FC0BFEB31379D` |
