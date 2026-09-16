@@ -21,7 +21,7 @@ import {
 import { assembleProjectEstimate } from '../../src/domain/estimateAssembly';
 import { buildCustomerDocument } from '../../src/domain/customerDocument';
 import { previewRateRefresh, applyRateRefresh, undoRateRefresh } from '../../src/domain/rateRefresh';
-import { exportBackup, planImportAsCopies, validateBackupEnvelope, planFullRestoreMerge } from '../../src/domain/backup';
+import { exportBackup, planImportAsCopies, validateBackupEnvelope, planFullRestoreMerge, applyFullRestoreResolutions } from '../../src/domain/backup';
 import { evaluateActualReview } from '../../src/engine/actuals';
 import { PEP } from '../../src/engine/decimal';
 import type { BusinessSettings, PaintVariant, EstimateRevision, Room, Surface, Project } from '../../src/domain/entities';
@@ -306,3 +306,126 @@ describe('State transition: exported -> imported as copy', () => {
     expect(project.revisions[0].id).toBe(draft.id);
   });
 });
+
+describe('State transition: draft -> rate preview -> cancel (no writes)', () => {
+  it('previewing a rate refresh never mutates the draft when the user cancels instead of applying it', () => {
+    const ids = sequentialIdSource();
+    const snapshot = createSnapshot(makeSettings(), [makeVariant('40')], [], ids, 'rev-1');
+    let draft = createDraftRevision('project-1', snapshot, ids);
+    draft = withWallSurface(draft, '300');
+    const originalSnapshot = JSON.parse(JSON.stringify(draft));
+    const originalResult = assembleProjectEstimate(draft, { priceMode: 'custom', customPriceRaw: '5000' });
+
+    const liveVariant = { ...snapshot.paintVariants[0], pricePerGal: '55', updatedAt: ids.now() };
+    const liveSnapshot = createSnapshot(snapshot.businessSettings, [liveVariant], [], ids, 'rev-2');
+    const diff = previewRateRefresh(draft, liveSnapshot);
+    expect(diff.variantChanges.length).toBeGreaterThan(0); // the preview genuinely found a real change
+
+    // "cancel": the caller simply discards the diff without ever calling
+    // applyRateRefresh. The draft must be completely untouched.
+    expect(JSON.stringify(draft)).toBe(JSON.stringify(originalSnapshot));
+    const afterCancel = assembleProjectEstimate(draft, { priceMode: 'custom', customPriceRaw: '5000' });
+    expect(afterCancel.jobCost!.toFixed(2)).toBe(originalResult.jobCost!.toFixed(2));
+  });
+});
+
+describe('State transition: draft -> rate refresh -> undo -> reapply', () => {
+  it('reapplying the same live rates after an undo reaches the identical refreshed numeric state, not a drifted one', () => {
+    const ids = sequentialIdSource();
+    const snapshot = createSnapshot(makeSettings(), [makeVariant('40')], [], ids, 'rev-1');
+    let draft = createDraftRevision('project-1', snapshot, ids);
+    draft = withWallSurface(draft, '300');
+    const preRefreshCost = assembleProjectEstimate(draft, { priceMode: 'custom', customPriceRaw: '5000' }).jobCost!.toFixed(2);
+
+    const liveVariant = { ...snapshot.paintVariants[0], pricePerGal: '55', updatedAt: ids.now() };
+    const liveSnapshot = createSnapshot(snapshot.businessSettings, [liveVariant], [], ids, 'rev-2');
+
+    const refreshed = applyRateRefresh(draft, liveSnapshot, [], ids);
+    const refreshedCost = assembleProjectEstimate(refreshed, { priceMode: 'custom', customPriceRaw: '5000' }).jobCost!.toFixed(2);
+    expect(refreshedCost).not.toBe(preRefreshCost);
+
+    const undone = undoRateRefresh(refreshed)!;
+    expect(assembleProjectEstimate(undone, { priceMode: 'custom', customPriceRaw: '5000' }).jobCost!.toFixed(2)).toBe(preRefreshCost);
+
+    // reapply: refreshing again with the SAME live rates lands on the exact
+    // same refreshed numeric state as the first time -- no drift from
+    // going through an undo cycle first.
+    const reapplied = applyRateRefresh(undone, liveSnapshot, [], ids);
+    const reappliedCost = assembleProjectEstimate(reapplied, { priceMode: 'custom', customPriceRaw: '5000' }).jobCost!.toFixed(2);
+    expect(reappliedCost).toBe(refreshedCost);
+  });
+});
+
+describe('State transition: export -> merge conflict -> resolve -> restore', () => {
+  it('a same-id project conflict resolved as "replace imported" commits the imported content, and originally-untouched records are preserved unchanged', () => {
+    const ids = sequentialIdSource();
+    const snapshot = createSnapshot(makeSettings(), [makeVariant('40')], [], ids, 'rev-1');
+    let localDraft = createDraftRevision('project-1', snapshot, ids);
+    localDraft = withWallSurface(localDraft, '300');
+    const localProject: Project = {
+      id: 'project-1', title: 'Local title', revisions: [localDraft], activeRevisionId: localDraft.id,
+      actualReviews: [], createdAt: ids.now(), updatedAt: ids.now(), version: 3,
+    };
+
+    // An incoming backup with the SAME project id but different content --
+    // planFullRestoreMerge must flag this as a conflict needing resolution,
+    // not silently prefer either side.
+    let incomingDraft = createDraftRevision('project-1', snapshot, ids);
+    incomingDraft = { ...incomingDraft, id: localDraft.id }; // same revision id too, to isolate the project-level content diff
+    incomingDraft = withWallSurface(incomingDraft, '300');
+    const incomingProject: Project = { ...localProject, title: 'Imported title', version: 3 };
+    const envelope = exportBackup('install-1', snapshot.businessSettings, snapshot.paintVariants, [], [], [incomingProject], ids);
+
+    const existing = { businessSettings: snapshot.businessSettings, paintVariants: snapshot.paintVariants, otherMaterials: [], serviceDefinitions: [] };
+    const plan = planFullRestoreMerge(
+      { ...existing, projects: [localProject] },
+      { businessSettings: envelope.businessSettings, paintVariants: envelope.paintVariants, otherMaterials: envelope.otherMaterials, serviceDefinitions: envelope.serviceDefinitions, projects: envelope.projects }
+    );
+    const projectConflict = plan.conflicts.find((c) => c.kind === 'project' && c.id === 'project-1');
+    expect(projectConflict).toBeDefined();
+
+    // "resolve": the user explicitly chooses to take the imported version.
+    const resolutions = { [`project:project-1`]: 'replaceImported' as const };
+    const resolved = applyFullRestoreResolutions(existing, envelope, plan, resolutions, { 'project-1': localProject.version }, ids);
+
+    // "restore": the committed write reflects the resolved (imported) content.
+    const write = resolved.projectWrites.find((w) => w.project.id === 'project-1');
+    expect(write).toBeDefined();
+    expect(write!.project.title).toBe('Imported title');
+    expect(write!.expectedVersion).toBe(localProject.version); // version-checked against the snapshot taken at preview time
+  });
+});
+
+describe('State transition: supported -> out-of-range -> corrected', () => {
+  it('an aggregate that exceeds the supported ceiling is flagged, then a corrected input brings it back to a normal supported result', () => {
+    const ids = sequentialIdSource();
+    // Price stays under the per-field MAX_RATE ceiling (1,000,000); the
+    // AREA is large enough that materials cost alone exceeds AGG-003's
+    // separate aggregate monetary ceiling ($1,000,000,000) --
+    // 400,000ft2 / 350 coverage = 1142.86 raw gal, purchased 1143 gal x
+    // $999,999/gal = ~$1.14B.
+    const snapshot = createSnapshot(makeSettings(), [makeVariant('999999')], [], ids, 'rev-1');
+    let revision = createDraftRevision('project-1', snapshot, ids);
+    revision = withWallSurface(revision, '400000');
+
+    const outOfRange = assembleProjectEstimate(revision, { priceMode: 'custom', customPriceRaw: '' });
+    expect(outOfRange.outOfSupportedRange).toBe(true);
+    expect(outOfRange.calculationState).not.toBe('complete');
+
+    // corrected: a realistic price per gallon brings the same project back
+    // into the normal supported range.
+    const correctedSnapshot = createSnapshot(makeSettings(), [makeVariant('40')], [], ids, 'rev-2');
+    const corrected = { ...revision, activeRateSnapshot: correctedSnapshot };
+    const correctedResult = assembleProjectEstimate(corrected, { priceMode: 'custom', customPriceRaw: '5000' });
+    expect(correctedResult.outOfSupportedRange).toBe(false);
+    expect(correctedResult.calculationState).toBe('complete');
+  });
+});
+
+// "failed persistence -> recoverable current work" is already covered end-
+// to-end at the UI layer: tests/browser/uxRaceAndFailureGuidance.test.tsx's
+// UX-010 block mocks a real storage-save rejection against the actual
+// ProApp component and confirms the user's current work stays visible and
+// exportable rather than silently lost -- a dedicated domain-level
+// duplicate here would exercise the identical saveProjectSafely() failure
+// path with no additional numeric assertion to make.
