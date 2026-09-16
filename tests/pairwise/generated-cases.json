@@ -1,0 +1,906 @@
+{
+  "generatedAt": "2026-09-16",
+  "subModels": {
+    "A_proEstimate": {
+      "dims": {
+        "surfaceType": [
+          "wall",
+          "ceiling",
+          "trim",
+          "door"
+        ],
+        "measurementMode": [
+          "manual",
+          "roomDerived"
+        ],
+        "openingMode": [
+          "quick",
+          "detailed"
+        ],
+        "coats": [
+          1,
+          2,
+          5
+        ],
+        "wasteBand": [
+          "zero",
+          "normal",
+          "highWarn",
+          "max"
+        ],
+        "laborRateSource": [
+          "settingsDefault",
+          "surfaceOverride"
+        ],
+        "throughputSource": [
+          "settingsDefault",
+          "surfaceOverride"
+        ],
+        "suppliesMode": [
+          "none",
+          "flat",
+          "paintPercent"
+        ],
+        "overheadBand": [
+          "zero",
+          "normal",
+          "highWarn",
+          "max"
+        ],
+        "priceMode": [
+          "suggested",
+          "custom"
+        ],
+        "targetMarginBand": [
+          "zero",
+          "normal",
+          "nearMax"
+        ],
+        "priceState": [
+          "unpriced",
+          "zeroPrice",
+          "belowCost",
+          "belowTarget",
+          "atTarget",
+          "aboveTarget"
+        ]
+      },
+      "totalValidCombinations": 96768,
+      "totalValidPairs": 609,
+      "generatedCases": [
+        {
+          "surfaceType": "wall",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "zero",
+          "priceMode": "suggested",
+          "targetMarginBand": "zero",
+          "priceState": "atTarget"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "roomDerived",
+          "openingMode": "detailed",
+          "coats": 2,
+          "wasteBand": "normal",
+          "laborRateSource": "surfaceOverride",
+          "throughputSource": "surfaceOverride",
+          "suppliesMode": "flat",
+          "overheadBand": "normal",
+          "priceMode": "custom",
+          "targetMarginBand": "normal",
+          "priceState": "unpriced"
+        },
+        {
+          "surfaceType": "ceiling",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 5,
+          "wasteBand": "highWarn",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "surfaceOverride",
+          "suppliesMode": "paintPercent",
+          "overheadBand": "highWarn",
+          "priceMode": "custom",
+          "targetMarginBand": "nearMax",
+          "priceState": "zeroPrice"
+        },
+        {
+          "surfaceType": "ceiling",
+          "measurementMode": "roomDerived",
+          "openingMode": "detailed",
+          "coats": 1,
+          "wasteBand": "max",
+          "laborRateSource": "surfaceOverride",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "max",
+          "priceMode": "custom",
+          "targetMarginBand": "nearMax",
+          "priceState": "belowCost"
+        },
+        {
+          "surfaceType": "trim",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 2,
+          "wasteBand": "max",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "surfaceOverride",
+          "suppliesMode": "flat",
+          "overheadBand": "max",
+          "priceMode": "suggested",
+          "targetMarginBand": "normal",
+          "priceState": "atTarget"
+        },
+        {
+          "surfaceType": "door",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 5,
+          "wasteBand": "normal",
+          "laborRateSource": "surfaceOverride",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "paintPercent",
+          "overheadBand": "normal",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "belowTarget"
+        },
+        {
+          "surfaceType": "ceiling",
+          "measurementMode": "roomDerived",
+          "openingMode": "detailed",
+          "coats": 2,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "surfaceOverride",
+          "suppliesMode": "paintPercent",
+          "overheadBand": "zero",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "aboveTarget"
+        },
+        {
+          "surfaceType": "ceiling",
+          "measurementMode": "roomDerived",
+          "openingMode": "detailed",
+          "coats": 5,
+          "wasteBand": "highWarn",
+          "laborRateSource": "surfaceOverride",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "flat",
+          "overheadBand": "highWarn",
+          "priceMode": "suggested",
+          "targetMarginBand": "normal",
+          "priceState": "atTarget"
+        },
+        {
+          "surfaceType": "trim",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "zero",
+          "laborRateSource": "surfaceOverride",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "flat",
+          "overheadBand": "normal",
+          "priceMode": "custom",
+          "targetMarginBand": "nearMax",
+          "priceState": "aboveTarget"
+        },
+        {
+          "surfaceType": "door",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "normal",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "surfaceOverride",
+          "suppliesMode": "none",
+          "overheadBand": "highWarn",
+          "priceMode": "custom",
+          "targetMarginBand": "normal",
+          "priceState": "belowCost"
+        },
+        {
+          "surfaceType": "trim",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 2,
+          "wasteBand": "highWarn",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "highWarn",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "unpriced"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "roomDerived",
+          "openingMode": "quick",
+          "coats": 5,
+          "wasteBand": "max",
+          "laborRateSource": "surfaceOverride",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "flat",
+          "overheadBand": "zero",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "zeroPrice"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "roomDerived",
+          "openingMode": "detailed",
+          "coats": 1,
+          "wasteBand": "highWarn",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "surfaceOverride",
+          "suppliesMode": "paintPercent",
+          "overheadBand": "max",
+          "priceMode": "custom",
+          "targetMarginBand": "normal",
+          "priceState": "belowTarget"
+        },
+        {
+          "surfaceType": "door",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 2,
+          "wasteBand": "normal",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "paintPercent",
+          "overheadBand": "zero",
+          "priceMode": "suggested",
+          "targetMarginBand": "nearMax",
+          "priceState": "atTarget"
+        },
+        {
+          "surfaceType": "door",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 5,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "max",
+          "priceMode": "custom",
+          "targetMarginBand": "normal",
+          "priceState": "zeroPrice"
+        },
+        {
+          "surfaceType": "trim",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 5,
+          "wasteBand": "highWarn",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "paintPercent",
+          "overheadBand": "zero",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "belowCost"
+        },
+        {
+          "surfaceType": "ceiling",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "max",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "paintPercent",
+          "overheadBand": "normal",
+          "priceMode": "custom",
+          "targetMarginBand": "nearMax",
+          "priceState": "unpriced"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 2,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "highWarn",
+          "priceMode": "custom",
+          "targetMarginBand": "nearMax",
+          "priceState": "belowTarget"
+        },
+        {
+          "surfaceType": "door",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 5,
+          "wasteBand": "highWarn",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "normal",
+          "priceMode": "custom",
+          "targetMarginBand": "normal",
+          "priceState": "aboveTarget"
+        },
+        {
+          "surfaceType": "ceiling",
+          "measurementMode": "roomDerived",
+          "openingMode": "detailed",
+          "coats": 1,
+          "wasteBand": "normal",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "max",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "zeroPrice"
+        },
+        {
+          "surfaceType": "door",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "max",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "flat",
+          "overheadBand": "zero",
+          "priceMode": "custom",
+          "targetMarginBand": "normal",
+          "priceState": "belowTarget"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 2,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "flat",
+          "overheadBand": "normal",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "belowCost"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "max",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "highWarn",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "aboveTarget"
+        },
+        {
+          "surfaceType": "trim",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 2,
+          "wasteBand": "normal",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "normal",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "zeroPrice"
+        },
+        {
+          "surfaceType": "door",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 5,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "zero",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "unpriced"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "normal",
+          "priceMode": "suggested",
+          "targetMarginBand": "zero",
+          "priceState": "atTarget"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "normal",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "max",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "aboveTarget"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "zero",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "atTarget"
+        },
+        {
+          "surfaceType": "wall",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "max",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "unpriced"
+        },
+        {
+          "surfaceType": "ceiling",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "zero",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "belowTarget"
+        },
+        {
+          "surfaceType": "trim",
+          "measurementMode": "manual",
+          "openingMode": "quick",
+          "coats": 1,
+          "wasteBand": "zero",
+          "laborRateSource": "settingsDefault",
+          "throughputSource": "settingsDefault",
+          "suppliesMode": "none",
+          "overheadBand": "zero",
+          "priceMode": "custom",
+          "targetMarginBand": "zero",
+          "priceState": "belowTarget"
+        }
+      ]
+    },
+    "B_freeJobCost": {
+      "dims": {
+        "materialsMode": [
+          "lumpSum",
+          "itemized"
+        ],
+        "laborMode": [
+          "direct",
+          "hoursRate"
+        ],
+        "overheadMode": [
+          "percent",
+          "flat"
+        ],
+        "overheadBand": [
+          "zero",
+          "normal",
+          "highWarn",
+          "max"
+        ],
+        "pricingMode": [
+          "solveForPrice",
+          "enterPrice"
+        ],
+        "targetMarginBand": [
+          "zero",
+          "normal",
+          "nearMax"
+        ]
+      },
+      "totalValidCombinations": 192,
+      "totalValidPairs": 92,
+      "generatedCases": [
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "zero",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "zero"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "hoursRate",
+          "overheadMode": "flat",
+          "overheadBand": "normal",
+          "pricingMode": "enterPrice",
+          "targetMarginBand": "normal"
+        },
+        {
+          "materialsMode": "itemized",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "highWarn",
+          "pricingMode": "enterPrice",
+          "targetMarginBand": "nearMax"
+        },
+        {
+          "materialsMode": "itemized",
+          "laborMode": "hoursRate",
+          "overheadMode": "flat",
+          "overheadBand": "max",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "zero"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "hoursRate",
+          "overheadMode": "flat",
+          "overheadBand": "highWarn",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "nearMax"
+        },
+        {
+          "materialsMode": "itemized",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "normal",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "normal"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "max",
+          "pricingMode": "enterPrice",
+          "targetMarginBand": "zero"
+        },
+        {
+          "materialsMode": "itemized",
+          "laborMode": "direct",
+          "overheadMode": "flat",
+          "overheadBand": "zero",
+          "pricingMode": "enterPrice",
+          "targetMarginBand": "normal"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "hoursRate",
+          "overheadMode": "percent",
+          "overheadBand": "zero",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "nearMax"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "normal",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "zero"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "normal",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "nearMax"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "highWarn",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "zero"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "highWarn",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "normal"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "max",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "normal"
+        },
+        {
+          "materialsMode": "lumpSum",
+          "laborMode": "direct",
+          "overheadMode": "percent",
+          "overheadBand": "max",
+          "pricingMode": "solveForPrice",
+          "targetMarginBand": "nearMax"
+        }
+      ]
+    },
+    "C_freeInterior": {
+      "dims": {
+        "includeWalls": [
+          true,
+          false
+        ],
+        "includeCeiling": [
+          true,
+          false
+        ],
+        "deductOpenings": [
+          true,
+          false
+        ],
+        "coats": [
+          1,
+          2,
+          5
+        ],
+        "wasteBand": [
+          "zero",
+          "normal",
+          "highWarn",
+          "max"
+        ]
+      },
+      "totalValidCombinations": 72,
+      "totalValidPairs": 65,
+      "generatedCases": [
+        {
+          "includeWalls": true,
+          "includeCeiling": true,
+          "deductOpenings": true,
+          "coats": 1,
+          "wasteBand": "zero"
+        },
+        {
+          "includeWalls": true,
+          "includeCeiling": false,
+          "deductOpenings": false,
+          "coats": 2,
+          "wasteBand": "normal"
+        },
+        {
+          "includeWalls": false,
+          "includeCeiling": true,
+          "deductOpenings": false,
+          "coats": 5,
+          "wasteBand": "highWarn"
+        },
+        {
+          "includeWalls": true,
+          "includeCeiling": false,
+          "deductOpenings": true,
+          "coats": 5,
+          "wasteBand": "max"
+        },
+        {
+          "includeWalls": false,
+          "includeCeiling": true,
+          "deductOpenings": true,
+          "coats": 2,
+          "wasteBand": "normal"
+        },
+        {
+          "includeWalls": false,
+          "includeCeiling": true,
+          "deductOpenings": false,
+          "coats": 1,
+          "wasteBand": "max"
+        },
+        {
+          "includeWalls": true,
+          "includeCeiling": false,
+          "deductOpenings": true,
+          "coats": 1,
+          "wasteBand": "highWarn"
+        },
+        {
+          "includeWalls": true,
+          "includeCeiling": false,
+          "deductOpenings": false,
+          "coats": 2,
+          "wasteBand": "zero"
+        },
+        {
+          "includeWalls": false,
+          "includeCeiling": true,
+          "deductOpenings": true,
+          "coats": 5,
+          "wasteBand": "zero"
+        },
+        {
+          "includeWalls": true,
+          "includeCeiling": true,
+          "deductOpenings": true,
+          "coats": 1,
+          "wasteBand": "normal"
+        },
+        {
+          "includeWalls": true,
+          "includeCeiling": true,
+          "deductOpenings": true,
+          "coats": 2,
+          "wasteBand": "highWarn"
+        },
+        {
+          "includeWalls": true,
+          "includeCeiling": true,
+          "deductOpenings": true,
+          "coats": 2,
+          "wasteBand": "max"
+        },
+        {
+          "includeWalls": true,
+          "includeCeiling": true,
+          "deductOpenings": true,
+          "coats": 5,
+          "wasteBand": "normal"
+        }
+      ]
+    },
+    "D_lifecycle": {
+      "dims": {
+        "revisionState": [
+          "draft",
+          "issued",
+          "superseded"
+        ],
+        "actualReviewState": [
+          "none",
+          "inProgress",
+          "final",
+          "outOfSupportedRange"
+        ],
+        "backupConflictMode": [
+          "keepLocal",
+          "replaceImported",
+          "keepBoth"
+        ]
+      },
+      "totalValidCombinations": 21,
+      "totalValidPairs": 28,
+      "generatedCases": [
+        {
+          "revisionState": "draft",
+          "actualReviewState": "none",
+          "backupConflictMode": "keepLocal"
+        },
+        {
+          "revisionState": "issued",
+          "actualReviewState": "inProgress",
+          "backupConflictMode": "keepLocal"
+        },
+        {
+          "revisionState": "issued",
+          "actualReviewState": "final",
+          "backupConflictMode": "replaceImported"
+        },
+        {
+          "revisionState": "issued",
+          "actualReviewState": "outOfSupportedRange",
+          "backupConflictMode": "keepBoth"
+        },
+        {
+          "revisionState": "superseded",
+          "actualReviewState": "inProgress",
+          "backupConflictMode": "replaceImported"
+        },
+        {
+          "revisionState": "superseded",
+          "actualReviewState": "final",
+          "backupConflictMode": "keepLocal"
+        },
+        {
+          "revisionState": "draft",
+          "actualReviewState": "none",
+          "backupConflictMode": "replaceImported"
+        },
+        {
+          "revisionState": "draft",
+          "actualReviewState": "none",
+          "backupConflictMode": "keepBoth"
+        },
+        {
+          "revisionState": "superseded",
+          "actualReviewState": "inProgress",
+          "backupConflictMode": "keepBoth"
+        },
+        {
+          "revisionState": "superseded",
+          "actualReviewState": "outOfSupportedRange",
+          "backupConflictMode": "keepLocal"
+        },
+        {
+          "revisionState": "issued",
+          "actualReviewState": "final",
+          "backupConflictMode": "keepBoth"
+        },
+        {
+          "revisionState": "issued",
+          "actualReviewState": "outOfSupportedRange",
+          "backupConflictMode": "replaceImported"
+        }
+      ]
+    }
+  },
+  "excludedPairs": [
+    {
+      "dims": "surfaceType x measurementMode",
+      "pair": "trim/door x roomDerived",
+      "reason": "trim/door surfaces never branch on measurementMode -- resolveSurface() (src/domain/estimateAssembly.ts) always reads their own direct fields (trimLengthFt/developedWidthFt, or doorCount/widthFt/heightFt/paintedSides) regardless of this field."
+    },
+    {
+      "dims": "surfaceType x openingMode",
+      "pair": "trim/door x detailed",
+      "reason": "opening-mode deduction is a Room property meaningful only for a roomDerived wall/ceiling; trim/door surfaces have no opening deduction at all."
+    },
+    {
+      "dims": "measurementMode x openingMode",
+      "pair": "manual x detailed",
+      "reason": "a manual-area surface has no room to deduct openings from -- openingMode only matters once measurementMode=roomDerived."
+    },
+    {
+      "dims": "priceMode x priceState",
+      "pair": "suggested x {zeroPrice, belowCost, belowTarget, aboveTarget}",
+      "reason": "in suggested-price mode the proposed price IS the computed suggestion by construction, always landing at (or immeasurably close to) the target -- the other price states are only reachable in custom-price mode where the user enters an independent figure."
+    },
+    {
+      "dims": "includeWalls x includeCeiling",
+      "pair": "false x false",
+      "reason": "nothing enabled to paint is the same \"incomplete\" state regardless of which other dimensions vary -- not a distinct behavior worth a dedicated pairwise slot."
+    },
+    {
+      "dims": "revisionState x actualReviewState",
+      "pair": "draft x {inProgress, final, outOfSupportedRange}",
+      "reason": "actual-cost review requires a frozen baseline from an issued revision -- a draft has none to review against."
+    },
+    {
+      "dims": "revisionState x actualReviewState",
+      "pair": "{issued, superseded} x none",
+      "reason": "once a revision is issued, its actual-cost review always exists in some state (even \"not started\" is represented as in_progress with 0 confirmed categories, not the special \"none\" state that only applies pre-issue)."
+    }
+  ]
+}
