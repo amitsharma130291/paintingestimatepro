@@ -13,6 +13,10 @@ import type { PriceResult, PriceStatus } from './types';
 export function requiredPriceRaw(cost: Dec, targetMarginRatio: Dec): Dec | 'out_of_supported_range' {
   // targetMarginRatio must be 0 <= m < 1 (validated upstream); guard here too.
   if (targetMarginRatio.greaterThanOrEqualTo(1) || targetMarginRatio.lessThan(0)) {
+    // Stryker disable next-line StringLiteral: message prose only — this is
+    // an unreachable-in-production defensive guard (targetMarginRatio is
+    // validated upstream by the domain layer before ever reaching this
+    // function); no caller inspects the message text, only that it throws.
     throw new Error('targetMarginRatio out of range; validate before calling requiredPriceRaw');
   }
   const raw = cost.dividedBy(new PEP(1).minus(targetMarginRatio));

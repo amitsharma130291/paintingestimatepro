@@ -136,3 +136,111 @@ fixes together are genuinely sufficient — not just for the originally-found
 fixtures, but for the entire 205,000-fixture set spanning valid projects,
 incomplete/invalid projects, boundary-adjacent purchases, loss/zero-price/
 unpriced states, Price Book Health, and actual-cost review.
+
+## Test-infrastructure correction (not a production defect) — Stryker mutation testing was silently no-op'ing under Vitest 5
+
+**Found by:** Part 19 mutation-testing baseline (`stryker.config.mjs`,
+`@stryker-mutator/core@10.0.0` + `@stryker-mutator/vitest-runner@10.0.0`,
+scoped to `src/engine/pricing.ts` + `src/engine/decimal.ts`, 49 mutants). The
+first complete run reported a **2.04% mutation score** (1 killed, 44
+survived, 4 no-coverage) — implausible given `pricing.ts`/`decimal.ts` are
+the two modules already subject to NUM-DEC-001/002 and the 205,000-fixture
+differential suite above, which assert exact expected values against every
+function in both files.
+
+**Root cause (two independent, stacked problems, both confirmed empirically
+before any fix was trusted):**
+
+1. **Suite runtime, not a correctness bug.** `coverageAnalysis: 'all'` reruns
+   the full covering-test set once per mutant. `tests/property/**` (13,000
+   fast-check iterations per test, several needing 60–90s per-test timeout
+   overrides) and `tests/differential/**` (100,000+ NDJSON fixture
+   comparisons per test) made one run of the covering suite too slow to
+   reliably complete within Stryker's per-mutant budget. Fixed by adding
+   `vitest.mutation.config.ts` (identical to `vitest.config.ts`, excludes
+   only those two directories) and pointing `stryker.config.mjs`'s
+   `vitest.configFile` at it — both directories still run in full under the
+   normal `npm test`.
+
+2. **A confirmed upstream bug, not a local misconfiguration**
+   ([stryker-mutator/stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210),
+   filed 2026-09-04, open at time of writing): Vitest 5 joins a nested
+   suite/test name chain with `' > '` for `testNamePattern` matching;
+   `@stryker-mutator/vitest-runner@10.0.0`'s `collectTestName` (duplicated in
+   both `test-helpers.js` and the sandbox-copied `stryker-setup.js`) still
+   joined with a plain space. The regex built from that space-joined name in
+   `vitest-test-runner.js`'s `run()` therefore matched **zero** tests against
+   Vitest's own `' > '`-joined internal names, so every per-mutant test run
+   silently executed 0 tests and Stryker reported "Survived" (no failure
+   observed) regardless of the actual mutation. This exactly matched the
+   observed data: every dynamic (function-body) mutant showed
+   `testsCompleted: 0` with a large `coveredBy` list; the one mutant that
+   *was* killed (`decimal.ts:21`, `PEP`'s `Decimal.clone(...)`) was the sole
+   `static: true` mutant, evaluated at module-import time before any
+   per-test filtering applies. Confirmed as environment-specific (not
+   inherent to the tool) by diffing against `hvacestimatepro/packages/
+   financial-core`'s identical `coverageAnalysis: 'all'` config, which runs
+   on Vitest 3.2.7 and produces hundreds of genuine kills. Independently
+   confirmed the mutation was real and should have been caught: manually
+   applying one surviving mutant (`ceilDecimal` returning `undefined`) and
+   running the affected tests directly with plain `vitest` (bypassing
+   Stryker) failed 25/45 tests immediately.
+
+**Fix:** patched `collectTestName` in both
+`node_modules/@stryker-mutator/vitest-runner/dist/src/test-helpers.js` and
+`.../stryker-setup.js` to join with `' > '` instead of `' '`. Made durable
+and reproducible from a fresh `npm ci` via `patch-package`
+(`patches/@stryker-mutator+vitest-runner+10.0.0.patch` + a `postinstall`
+script in `package.json`) rather than left as an unreproducible local
+`node_modules` edit.
+
+**Genuine test gaps found once the tooling was fixed** (baseline after both
+fixes: 42/49 killed, 3 survived, 4 no-coverage — a believable, real result,
+confirmed by manually re-verifying one survivor broke the suite when applied
+by hand):
+
+- `markup()` (`src/engine/pricing.ts`) was **never called** by production
+  code or by any test — `tests/engine/pricing.test.ts`'s `CORE-price-08`
+  reimplemented the margin/markup formulas inline rather than calling the
+  real exported functions, so `NUMERICAL_REQUIREMENTS_MATRIX.csv`'s `PRICE-03`
+  row was marked `verified` for a function nothing actually exercised (4
+  no-coverage mutants: the whole function body, plus 3 variants of its
+  `cost > 0` guard). `margin()`'s own `price > 0` guard (`if
+  (!price.greaterThan(0)) return null;`) had the same problem one line up:
+  187 tests covered the line via `evaluatePrice`, but none of them ever
+  called `margin()` with a non-positive price (`evaluatePrice` only reaches
+  `margin()` after separately handling `price === null` and
+  `price.isZero()`), so the guard's own behavior was asserted nowhere.
+
+  **Fix:** rewrote `CORE-price-08` in `tests/engine/pricing.test.ts` to call
+  the real `margin`/`markup` exports directly (not a reimplementation), and
+  added `CORE-price-09`/`CORE-price-10` asserting `margin(price<=0, cost)`
+  and `markup(price, cost<=0)` both return `null` rather than dividing by
+  zero. All three functions' guard/value behavior is now covered by tests
+  that call the real production code.
+
+- The `requiredPriceRaw` guard's error message string (`'targetMarginRatio
+  out of range; validate before calling requiredPriceRaw'`) survived a
+  `StringLiteral` mutation to `""`. Classified as a genuinely non-behavioral
+  equivalent, not a gap: this is an unreachable-in-production defensive
+  assertion (`targetMarginRatio` is validated upstream by the domain layer
+  before ever reaching this function — the comment on the line above already
+  says so), no caller inspects the message text, and `CORE-price-03`/`-04`
+  correctly assert only `.toThrow()`. Documented in place with `// Stryker
+  disable next-line StringLiteral: ...`, following the identical precedent
+  already established in `hvacestimatepro/packages/financial-core` for
+  free-text message prose (as opposed to a `code`/status string, which *is*
+  behaviorally significant and is not exempted).
+
+**Confirmed:** re-ran the full 49-mutant baseline after both the tooling fix
+and the two test additions: `pricing.ts` **100% (44/44 killed, 0 survived, 0
+no-coverage)**; `decimal.ts` **80% (4/5)**, with the sole remaining survivor
+being the `PEP` precision mutant, which is not a gap — an earlier baseline
+run (before the `tests/property/**` exclusion existed) recorded this exact
+mutant (`decimal.ts:21:34`) as **Killed** by
+`tests/property/hardening.property.test.ts`, with a real fast-check
+counterexample (`seed: 20260914`, shrunk to `[1,1,259]`) — it is excluded
+from the fast mutation-testing config purely for per-mutant runtime, not
+because no test catches it. Full normal suite (`npm test`, includes
+`tests/property/**` and `tests/differential/**`) re-run after all fixes:
+102/102 files, 957 passed, 3 skipped, 0 failed — no regressions.

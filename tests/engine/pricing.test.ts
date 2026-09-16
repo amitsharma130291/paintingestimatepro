@@ -3,7 +3,7 @@
 // property tests.
 import { describe, it, expect } from 'vitest';
 import { PEP, type Dec } from '../../src/engine/decimal';
-import { evaluatePrice, requiredPriceRaw, minimumTargetPrice } from '../../src/engine/pricing';
+import { evaluatePrice, requiredPriceRaw, minimumTargetPrice, margin, markup } from '../../src/engine/pricing';
 
 const d = (n: string) => new PEP(n);
 
@@ -57,11 +57,23 @@ describe('CORE pricing: status boundaries', () => {
   });
 
   it('CORE-price-08: markup is distinct from margin and only null-guarded on cost, not price', () => {
-    // profit/cost, not profit/price — sanity check the two formulas actually diverge
+    // profit/cost, not profit/price — calls the real exported functions
+    // directly (not a reimplementation) so this actually exercises them.
     const price = d('150');
     const cost = d('100');
-    const margin = price.minus(cost).dividedBy(price); // 50/150 = 33.3%
-    const markup = price.minus(cost).dividedBy(cost); // 50/100 = 50%
-    expect(margin.equals(markup)).toBe(false);
+    const marginResult = margin(price, cost)!; // 50/150 = 33.3%
+    const markupResult = markup(price, cost)!; // 50/100 = 50%
+    expect(marginResult.equals(markupResult)).toBe(false);
+    expect(markupResult.toFixed(4)).toBe('0.5000');
+  });
+
+  it('CORE-price-09: margin(price) is null for a non-positive price, never a divide-by-zero result', () => {
+    expect(margin(d('0'), d('100'))).toBeNull();
+    expect(margin(d('-5'), d('100'))).toBeNull();
+  });
+
+  it('CORE-price-10: markup(cost) is null for a non-positive cost, never a divide-by-zero result', () => {
+    expect(markup(d('150'), d('0'))).toBeNull();
+    expect(markup(d('150'), d('-5'))).toBeNull();
   });
 });

@@ -12,7 +12,8 @@
     "astro": "astro",
     "check": "astro check",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@astrojs/react": "^6.0.5",
@@ -43,6 +44,7 @@
     "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.10.0",
     "jsdom": "^29.1.1",
+    "patch-package": "^8.0.1",
     "sharp": "0.35.4",
     "typescript": "^5.7.3",
     "vitest": "^5.0.0"
