@@ -1,7 +1,7 @@
 # Pairwise mode coverage report
 
 Numerical-hardening initiative, section 8. Generator:
-`docs/generate_pairwise_cases.js`. Generated data:
+`docs/generate_pairwise_cases.cjs`. Generated data:
 `tests/pairwise/generated-cases.json`. Executable suites:
 `tests/pairwise/{proEstimatePairwise,jobCostPairwise,interiorCalculatorPairwise,lifecyclePairwise}.test.{ts,tsx}`
 (71 tests total, all passing).

@@ -82,7 +82,7 @@ describe('State transition: blank -> incomplete -> complete -> invalid -> comple
     revision = {
       ...revision,
       rooms: [{ ...revision.rooms[0], deductionEnabled: true, quick: { doorCount: 100, windowCount: 0, doorAreaEach: '20', windowAreaEach: '15' } }],
-      surfaces: [{ ...revision.surfaces[0], measurementMode: 'roomDerived' as const, lengthFt: null }],
+      surfaces: [{ ...revision.surfaces[0], measurementMode: 'roomDerived' as const }],
     };
     // give the room real dimensions so gross area is computable, but small
     // enough that 100 quick doors (2000 ft2) exceeds it.

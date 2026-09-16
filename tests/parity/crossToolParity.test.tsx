@@ -23,9 +23,10 @@ import { freezeCalculatedOutputs, readFrozenCalculatedOutputs } from '../../src/
 import { previewRateRefresh, applyRateRefresh, undoRateRefresh } from '../../src/domain/rateRefresh';
 import { exportBackup, validateBackupEnvelope, planImportAsCopies } from '../../src/domain/backup';
 import { assembleServiceHealth } from '../../src/domain/serviceHealthAssembly';
-import { buildProjectFromInteriorHandoff } from '../../src/domain/interiorHandoff';
+import { buildCustomerDocument } from '../../src/domain/customerDocument';
+import { buildProjectFromInteriorHandoff, type InteriorHandoffPayload } from '../../src/domain/interiorHandoff';
 import { ENGINE_VERSION } from '../../src/domain/entities';
-import type { BusinessSettings, PaintVariant, EstimateRevision, Project, ServiceDefinition, InteriorHandoffPayload } from '../../src/domain/entities';
+import type { BusinessSettings, PaintVariant, EstimateRevision, Project, ServiceDefinition, Surface } from '../../src/domain/entities';
 
 afterEach(() => cleanup());
 
@@ -55,7 +56,7 @@ function engineWall(overrides: Partial<ProjectSurface> & { geometryOverrides?: R
   } as ProjectSurface;
 }
 // Domain-level surface (string fields), for assembleProjectEstimate(revision) calls.
-function domainWall(overrides: Record<string, unknown> = {}) {
+function domainWall(overrides: Partial<Surface> = {}): Surface {
   return {
     id: 'wall-1', roomId: null, kind: 'wall', enabled: true, measurementMode: 'manual', areaFt2: '400', trimLengthFt: null,
     developedWidthFt: null, doorCount: null, widthFt: null, heightFt: null, paintedSides: null, paintVariantId: 'paint-1',
@@ -335,7 +336,11 @@ describe('PARITY-12: an issued frozen revision vs. later live settings/catalog c
     expect(assembly.calculationState).toBe('complete');
     const frozen = freezeCalculatedOutputs(assembly, ENGINE_VERSION);
     const ids = sequentialIdSource();
-    const issued = issueRevision({ ...revision, rawCalculatedOutputs: frozen }, () => ({ scopeLines: [], totals: null, generatedAt: ids.now() } as any), ids);
+    const issued = issueRevision(
+      { ...revision, rawCalculatedOutputs: frozen },
+      (r) => buildCustomerDocument(r, { estimateNumber: 'E-1', estimateDate: '2026-01-01', projectAddress: '', revisionLabel: 'Rev 1' }),
+      ids
+    );
 
     const read = readFrozenCalculatedOutputs(issued.rawCalculatedOutputs);
     expect(read.status).toBe('frozen');

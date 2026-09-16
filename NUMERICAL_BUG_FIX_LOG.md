@@ -286,8 +286,9 @@ directly, unfused, by:
 
 **Searched for a live counterexample in the highest-risk of these**
 (`InteriorCalculator.tsx`'s two-division-sum shape, structurally the closest
-to NUM-DEC-002's proven bug): a targeted script
-(`scratchpad/numerical_hardening/search_int003.js`) comparing decimal.js
+to NUM-DEC-002's proven bug): a targeted, session-local scratch script
+(not part of the committed deliverables -- its methodology and full result
+are recorded here in place of the file itself) comparing decimal.js
 (at precision 50 and 100, exactly as the component computes it) against
 exact BigInt-fraction arithmetic, over 8,000,000 randomly seeded
 (wallArea, ceilingArea, coats, wallThroughput, ceilingThroughput, prep,

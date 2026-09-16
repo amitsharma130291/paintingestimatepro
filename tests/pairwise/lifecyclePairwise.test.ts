@@ -7,10 +7,10 @@ import { sequentialIdSource } from '../../src/domain/ids';
 import { createSnapshot } from '../../src/domain/snapshot';
 import { createDraftRevision, issueRevision, supersede } from '../../src/domain/project';
 import { buildCustomerDocument } from '../../src/domain/customerDocument';
-import { evaluateActualReview } from '../../src/engine/actuals';
-import { planArrayMerge } from '../../src/domain/backup';
+import { evaluateActualReview, type ActualCategory, type ActualReviewInput } from '../../src/engine/actuals';
+import { planArrayMerge, type ImportConflict } from '../../src/domain/backup';
 import { PEP } from '../../src/engine/decimal';
-import type { BusinessSettings, PaintVariant, Room, Surface, EstimateRevision, ImportConflict } from '../../src/domain/entities';
+import type { BusinessSettings, PaintVariant, Surface, EstimateRevision } from '../../src/domain/entities';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 function settings(): BusinessSettings {
@@ -33,6 +33,15 @@ function wallSurface(): Surface {
 
 type Case = (typeof generated.subModels.D_lifecycle.generatedCases)[number];
 
+// generated-cases.json is plain JSON, so its string fields widen to
+// `string` under TypeScript's JSON-module inference -- this validates the
+// runtime value actually is one of the three real resolutions (throwing on
+// anything else) rather than casting past the type system.
+function toResolution(value: string): ImportConflict['resolution'] {
+  if (value === 'keepLocal' || value === 'replaceImported' || value === 'keepBoth') return value;
+  throw new Error(`Unexpected backupConflictMode in generated-cases.json: "${value}"`);
+}
+
 function buildRevisionInState(state: Case['revisionState'], ids: ReturnType<typeof sequentialIdSource>): EstimateRevision {
   const snap = createSnapshot(settings(), [variant()], [], ids, 'rev-1');
   let revision: EstimateRevision = { ...createDraftRevision('project-1', snap, ids), surfaces: [wallSurface()], proposedPrice: '5000' };
@@ -53,18 +62,18 @@ describe('PAIRWISE-D: lifecycle/import mode-interaction coverage', () => {
     if (c.actualReviewState !== 'none') {
       const baselineCost = new PEP('3000');
       const baselinePrice = new PEP('5000');
-      const byState = {
-        inProgress: { materials: { confirmed: false, amount: null }, labor: { confirmed: false, amount: null }, otherExpenses: { confirmed: false, amount: null }, overhead: { confirmed: false, amount: null } },
-        final: {
-          materials: { confirmed: true, amount: new PEP('1200') }, labor: { confirmed: true, amount: new PEP('900') },
-          otherExpenses: { confirmed: true, amount: new PEP('100') }, overhead: { confirmed: true, amount: new PEP('315') },
-        },
-        outOfSupportedRange: {
-          materials: { confirmed: true, amount: new PEP('999999999') }, labor: { confirmed: true, amount: new PEP('999999999') },
-          otherExpenses: { confirmed: true, amount: new PEP('999999999') }, overhead: { confirmed: true, amount: new PEP('999999999') },
-        },
-      }[c.actualReviewState];
-      const review = evaluateActualReview({ ...byState, baselineCost, baselinePrice });
+      const unconfirmed: ActualCategory = { confirmed: false, amount: null };
+      const confirmed = (amount: string): ActualCategory => ({ confirmed: true, amount: new PEP(amount) });
+
+      let categories: Pick<ActualReviewInput, 'materials' | 'labor' | 'otherExpenses' | 'overhead'>;
+      if (c.actualReviewState === 'inProgress') {
+        categories = { materials: unconfirmed, labor: unconfirmed, otherExpenses: unconfirmed, overhead: unconfirmed };
+      } else if (c.actualReviewState === 'final') {
+        categories = { materials: confirmed('1200'), labor: confirmed('900'), otherExpenses: confirmed('100'), overhead: confirmed('315') };
+      } else {
+        categories = { materials: confirmed('999999999'), labor: confirmed('999999999'), otherExpenses: confirmed('999999999'), overhead: confirmed('999999999') };
+      }
+      const review = evaluateActualReview({ ...categories, baselineCost, baselinePrice });
       expect(review.state).toBe(c.actualReviewState === 'inProgress' ? 'in_progress' : c.actualReviewState === 'final' ? 'final' : 'out_of_supported_range');
     }
 
@@ -76,7 +85,7 @@ describe('PAIRWISE-D: lifecycle/import mode-interaction coverage', () => {
     const incoming = [{ id: 'x', v: 2 }];
     const merge = planArrayMerge(existing, incoming);
     expect(merge.conflicts).toHaveLength(1);
-    const resolution: ImportConflict['resolution'] = c.backupConflictMode;
+    const resolution = toResolution(c.backupConflictMode);
     expect(['keepLocal', 'replaceImported', 'keepBoth']).toContain(resolution);
   });
 });

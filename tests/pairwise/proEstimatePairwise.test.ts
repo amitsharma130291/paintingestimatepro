@@ -45,7 +45,6 @@ function buildRevision(c: Case): EstimateRevision {
   const snap = createSnapshot(bSettings, [variant()], [], ids, 'rev-1');
   let revision = createDraftRevision('project-1', snap, ids);
 
-  const throughputByKind: Record<string, string> = { wall: '150', ceiling: '120', trim: '40' };
   const laborRate = c.laborRateSource === 'surfaceOverride' ? '45' : null;
   const throughput = c.surfaceType !== 'door' && c.throughputSource === 'surfaceOverride' ? '200' : null;
   const hoursPerSidePerCoat = c.surfaceType === 'door' && c.throughputSource === 'surfaceOverride' ? '1.0' : null;
