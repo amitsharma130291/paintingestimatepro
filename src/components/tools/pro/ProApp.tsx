@@ -1355,7 +1355,7 @@ export default function ProApp() {
             {draftEdit.state === 'draft' && (
               <>
                 <div className="card p-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="font-semibold">Rooms</h3>
                     <button type="button" className="btn btn-secondary" disabled={snapshotVariants.length === 0} onClick={addRoom}>+ Add room</button>
                   </div>
@@ -1379,7 +1379,7 @@ export default function ProApp() {
                 </div>
 
                 <div className="card p-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="font-semibold">Standalone surfaces (no room required)</h3>
                     <div className="flex gap-2">
                       <button type="button" className="btn btn-secondary" disabled={snapshotVariants.length === 0} onClick={() => addStandaloneSurface('trim')}>+ Trim</button>
@@ -1410,7 +1410,7 @@ export default function ProApp() {
                   </p>
 
                   <div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <h4 className="text-sm font-semibold">Additional labor (prep, cleanup, touch-up)</h4>
                       <button type="button" className="btn btn-secondary" onClick={addAdditionalLabor}>+ Add task</button>
                     </div>
@@ -1429,7 +1429,7 @@ export default function ProApp() {
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <h4 className="text-sm font-semibold">Other materials</h4>
                       <button type="button" className="btn btn-secondary" onClick={addOtherMaterialLine}>+ Add material</button>
                     </div>
@@ -1470,7 +1470,7 @@ export default function ProApp() {
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <h4 className="text-sm font-semibold">Other direct expenses (including travel)</h4>
                       <button type="button" className="btn btn-secondary" onClick={addOtherExpense}>+ Add expense</button>
                     </div>
