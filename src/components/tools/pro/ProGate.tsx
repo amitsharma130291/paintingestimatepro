@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { resolvePendingCheckout, checkAccess, clearStoredPayment, NetworkFailure } from '../../../lib/license';
 import LicenseActions from '../LicenseActions';
 import ProApp from './ProApp';
+import { PRICE } from '../../../data/site';
 
 type GateState = { status: 'checking' } | { status: 'locked' } | { status: 'unavailable' } | { status: 'unlocked' };
 
@@ -144,7 +145,7 @@ export default function ProGate() {
         <p className="eyebrow justify-center">Pro</p>
         <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Unlock the Pro workspace</h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-ink-soft">
-          $99 one-time · lifetime access. Multi-room projects, per-surface materials, Price Book Health, customer documents, and actual-cost review — everything computes and saves locally in your browser.
+          <span className="text-ink-soft/70 line-through">{PRICE.originalAmount}</span> <span className="font-semibold text-ink">{PRICE.amount} one-time</span> · lifetime access. Multi-room projects, per-surface materials, Price Book Health, customer documents, and actual-cost review — everything computes and saves locally in your browser.
         </p>
         <div className="mt-6 flex flex-col items-center gap-3">
           <LicenseActions returnTo="/app/welcome" onUnlocked={() => setState({ status: 'unlocked' })} />

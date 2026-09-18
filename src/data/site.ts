@@ -31,7 +31,7 @@ export const FREE_TOOLS_LINK = { label: "Explore free painting tools", href: "/#
 // A modest way out of the Price Book Health demo toward the offer, instead
 // of looping every CTA back to the same static preview.
 export const PRICE_BOOK_TO_PRICING_LINK = {
-  label: "See the planned features and price",
+  label: "See pricing and what's included",
   href: "/#pricing",
 };
 
@@ -41,24 +41,31 @@ export const PRICE_BOOK_TO_PRICING_LINK = {
 export const PRICING_FAQ_LINK = { label: "Read questions about Pro", href: "/#faq" };
 
 export const CLOSING_CTA_PRIMARY = {
-  label: "Review the planned Pro offer",
+  label: "See Pro pricing",
   href: "/#pricing",
 };
 
-export const HERO_OFFER_LINE = "Planned at $99 one-time · No monthly subscription";
-
-export const HERO_AVAILABILITY_NOTE = "In development · Illustrative previews below";
+// LAUNCH-001: Pro's real Dodo checkout is live at the $79 launch price
+// (originalAmount is shown struck through beside it) — everywhere on the
+// site that mentioned "planned"/"in development"/"not yet" for Pro itself
+// was pre-launch copy and has been updated to reflect that. This does NOT
+// apply to the free-tools "Coming soon" badges (STATUS_COMING_SOON, genuine
+// not-yet-built tools) or the "illustrative example" labels on sample data
+// (STATUS_PREVIEW/STATUS_EXAMPLE) — those are unrelated, still-true
+// disclosures about specific unbuilt tools / hypothetical numbers.
+export const HERO_AVAILABILITY_NOTE = "Illustrative example below · Live now";
 
 export const PRICING_AVAILABILITY_NOTE =
-  "In development. Purchasing is not available yet.";
+  "Secure checkout via Dodo Payments · Instant access after purchase.";
 
 export const STATUS_COMING_SOON = "Coming soon";
 export const STATUS_PREVIEW = "Illustrative preview";
 export const STATUS_EXAMPLE = "Illustrative example";
 
 export const PRICE = {
-  amount: "$99",
-  caption: "One-time purchase · Planned lifetime access",
+  amount: "$79",
+  originalAmount: "$99",
+  caption: "One-time purchase · Lifetime access",
 };
 
 export const TARGET_MARGIN = "35%";
@@ -80,7 +87,7 @@ export const PRICE_BOOK_SAMPLE_ROWS = [
 ] as const;
 
 export const PRICE_BOOK_SAMPLE_INTRO =
-  "A single target margin. Different results across your services. The planned Price Book Health view helps you identify where to review your prices and cost assumptions.";
+  "A single target margin. Different results across your services, shown here as an illustrative example. Price Book Health helps you identify where to review your own prices and cost assumptions.";
 
 export const PRICE_BOOK_SAMPLE_CALLOUT_HEADING = "Two rates to review before your next quote.";
 

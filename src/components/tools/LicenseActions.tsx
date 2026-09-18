@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Loader2, CheckCircle2, MailCheck } from 'lucide-react';
 import { startCheckout, redeemLicenseKey, requestLicenseRecovery } from '../../lib/license';
+import { PRICE } from '../../data/site';
 
 function Spinner() {
   return <Loader2 size={15} strokeWidth={2.5} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />;
@@ -81,7 +82,13 @@ export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: str
     <div>
       <button type="button" className="btn btn-primary" onClick={handleBuy} disabled={buying}>
         {buying && <Spinner />}
-        {buying ? 'Starting checkout…' : 'Buy Pro — $99 one-time'}
+        {buying ? (
+          'Starting checkout…'
+        ) : (
+          <>
+            Buy Pro — <span className="text-primary-ink/60 line-through">{PRICE.originalAmount}</span> {PRICE.amount} one-time
+          </>
+        )}
       </button>
       {buyError && <p className="mt-2 text-sm text-bad">{buyError}</p>}
 

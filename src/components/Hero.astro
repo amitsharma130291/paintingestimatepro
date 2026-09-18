@@ -2,9 +2,9 @@
 import {
   HEADER_CTA,
   FREE_TOOLS_LINK,
-  HERO_OFFER_LINE,
   HERO_AVAILABILITY_NOTE,
   STATUS_EXAMPLE,
+  PRICE,
 } from "../data/site";
 ---
 
@@ -17,9 +17,8 @@ import {
       </h1>
       <p class="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
         Finishing a job shouldn't be the first time you discover what it
-        leaves. Painting Estimate Pro is being built to help you review
-        materials, labor, overhead, and estimated job profit before
-        sending your quote.
+        leaves. Painting Estimate Pro helps you review materials, labor,
+        overhead, and estimated job profit before sending your quote.
       </p>
 
       <div class="mt-8">
@@ -30,7 +29,10 @@ import {
         {FREE_TOOLS_LINK.label}
       </a>
 
-      <p class="mt-5 text-sm font-medium text-ink-soft">{HERO_OFFER_LINE}</p>
+      <p class="mt-5 text-sm font-medium text-ink-soft">
+        <span class="text-ink-soft/70 line-through">{PRICE.originalAmount}</span>{" "}
+        <span class="font-semibold text-ink">{PRICE.amount} one-time</span> · No monthly subscription
+      </p>
 
       <p class="status-note mt-4">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

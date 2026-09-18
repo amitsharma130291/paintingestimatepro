@@ -60,8 +60,11 @@ describe('UX-012: the sample is explicitly labeled as illustrative and never cla
     expect(STATUS_PREVIEW).toMatch(/illustrative|preview|sample|example/i);
   });
 
-  it('the intro copy explicitly calls this "the planned" view, never "your" live data', () => {
-    expect(PRICE_BOOK_SAMPLE_INTRO).toMatch(/planned/i);
+  // LAUNCH-001: Price Book Health is a real, live feature now, so the intro
+  // no longer calls it "planned" -- but it must still explicitly mark THIS
+  // specific table as an illustrative example, never the reader's own data.
+  it('the intro copy explicitly marks this an illustrative example, never "your" live data', () => {
+    expect(PRICE_BOOK_SAMPLE_INTRO).toMatch(/illustrative|example|sample/i);
     expect(PRICE_BOOK_SAMPLE_INTRO).not.toMatch(/\byour (current|actual|live) (prices?|margins?|rates?)\b/i);
   });
 

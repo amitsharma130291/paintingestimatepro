@@ -6,6 +6,27 @@
 // BarcodeFlow) there's no tier segment or per-purchase job-scoping — this
 // is the simplified single-tier variant of that same established pattern.
 import { getTransporter, escapeHtml } from './mailer';
+import { PRICE } from '../../data/site';
+
+/**
+ * LAUNCH-001: the owner-email summary used to hardcode "$99 lifetime" —
+ * which would just go stale again at the next price change (as it already
+ * had, when the launch price dropped to PRICE.amount). Prefer the payment's
+ * own real total_amount/currency when available (authoritative, whatever
+ * was actually charged for that specific purchase) and fall back to the
+ * current site price only if the caller didn't have a payment object handy.
+ */
+function formatChargedAmount(payment: unknown): string {
+  const p = payment as { total_amount?: number; currency?: string } | undefined;
+  if (typeof p?.total_amount === 'number' && p.currency) {
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: p.currency }).format(p.total_amount / 100);
+    } catch {
+      // Fall through to the site-price fallback below.
+    }
+  }
+  return PRICE.amount;
+}
 
 export const SITE_URL = 'https://paintingpricingcalculator.com';
 export const SITE_NAME = 'PaintingPricing Calculator';
@@ -183,6 +204,7 @@ export async function sendLicenseEmails({
   if (OWNER_EMAIL) {
     try {
       const rawJson = payment !== undefined ? JSON.stringify(payment, null, 2) : null;
+      const amountLabel = formatChargedAmount(payment);
       await transporter.sendMail({
         from: `"Painting Estimate Pro" <${gmailUser}>`,
         to: OWNER_EMAIL,
@@ -190,7 +212,7 @@ export async function sendLicenseEmails({
         text: [
           `New order on ${SITE_NAME} (${SITE_URL}).`,
           '',
-          'Product: Pro ($99 lifetime)',
+          `Product: Pro (${amountLabel} lifetime)`,
           `License key: ${licenseKey}`,
           `Customer: ${customerName || '(no name given)'} <${customerEmail || 'no email'}>`,
           isResend ? '(This was a resend, not a new purchase.)' : '',
@@ -198,7 +220,7 @@ export async function sendLicenseEmails({
         ].filter(Boolean).join('\n'),
         html: [
           `<p>New order on <strong>${escapeHtml(SITE_NAME)}</strong> (${escapeHtml(SITE_URL)}).</p>`,
-          `<ul><li>Product: Pro ($99 lifetime)</li><li>License key: ${escapeHtml(licenseKey)}</li><li>Customer: ${escapeHtml(customerName || '(no name given)')} &lt;${escapeHtml(customerEmail || 'no email')}&gt;</li></ul>`,
+          `<ul><li>Product: Pro (${escapeHtml(amountLabel)} lifetime)</li><li>License key: ${escapeHtml(licenseKey)}</li><li>Customer: ${escapeHtml(customerName || '(no name given)')} &lt;${escapeHtml(customerEmail || 'no email')}&gt;</li></ul>`,
           isResend ? '<p><em>This was a resend, not a new purchase.</em></p>' : '',
           rawJson ? `<p style="font-weight:700;margin:16px 0 6px">Full payment object</p><pre style="background:#faf9f6;border:1px solid #dde3dd;border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;white-space:pre-wrap">${escapeHtml(rawJson)}</pre>` : '',
         ].filter(Boolean).join(''),
@@ -227,6 +249,7 @@ export async function sendPaymentFailureEmail(payment: unknown): Promise<{ sent:
   const p = (payment ?? {}) as { payment_id?: string; error_code?: string | null; error_message?: string | null; customer?: { email?: string | null; name?: string | null } };
   const rawJson = JSON.stringify(payment, null, 2);
   const reasonLine = p.error_message || p.error_code ? `Reason: ${p.error_message || p.error_code}` : 'Reason: not provided by Dodo.';
+  const attemptedAmount = formatChargedAmount(payment);
 
   try {
     await transporter.sendMail({
@@ -237,13 +260,14 @@ export async function sendPaymentFailureEmail(payment: unknown): Promise<{ sent:
         `A payment attempt failed on ${SITE_NAME} (${SITE_URL}).`,
         '',
         `Customer: ${p.customer?.name || '(no name given)'} <${p.customer?.email || 'no email'}>`,
+        `Attempted amount: ${attemptedAmount}`,
         reasonLine,
         '',
         `Full payment object:\n${rawJson}`,
       ].join('\n'),
       html: [
         `<p>A payment attempt failed on <strong>${escapeHtml(SITE_NAME)}</strong> (${escapeHtml(SITE_URL)}).</p>`,
-        `<ul><li>Customer: ${escapeHtml(p.customer?.name || '(no name given)')} &lt;${escapeHtml(p.customer?.email || 'no email')}&gt;</li><li>${escapeHtml(reasonLine)}</li></ul>`,
+        `<ul><li>Customer: ${escapeHtml(p.customer?.name || '(no name given)')} &lt;${escapeHtml(p.customer?.email || 'no email')}&gt;</li><li>Attempted amount: ${escapeHtml(attemptedAmount)}</li><li>${escapeHtml(reasonLine)}</li></ul>`,
         `<p style="font-weight:700;margin:16px 0 6px">Full payment object</p><pre style="background:#fbeeec;border:1px solid #f0d3ce;border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;white-space:pre-wrap">${escapeHtml(rawJson)}</pre>`,
       ].join(''),
     });
