@@ -47,7 +47,7 @@ async function issueAndOpenActuals() {
   }
   fireEvent.click(screen.getByRole('button', { name: 'Issue estimate' }));
   await waitFor(async () => expect((await readProjects())[0]?.revisions[0].state).toBe('issued'));
-  fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
 }
 
 describe('ACT-011: actual labor can be entered as hours × rate, not only a flat amount', () => {
@@ -92,7 +92,7 @@ describe('ACT-011: actual labor can be entered as hours × rate, not only a flat
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
     fireEvent.click(await screen.findByRole('button', { name: /^Labor breakdown job/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
 
     expect(screen.getByRole('radio', { name: /hours × rate/i })).toHaveProperty('checked', true);
     expect((screen.getByLabelText('Labor hours') as HTMLInputElement).value).toBe('10');

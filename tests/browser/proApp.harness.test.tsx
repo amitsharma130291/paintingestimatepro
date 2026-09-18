@@ -152,7 +152,7 @@ describe('ProApp harness: backup import conflict UI — the real Confirm/Cancel/
   }
 
   async function goToBackupTabAndSelectFile(file: File) {
-    fireEvent.click(screen.getByRole('button', { name: 'Backup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Backup & Data' }));
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [file] } });
   }

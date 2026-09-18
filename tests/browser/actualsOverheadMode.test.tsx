@@ -66,7 +66,7 @@ async function issueAKitchenEstimateAndOpenActuals() {
   const frozenOverhead = (issued.rawCalculatedOutputs as { overhead: string } | null)?.overhead;
   expect(frozenOverhead).toBeTruthy(); // ground truth: the real frozen value written by freezeCalculatedOutputs, not hand-constructed
 
-  fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
   return frozenOverhead!;
 }
 
@@ -123,7 +123,7 @@ describe('ACT-010: actual-cost overhead has two explicit modes (baselineAllocati
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
     fireEvent.click(await screen.findByRole('button', { name: /^Kitchen estimate/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
 
     expect(screen.getByRole('radio', { name: /enter actual amount/i })).toHaveProperty('checked', true);
     expect((screen.getByLabelText(/overhead amount/i) as HTMLInputElement).value).toBe('500');

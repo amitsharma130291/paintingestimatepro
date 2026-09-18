@@ -13,7 +13,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { Webhook } from 'standardwebhooks';
 import { evaluatePaymentEntitlement, type DodoPayment } from '../../../lib/server/dodo';
-import { buildLicenseKey, buildRecoveryUrl, sendLicenseEmails } from '../../../lib/server/license';
+import { buildLicenseKey, buildRecoveryUrl, sendLicenseEmails, sendPaymentFailureEmail } from '../../../lib/server/license';
 
 export const POST: APIRoute = async ({ request }) => {
   const secret = import.meta.env.DODO_PAYMENTS_WEBHOOK_KEY?.trim();
@@ -65,14 +65,25 @@ export const POST: APIRoute = async ({ request }) => {
         console.error("Dodo webhook: payment.succeeded with no customer email -- can't send it.", data);
       } else {
         const licenseKey = buildLicenseKey(paymentId);
-        const recoveryUrl = buildRecoveryUrl({ paymentId });
-        await sendLicenseEmails({ customerEmail, customerName, licenseKey, recoveryUrl });
+        // Backstop for the same first-purchase confirmation verify.ts sends
+        // on the browser-redirect path -- same /app/welcome target.
+        const recoveryUrl = buildRecoveryUrl({ paymentId, target: '/app/welcome' });
+        await sendLicenseEmails({ customerEmail, customerName, licenseKey, recoveryUrl, payment: data });
       }
     } catch (err) {
       // Don't fail the webhook over a best-effort email — Dodo would just
       // retry it, and the browser-redirect path may have already unlocked
       // this purchase in the customer's current session regardless.
       console.error('Dodo webhook: license email failed:', err);
+    }
+  } else if (event.type === 'payment.failed') {
+    // Internal-only notification -- no license exists to send the customer,
+    // and the customer-facing failure experience (redirect + banner) is
+    // driven separately by the browser-side return flow, not this webhook.
+    try {
+      await sendPaymentFailureEmail(event.data ?? {});
+    } catch (err) {
+      console.error('Dodo webhook: payment-failure email failed:', err);
     }
   }
 

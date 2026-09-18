@@ -25,7 +25,7 @@ describe('An overhead ratio above 0.5 shows a nonblocking warning but still pric
   it('setting Overhead to 0.75 keeps a real priced result and adds a warning notice', async () => {
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
-    fireEvent.click(screen.getByRole('button', { name: 'Business settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Business Settings' }));
     fireEvent.change(screen.getByLabelText(/Overhead/i), { target: { value: '0.75' } });
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
     fireEvent.click(screen.getByRole('button', { name: '+ New project' }));

@@ -37,7 +37,7 @@ async function openActuals() {
   await mount();
   fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
   fireEvent.click(await screen.findByRole('button', { name: /^Audit project/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
 }
 
 describe('Independent v4 user-workflow regressions', () => {
@@ -67,7 +67,7 @@ describe('Independent v4 user-workflow regressions', () => {
     const p = project(); p.version = 7;
     const data = envelope([p]);
     await mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Backup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Backup & Data' }));
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'copies' } });
     const file = new File([JSON.stringify(data)], 'backup.json', { type: 'application/json' });
     fireEvent.change(document.querySelector('input[type=file]')!, { target: { files: [file] } });
@@ -91,7 +91,7 @@ describe('Independent v4 user-workflow regressions', () => {
     vi.spyOn(URL, 'createObjectURL').mockImplementation(blob => { exported = blob as Blob; return 'blob:audit'; });
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    fireEvent.click(screen.getByRole('button', { name: 'Backup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Backup & Data' }));
     fireEvent.click(screen.getByRole('button', { name: 'Export backup (.json)' }));
     await waitFor(() => expect(exported).toBeDefined());
     expect(JSON.parse(await exported!.text()).projects.map((p: Project) => p.id)).toContain('p1');

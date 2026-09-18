@@ -64,7 +64,7 @@ describe('ACT-008: a missing (null) baseline proposedPrice never computes a revi
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
     fireEvent.click(await screen.findByRole('button', { name: /^Kitchen estimate/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
     expect(screen.queryByText('Actual cost')).toBeNull();
     expect(screen.queryByText(/In progress/)).toBeNull(); // no review computed at all, not even a "0/4" in-progress one
   });
@@ -73,7 +73,7 @@ describe('ACT-008: a missing (null) baseline proposedPrice never computes a revi
 describe('ACT-012: editing an already-entered actual amount REPLACES it -- the cost delta reflects only the new value, never the sum of both', () => {
   it('changing materials from 700 to 750 after saving updates the saved amount to exactly "750", not "700750" or a summed value', async () => {
     await issueAKitchenEstimate();
-    fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'materials' }));
     const materialsInputs = screen.getAllByPlaceholderText('0.00');
     fireEvent.change(materialsInputs[0], { target: { value: '700' } });
@@ -91,7 +91,7 @@ describe('ACT-012: editing an already-entered actual amount REPLACES it -- the c
 describe('ACT-014: issuing a NEW revision later never auto-rebases an existing actual review\'s baseline -- it keeps pointing at the original issued revision', () => {
   it('the original ActualReview.baselineIssuedRevisionId is unchanged after a second revision is issued', async () => {
     await issueAKitchenEstimate();
-    fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'materials' }));
     fireEvent.change(screen.getAllByPlaceholderText('0.00')[0], { target: { value: '700' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save actuals' }));
@@ -121,7 +121,7 @@ describe('ACT-014: issuing a NEW revision later never auto-rebases an existing a
 describe('ACT-016: the profit label is explicit that this is against the original quote, never implying cash received or actual revenue', () => {
   it('the rendered label reads exactly "Profit vs. original quote", with no "cash received" or "revenue" wording anywhere on the tab', async () => {
     await issueAKitchenEstimate();
-    fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
     // Every category needs BOTH confirmed=true AND a real amount to count
     // toward finalization (ACT-004/ACT-009) -- overhead alone auto-fills
     // from the baseline allocation; the other three need an explicit amount.

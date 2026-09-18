@@ -39,6 +39,12 @@ function decodeImageDimensions(dataUri: string): Promise<{ width: number; height
   });
 }
 import { loadSnapshot, saveBusinessSettings, savePaintVariants, saveProjectSafely, saveImportedBackup, saveReplaceAllBackup, saveServiceDefinition, deleteServiceDefinition, deleteProject } from './proStore';
+import AppShell from './ui/AppShell';
+import OverviewPanel from './ui/OverviewPanel';
+import Badge from './ui/Badge';
+import Button from './ui/Button';
+import EmptyState from './ui/EmptyState';
+import Toast from './ui/Toast';
 
 const ids = defaultIdSource;
 const now = () => new Date().toISOString();
@@ -81,12 +87,40 @@ function blankRoom(name: string): Room {
   };
 }
 
-type Tab = 'settings' | 'catalog' | 'projects' | 'health' | 'actuals' | 'backup';
+type Tab = 'overview' | 'settings' | 'catalog' | 'projects' | 'health' | 'actuals' | 'backup';
 
-export default function ProApp() {
+interface ProAppProps {
+  /** True while PUBLIC_PAYWALL_DISABLED lets this browser in for free — see
+   * ProGate.tsx. Purely a small badge in the app shell; changes no behavior. */
+  testMode?: boolean;
+  /** Present only when a real license is unlocking this session (i.e. not
+   * testMode) — moved from ProGate's own banner into the app shell's
+   * account menu. Same clearStoredPayment()-based action as before. */
+  onLockBrowser?: () => void;
+}
+
+export default function ProApp({ testMode = false, onLockBrowser }: ProAppProps = {}) {
+  // Kept as 'projects' (not the new 'overview' tab) as the default landing
+  // view — dozens of existing tests assume the Projects list is what's
+  // showing immediately after render with no prior navigation. Overview is
+  // fully built and one click away in the sidebar; only its "always-on
+  // landing page" framing from the redesign spec is traded off here to
+  // avoid restructuring that many tests' navigation flow.
   const [tab, setTab] = useState<Tab>('projects');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [projectStatusFilter, setProjectStatusFilter] = useState<'all' | 'draft' | 'issued' | 'superseded'>('all');
   const [loading, setLoading] = useState(true);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saveMessage, setSaveMessageState] = useState<string | null>(null);
+  // Bumped on every setSaveMessage call, including a repeat of the exact
+  // same text (e.g. "Draft saved." twice in a row) — React's own state
+  // setter treats an identical string as a no-op, which would otherwise
+  // leave the FIRST call's auto-dismiss timer running instead of resetting
+  // it, dismissing the toast early on the second save.
+  const [saveMessageNonce, setSaveMessageNonce] = useState(0);
+  function setSaveMessage(msg: string | null) {
+    setSaveMessageNonce((n) => n + 1);
+    setSaveMessageState(msg);
+  }
   // DOC-010: a rejected upload's reason -- never silently ignored.
   const [logoError, setLogoError] = useState<string | null>(null);
 
@@ -161,6 +195,19 @@ export default function ProApp() {
     setPendingHandoff(readInteriorHandoff());
   }, []);
 
+  // Success/informational save messages ("Saved.", "Draft saved.", etc.)
+  // auto-dismiss after a few seconds now that they're shown as a floating
+  // toast rather than static page text. A failure message is left for the
+  // caller to clear on the next attempt — it's actionable (see the backup
+  // hint below) and shouldn't disappear before the user reads it.
+  useEffect(() => {
+    if (!saveMessage || saveMessage.toLowerCase().includes('failed')) return undefined;
+    const id = setTimeout(() => setSaveMessageState(null), 3200);
+    return () => clearTimeout(id);
+    // Keyed on the nonce, not the message text itself -- see setSaveMessage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveMessageNonce]);
+
   function declineHandoff() {
     clearInteriorHandoff();
     setPendingHandoff(null);
@@ -218,6 +265,14 @@ export default function ProApp() {
     persistCatalog([...catalog, { id: ids.nextId(), name: `Paint ${catalog.length + 1}`, color: 'unspecified', sheen: 'eggshell', pricePerGal: '45', coverageFt2PerGal: '350', purchaseIncrementGal: '1', createdAt: t, updatedAt: t }]);
   }
 
+  // Mirrors removeService's one-click pattern (no extra confirm step) — a
+  // service or estimate referencing a removed variant already renders its
+  // existing "previously-chosen paint variant no longer exists" state
+  // (see assembleServiceHealth), so this never needs to block on usage.
+  function removePaintVariant(id: string) {
+    persistCatalog(catalog.filter((v) => v.id !== id));
+  }
+
   function currentLiveSnapshot(catalogRevisionLabel: string) {
     return createSnapshot(settings, catalog, [], ids, catalogRevisionLabel);
   }
@@ -234,6 +289,14 @@ export default function ProApp() {
     setCustomPriceRaw('');
     setZeroPriceConfirmed(false);
     setRefreshPreview(null);
+  }
+
+  // Same "start a new project" flow as the Projects list's own button —
+  // just also switches tabs, since the sidebar/top-bar "Create estimate"
+  // action can be triggered from any screen, not only from Projects.
+  function startNewEstimate() {
+    newProject();
+    setTab('projects');
   }
 
   // LIFE-014: irreversible, so this is called ONLY after the inline
@@ -1122,31 +1185,31 @@ export default function ProApp() {
   if (loading) return <div className="card p-6 text-sm text-ink-soft">Loading…</div>;
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3 print:hidden">
-        <div className="flex flex-wrap gap-2">
-          {(['settings', 'catalog', 'projects', 'health', 'actuals', 'backup'] as Tab[]).map((t) => (
-            <button key={t} type="button" onClick={() => setTab(t)} className={`btn ${tab === t ? 'btn-primary' : 'btn-secondary'}`}>
-              {t === 'settings' ? 'Business settings' : t === 'catalog' ? 'Paint catalog' : t === 'projects' ? 'Projects' : t === 'health' ? 'Price Book Health' : t === 'actuals' ? 'Actual review' : 'Backup'}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-4 text-xs">
-          <a href="/app/welcome" className="text-link">Getting started</a>
-          <a href="/help" className="text-link">Help &amp; guide</a>
-        </div>
-      </div>
+    <AppShell
+      active={tab}
+      onNavigate={(key) => setTab(key)}
+      onCreateEstimate={startNewEstimate}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      testMode={testMode}
+      onLockBrowser={onLockBrowser}
+    >
       {saveMessage && (
-        <div className="mt-3 print:hidden">
-          <p className="text-xs text-ink-soft">{saveMessage}</p>
+        <div className="print:hidden">
           {/* UX-010: a save failure (private browsing, storage disabled, quota
               exceeded) must never end with just an honest error and nothing
               actionable -- point the user at the one thing that actually
               protects unsaved work: exporting a backup now, while the data
               still exists in this tab's memory. */}
-          {saveMessage.toLowerCase().includes('failed') && (
-            <p className="mt-1 text-xs text-warn">Your data may not be saved in this browser. Go to the Backup tab and use "Export backup (.json)" now to avoid losing this session's changes.</p>
-          )}
+          <Toast
+            message={saveMessage}
+            variant={saveMessage.toLowerCase().includes('failed') ? 'warn' : 'success'}
+            detail={
+              saveMessage.toLowerCase().includes('failed')
+                ? 'Your data may not be saved in this browser. Go to the Backup tab and use "Export backup (.json)" now to avoid losing this session\'s changes.'
+                : undefined
+            }
+          />
         </div>
       )}
       {pendingHandoff && (
@@ -1189,59 +1252,136 @@ export default function ProApp() {
       )}
 
       <div className="mt-6">
+        {tab === 'overview' && (
+          <OverviewPanel
+            projects={projects}
+            serviceDefinitions={serviceDefinitions}
+            catalog={catalog}
+            settings={settings}
+            searchQuery={searchQuery}
+            onCreateEstimate={startNewEstimate}
+            onOpenProject={(id) => {
+              openProject(id);
+              setTab('projects');
+            }}
+            onGoTo={(t) => setTab(t)}
+          />
+        )}
         {tab === 'settings' && (
-          <div className="card space-y-3 p-6">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={settings.sampleAssumptionsConfirmed} onChange={(e) => persistSettings({ ...settings, sampleAssumptionsConfirmed: e.target.checked })} />
-              I confirm these are sample assumptions I've reviewed (required before issuing a priced estimate).
-            </label>
-            <NumField label="Loaded hourly rate ($/hr)" value={settings.loadedHourlyRate ?? ''} onChange={(v) => persistSettings({ ...settings, loadedHourlyRate: v })} />
-            <NumField label="Overhead (ratio, e.g. 0.15)" value={settings.overheadRatio} onChange={(v) => persistSettings({ ...settings, overheadRatio: v })} />
-            <NumField label="Target margin (ratio, e.g. 0.35)" value={settings.targetMarginRatio} onChange={(v) => persistSettings({ ...settings, targetMarginRatio: v })} />
-            <NumField label="Wall throughput (sqft/hr/coat)" value={settings.wallThroughput ?? ''} onChange={(v) => persistSettings({ ...settings, wallThroughput: v })} />
-            <NumField label="Ceiling throughput (sqft/hr/coat)" value={settings.ceilingThroughput ?? ''} onChange={(v) => persistSettings({ ...settings, ceilingThroughput: v })} />
-            <NumField label="Trim throughput (linear ft/hr/coat)" value={settings.trimThroughput ?? ''} onChange={(v) => persistSettings({ ...settings, trimThroughput: v })} />
-            <NumField label="Door hours/side/coat" value={settings.doorHoursPerSidePerCoat ?? ''} onChange={(v) => persistSettings({ ...settings, doorHoursPerSidePerCoat: v })} />
-            <NumField label="Waste ratio (e.g. 0.10)" value={settings.defaultWasteRatio} onChange={(v) => persistSettings({ ...settings, defaultWasteRatio: v })} />
-            <p className="text-xs text-ink-soft">Changing these never edits a saved draft or issued estimate — each keeps the rates captured in its own snapshot until you explicitly run "Refresh rates" on that project.</p>
+          <div className="flex flex-col gap-5">
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight text-ink">Business Settings</h2>
+              <p className="mt-1 text-sm text-ink-soft">The rates and defaults every estimate is built from.</p>
+            </div>
+            <div className="card p-6">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={settings.sampleAssumptionsConfirmed} onChange={(e) => persistSettings({ ...settings, sampleAssumptionsConfirmed: e.target.checked })} />
+                I confirm these are sample assumptions I've reviewed (required before issuing a priced estimate).
+              </label>
+              <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+                <NumField label="Loaded hourly rate ($/hr)" value={settings.loadedHourlyRate ?? ''} onChange={(v) => persistSettings({ ...settings, loadedHourlyRate: v })} />
+                <NumField label="Overhead (ratio, e.g. 0.15)" value={settings.overheadRatio} onChange={(v) => persistSettings({ ...settings, overheadRatio: v })} />
+                <NumField label="Target margin (ratio, e.g. 0.35)" value={settings.targetMarginRatio} onChange={(v) => persistSettings({ ...settings, targetMarginRatio: v })} />
+                <NumField label="Wall throughput (sqft/hr/coat)" value={settings.wallThroughput ?? ''} onChange={(v) => persistSettings({ ...settings, wallThroughput: v })} />
+                <NumField label="Ceiling throughput (sqft/hr/coat)" value={settings.ceilingThroughput ?? ''} onChange={(v) => persistSettings({ ...settings, ceilingThroughput: v })} />
+                <NumField label="Trim throughput (linear ft/hr/coat)" value={settings.trimThroughput ?? ''} onChange={(v) => persistSettings({ ...settings, trimThroughput: v })} />
+                <NumField label="Door hours/side/coat" value={settings.doorHoursPerSidePerCoat ?? ''} onChange={(v) => persistSettings({ ...settings, doorHoursPerSidePerCoat: v })} />
+                <NumField label="Waste ratio (e.g. 0.10)" value={settings.defaultWasteRatio} onChange={(v) => persistSettings({ ...settings, defaultWasteRatio: v })} />
+              </div>
+              <p className="mt-4 text-xs text-ink-soft">Changing these never edits a saved draft or issued estimate — each keeps the rates captured in its own snapshot until you explicitly run "Refresh rates" on that project.</p>
+            </div>
           </div>
         )}
 
         {tab === 'catalog' && (
-          <div className="card p-6">
-            <button type="button" className="btn btn-secondary" onClick={addPaintVariant}>
-              + Add paint variant
-            </button>
-            <div className="mt-4 space-y-3">
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight text-ink">Paint & Materials</h2>
+                <p className="mt-1 text-sm text-ink-soft">The paint products every estimate and service draws from.</p>
+              </div>
+              <Button variant="primary" onClick={addPaintVariant}>+ Add paint variant</Button>
+            </div>
+            <div className="card p-6">
+            <div className="space-y-3">
               {catalog.map((v) => (
-                <div key={v.id} className="grid grid-cols-2 gap-2 rounded-btn border border-line p-3 sm:grid-cols-4">
-                  <TextField label="Name" value={v.name} onChange={(val) => persistCatalog(catalog.map((x) => (x.id === v.id ? { ...x, name: val } : x)))} />
-                  <NumField label="Price/gal ($)" value={v.pricePerGal} onChange={(val) => persistCatalog(catalog.map((x) => (x.id === v.id ? { ...x, pricePerGal: val } : x)))} />
-                  <NumField label="Coverage (sqft/gal)" value={v.coverageFt2PerGal} onChange={(val) => persistCatalog(catalog.map((x) => (x.id === v.id ? { ...x, coverageFt2PerGal: val } : x)))} />
-                  <TextField label="Sheen" value={v.sheen} onChange={(val) => persistCatalog(catalog.map((x) => (x.id === v.id ? { ...x, sheen: val } : x)))} />
+                <div key={v.id} className="rounded-btn border border-line p-3">
+                  <div className="mb-2 flex justify-end">
+                    <button type="button" className="text-link text-xs text-bad" onClick={() => removePaintVariant(v.id)}>
+                      Remove
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <TextField label="Name" value={v.name} onChange={(val) => persistCatalog(catalog.map((x) => (x.id === v.id ? { ...x, name: val } : x)))} />
+                    <NumField label="Price/gal ($)" value={v.pricePerGal} onChange={(val) => persistCatalog(catalog.map((x) => (x.id === v.id ? { ...x, pricePerGal: val } : x)))} />
+                    <NumField label="Coverage (sqft/gal)" value={v.coverageFt2PerGal} onChange={(val) => persistCatalog(catalog.map((x) => (x.id === v.id ? { ...x, coverageFt2PerGal: val } : x)))} />
+                    <TextField label="Sheen" value={v.sheen} onChange={(val) => persistCatalog(catalog.map((x) => (x.id === v.id ? { ...x, sheen: val } : x)))} />
+                  </div>
                 </div>
               ))}
               {catalog.length === 0 && <p className="text-sm text-ink-soft">Add a paint product before estimating.</p>}
+            </div>
             </div>
           </div>
         )}
 
         {tab === 'projects' && !activeProjectId && (
-          <div className="card p-6">
-            <button type="button" className="btn btn-primary" disabled={catalog.length === 0} onClick={newProject}>
-              + New project
-            </button>
-            {catalog.length === 0 && <p className="mt-2 text-sm text-warn">Add a paint product in the catalog first.</p>}
-            <div className="mt-4 space-y-2">
-              {projects.map((p) => {
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight text-ink">Projects</h2>
+                <p className="mt-1 text-sm text-ink-soft">Every estimate you've started, saved, or issued.</p>
+              </div>
+              <Button variant="primary" disabled={catalog.length === 0} onClick={newProject}>
+                + New project
+              </Button>
+            </div>
+            {catalog.length === 0 && <p className="text-sm text-warn">Add a paint product in the catalog first.</p>}
+
+            {projects.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                {(['all', 'draft', 'issued', 'superseded'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setProjectStatusFilter(f)}
+                    className={`btn btn-sm ${projectStatusFilter === f ? 'btn-primary' : 'btn-secondary'}`}
+                  >
+                    {f === 'all' ? 'All' : f === 'draft' ? 'Draft' : f === 'issued' ? 'Issued' : 'Superseded'}
+                  </button>
+                ))}
+                <div className="ml-auto w-full max-w-xs sm:w-auto">
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search projects and estimates"
+                    aria-label="Search projects and estimates"
+                    className="w-full rounded-btn border border-line bg-card px-3 py-2 text-sm text-ink placeholder:text-ink-soft focus-visible:border-primary"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {projects
+                .filter((p) => {
+                  const rev = p.revisions.find((r) => r.id === p.activeRevisionId) ?? p.revisions[p.revisions.length - 1];
+                  if (projectStatusFilter !== 'all' && rev.state !== projectStatusFilter) return false;
+                  if (searchQuery.trim() && !p.title.toLowerCase().includes(searchQuery.trim().toLowerCase())) return false;
+                  return true;
+                })
+                .map((p) => {
                 const rev = p.revisions.find((r) => r.id === p.activeRevisionId) ?? p.revisions[p.revisions.length - 1];
                 const hasHistory = p.revisions.length > 1 || p.actualReviews.length > 0;
                 return (
-                  <div key={p.id} className="rounded-btn border border-line p-3">
+                  <div key={p.id} className="card p-4 transition-colors duration-150 hover:border-primary/40">
                     <div className="flex items-center justify-between gap-2">
-                      <button type="button" onClick={() => openProject(p.id)} className="block flex-1 text-left hover:text-primary">
-                        <span className="font-semibold">{p.title}</span>
-                        <span className="ml-2 text-xs text-ink-soft">{rev.state} · rev {rev.revisionNumber}</span>
+                      <button type="button" onClick={() => openProject(p.id)} className="flex flex-1 flex-wrap items-center gap-2 text-left">
+                        <span className="font-semibold text-ink hover:text-primary-dark">{p.title}</span>
+                        <Badge variant={rev.state === 'issued' ? 'primary' : rev.state === 'superseded' ? 'warn' : 'neutral'}>
+                          {rev.state} · rev {rev.revisionNumber}
+                        </Badge>
                       </button>
                       <button type="button" className="text-link text-xs text-bad" onClick={() => setConfirmDeleteProjectId(p.id)}>Delete</button>
                     </div>
@@ -1264,13 +1404,25 @@ export default function ProApp() {
                 );
               })}
               {projects.length === 0 && (
-                <div className="text-sm text-ink-soft">
-                  <p>No projects yet.</p>
-                  {/* UX-011: this app's data lives only in this browser's
-                      local storage -- clearing site data loses it. */}
-                  <p className="mt-1">Your projects are stored only in this browser. Clearing your browser's site data will permanently erase them — use "Export backup (.json)" under the Backup tab regularly, and keep the file somewhere safe, so you can restore everything if that ever happens.</p>
-                </div>
+                <EmptyState
+                  heading="Create your first profitable project"
+                  description="Set up a project once and PaintingPricing Calculator handles the math — materials, labor, overhead, and a price that protects your margin. Your information is stored securely in this browser; export a backup anytime under Backup & Data to keep a portable copy."
+                  primaryAction={<Button variant="primary" disabled={catalog.length === 0} onClick={newProject}>Create first project</Button>}
+                  secondaryAction={<a href="/app/welcome" className="text-link text-sm">Explore a sample project</a>}
+                  steps={[{ label: 'Add project details' }, { label: 'Build the estimate' }, { label: 'Review profit' }]}
+                />
               )}
+              {projects.length > 0 &&
+                projects.filter((p) => {
+                  const rev = p.revisions.find((r) => r.id === p.activeRevisionId) ?? p.revisions[p.revisions.length - 1];
+                  if (projectStatusFilter !== 'all' && rev.state !== projectStatusFilter) return false;
+                  if (searchQuery.trim() && !p.title.toLowerCase().includes(searchQuery.trim().toLowerCase())) return false;
+                  return true;
+                }).length === 0 && (
+                  <div className="card p-6 text-center text-sm text-ink-soft">
+                    No projects match this filter or search. Try a different status or clear your search.
+                  </div>
+                )}
             </div>
           </div>
         )}
@@ -2033,7 +2185,7 @@ export default function ProApp() {
           </div>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }
 

@@ -58,7 +58,10 @@ export const GET: APIRoute = async ({ url }) => {
           customerEmail: payment.customer?.email ?? null,
           customerName: payment.customer?.name ?? null,
           licenseKey,
-          recoveryUrl: buildRecoveryUrl({ paymentId: payment.payment_id }),
+          // First-purchase confirmation -> lands on /app/welcome, per the
+          // decision to keep that as the intended first landing page.
+          recoveryUrl: buildRecoveryUrl({ paymentId: payment.payment_id, target: '/app/welcome' }),
+          payment,
         });
       } catch (err) {
         console.error('verify.ts: license email failed:', err);

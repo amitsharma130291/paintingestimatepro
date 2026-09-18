@@ -2,16 +2,24 @@
 @import "@fontsource-variable/inter";
 
 /* ---- Design tokens ------------------------------------------------- */
+/* "Modern craftsman" palette — warm off-white paper, deep forest-green
+   primary, sage surfaces for secondary panels, brass reserved for sparing
+   accents (never large fills). Shared site-wide so the marketing pages and
+   the Pro app read as one brand; only the Pro app's layout/structure is
+   redesigned, not these color values. */
 @theme {
-  --color-paper: #faf9f6;
+  --color-paper: #f7f7f3;
   --color-card: #ffffff;
-  --color-ink: #17211d;
-  --color-ink-soft: #4c5a52;
-  --color-primary: #146c4e;
-  --color-primary-dark: #0f5940;
+  --color-ink: #15201c;
+  --color-ink-soft: #4b5750;
+  --color-primary: #0e5a43;
+  --color-primary-dark: #0a4735;
   --color-primary-ink: #f6faf8;
-  --color-line: #dde3dd;
-  --color-line-soft: #eaeee9;
+  --color-surface-sage: #e9f0eb;
+  --color-accent-brass: #c99746;
+  --color-accent-brass-dark: #ad7f36;
+  --color-line: #e0e3dc;
+  --color-line-soft: #edefe9;
   --color-warn: #92450c;
   --color-warn-soft: #fbf1e2;
   --color-warn-line: #f0dcb8;
@@ -20,7 +28,8 @@
   --color-bad-line: #f0d3ce;
 
   --radius-card: 1.125rem;
-  --radius-btn: 0.6875rem;
+  --radius-btn: 0.75rem;
+  --radius-sm: 0.5rem;
 
   --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
@@ -124,6 +133,33 @@ body {
     color: var(--color-primary-dark);
   }
 
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--color-ink-soft);
+    border: 1px solid transparent;
+  }
+
+  .btn-ghost:hover {
+    background-color: var(--color-surface-sage);
+    color: var(--color-ink);
+  }
+
+  .btn-danger {
+    background-color: transparent;
+    color: var(--color-bad);
+    border: 1px solid var(--color-bad-line);
+  }
+
+  .btn-danger:hover {
+    background-color: var(--color-bad-soft);
+  }
+
+  .btn-sm {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.8125rem;
+    min-height: 36px;
+  }
+
   .card {
     background-color: var(--color-card);
     border: 1px solid var(--color-line);
@@ -152,6 +188,30 @@ body {
     border: 1px solid var(--color-line);
     color: var(--color-ink-soft);
     background-color: var(--color-line-soft);
+  }
+
+  .status-pill-primary {
+    border-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-line));
+    background-color: var(--color-surface-sage);
+    color: var(--color-primary-dark);
+  }
+
+  .status-pill-warn {
+    border-color: var(--color-warn-line);
+    background-color: var(--color-warn-soft);
+    color: var(--color-warn);
+  }
+
+  .status-pill-bad {
+    border-color: var(--color-bad-line);
+    background-color: var(--color-bad-soft);
+    color: var(--color-bad);
+  }
+
+  .status-pill-brass {
+    border-color: color-mix(in srgb, var(--color-accent-brass) 45%, var(--color-line));
+    background-color: color-mix(in srgb, var(--color-accent-brass) 14%, white);
+    color: var(--color-accent-brass-dark);
   }
 
   /* Same idea as .status-pill but for a full sentence (availability

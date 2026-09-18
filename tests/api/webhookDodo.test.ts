@@ -20,12 +20,13 @@ vi.mock('standardwebhooks', () => {
 });
 
 const mockSendLicenseEmails = vi.fn(async () => ({ configured: false, customerSent: false, customerError: null, ownerSent: false, ownerError: null }));
+const mockSendPaymentFailureEmail = vi.fn(async () => ({ sent: false, error: null }));
 vi.mock('../../src/lib/server/license', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/lib/server/license')>();
-  return { ...actual, sendLicenseEmails: mockSendLicenseEmails };
+  return { ...actual, sendLicenseEmails: mockSendLicenseEmails, sendPaymentFailureEmail: mockSendPaymentFailureEmail };
 });
 
-function payment(overrides: Partial<{ status: string; refund_status: string | null; product_cart: { product_id: string; quantity: number }[] | null; payment_id: string; customer: { email: string | null; name: string | null } }> = {}) {
+function payment(overrides: Partial<{ status: string; refund_status: string | null; product_cart: { product_id: string; quantity: number }[] | null; payment_id: string; customer: { email: string | null; name: string | null }; error_code: string | null; error_message: string | null }> = {}) {
   return {
     payment_id: 'pay_1',
     status: 'succeeded',
@@ -60,6 +61,7 @@ describe('POST /api/webhooks/dodo — real handler, mocked signature verificatio
     mockVerify.mockReset();
     mockVerify.mockResolvedValue(undefined); // signature valid by default
     mockSendLicenseEmails.mockClear();
+    mockSendPaymentFailureEmail.mockClear();
   });
 
   it('sends the license email for a payment.succeeded event that purchased the configured Pro product', async () => {
@@ -82,11 +84,21 @@ describe('POST /api/webhooks/dodo — real handler, mocked signature verificatio
     expect(mockSendLicenseEmails).not.toHaveBeenCalled();
   });
 
-  it('ignores an unrelated event type entirely', async () => {
+  it('sends an owner-only failure notification for payment.failed, never a license email', async () => {
     const POST = await getHandler();
-    const res = await POST(makeContext('payment.failed', payment({ status: 'failed' })));
+    const res = await POST(makeContext('payment.failed', payment({ status: 'failed', error_code: 'card_declined' })));
     expect(res.status).toBe(200);
     expect(mockSendLicenseEmails).not.toHaveBeenCalled();
+    expect(mockSendPaymentFailureEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendPaymentFailureEmail).toHaveBeenCalledWith(expect.objectContaining({ payment_id: 'pay_1', error_code: 'card_declined' }));
+  });
+
+  it('ignores an unrelated event type entirely', async () => {
+    const POST = await getHandler();
+    const res = await POST(makeContext('refund.succeeded', payment()));
+    expect(res.status).toBe(200);
+    expect(mockSendLicenseEmails).not.toHaveBeenCalled();
+    expect(mockSendPaymentFailureEmail).not.toHaveBeenCalled();
   });
 
   it('rejects a request with an invalid signature (401), never evaluating entitlement or emailing', async () => {

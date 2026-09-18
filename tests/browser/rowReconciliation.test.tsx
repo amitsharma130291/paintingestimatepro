@@ -50,7 +50,7 @@ describe('PRO-013: the estimate summary reconciles its own displayed components 
     // get an exact .xx5 boundary this way.
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
-    fireEvent.click(screen.getByRole('button', { name: 'Business settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Business Settings' }));
     fireEvent.change(screen.getByLabelText(/Loaded hourly rate/i), { target: { value: '32' } });
     fireEvent.change(screen.getByLabelText(/Overhead/i), { target: { value: '0.15' } });
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));

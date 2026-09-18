@@ -111,7 +111,7 @@ describe('LIFE-014: deleting a project requires explicit confirmation and is ato
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Yes, delete permanently' }));
 
-    await waitFor(() => expect(screen.getByText('No projects yet.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Create your first profitable project')).toBeTruthy());
     expect((await readProjects())).toHaveLength(0);
   });
 });

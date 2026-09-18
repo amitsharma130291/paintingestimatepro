@@ -1,5 +1,10 @@
 import { useState, type FormEvent } from 'react';
+import { Loader2, CheckCircle2, MailCheck } from 'lucide-react';
 import { startCheckout, redeemLicenseKey, requestLicenseRecovery } from '../../lib/license';
+
+function Spinner() {
+  return <Loader2 size={15} strokeWidth={2.5} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />;
+}
 
 /**
  * The one purchase/unlock UI, used both on the homepage pricing section and
@@ -43,7 +48,12 @@ export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: str
       await redeemLicenseKey(key);
       setRedeemSuccess(true);
       setLicenseKeyInput('');
-      onUnlocked?.();
+      // ProGate passes its own onUnlocked to flip state in place (already on
+      // /app). The homepage usage passes none -- default to actually taking
+      // the user into the app, since redeeming there previously just showed
+      // a confirmation sentence and went nowhere.
+      if (onUnlocked) onUnlocked();
+      else window.location.href = '/app';
     } catch (err) {
       setRedeemError(err instanceof Error ? err.message : "Couldn't verify that license key.");
     } finally {
@@ -70,6 +80,7 @@ export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: str
   return (
     <div>
       <button type="button" className="btn btn-primary" onClick={handleBuy} disabled={buying}>
+        {buying && <Spinner />}
         {buying ? 'Starting checkout…' : 'Buy Pro — $99 one-time'}
       </button>
       {buyError && <p className="mt-2 text-sm text-bad">{buyError}</p>}
@@ -81,7 +92,10 @@ export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: str
         {showRecovery && (
           <div className="mt-3 max-w-sm text-left">
             {redeemSuccess ? (
-              <p className="text-sm text-primary-dark">✓ License verified — Pro is unlocked in this browser.</p>
+              <p className="flex items-center gap-1.5 text-sm font-medium text-primary-dark">
+                <CheckCircle2 size={16} strokeWidth={2} aria-hidden="true" />
+                License verified — Pro is unlocked in this browser.
+              </p>
             ) : (
               <form onSubmit={handleRedeem} className="flex gap-2">
                 <input
@@ -94,6 +108,7 @@ export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: str
                   className="w-full rounded-btn border border-line bg-card px-3 py-2 text-sm text-ink"
                 />
                 <button type="submit" className="btn btn-secondary shrink-0" disabled={redeeming}>
+                  {redeeming && <Spinner />}
                   {redeeming ? 'Checking…' : 'Unlock'}
                 </button>
               </form>
@@ -115,11 +130,17 @@ export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: str
                   className="w-full rounded-btn border border-line bg-card px-3 py-2 text-sm text-ink"
                 />
                 <button type="submit" className="btn btn-secondary shrink-0" disabled={recovering}>
+                  {recovering && <Spinner />}
                   {recovering ? 'Sending…' : 'Send my key'}
                 </button>
               </form>
             )}
-            {recoveryMessage && <p className="mt-2 text-xs text-ink-soft">{recoveryMessage}</p>}
+            {recoveryMessage && (
+              <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-soft">
+                <MailCheck size={14} strokeWidth={2} className="mt-0.5 shrink-0" aria-hidden="true" />
+                {recoveryMessage}
+              </p>
+            )}
           </div>
         )}
       </div>

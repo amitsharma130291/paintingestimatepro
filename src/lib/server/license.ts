@@ -27,12 +27,17 @@ export function parseLicenseKey(rawKey: unknown): { paymentId: string } | null {
   return { paymentId: match[1] };
 }
 
-export function buildRecoveryUrl({ sessionId, paymentId }: { sessionId?: string | null; paymentId?: string | null }): string {
-  // Points at /#pricing, where the standalone "Already purchased?" box
-  // lives, so a customer clicking this from their email lands somewhere
-  // that explains itself, not straight into the workspace.
-  const url = new URL('/', SITE_URL);
-  url.hash = 'pricing';
+/**
+ * BUG FIX: this used to point at `/#pricing` — but the code that actually
+ * consumes `checkout=recover` (consumeRecoveryParams() inside
+ * resolvePendingCheckout(), src/lib/license.ts) only ever runs from
+ * ProGate.tsx, which is mounted on /app and /app/welcome, never on the
+ * homepage. A recovery/reactivation email link built the old way landed on
+ * the pricing section and did nothing — no auto-unlock. `target` must be a
+ * page that actually resolves these params.
+ */
+export function buildRecoveryUrl({ sessionId, paymentId, target = '/app' }: { sessionId?: string | null; paymentId?: string | null; target?: '/app' | '/app/welcome' }): string {
+  const url = new URL(target, SITE_URL);
   url.searchParams.set('checkout', 'recover');
   if (sessionId) url.searchParams.set('sessionId', sessionId);
   else if (paymentId) url.searchParams.set('paymentId', paymentId);
@@ -40,13 +45,13 @@ export function buildRecoveryUrl({ sessionId, paymentId }: { sessionId?: string 
 }
 
 function customerHtml({ licenseKey, recoveryUrl, isResend }: { licenseKey: string; recoveryUrl: string; isResend: boolean }): string {
-  const heading = isResend ? "Here's your license key" : 'Thanks for your purchase';
+  const heading = isResend ? "Here's your license key" : "Welcome to Pro — you're all set";
   const intro = isResend
     ? 'You asked for your Painting Estimate Pro license key to be resent — here it is.'
-    : "Pro is unlocked — here's your license key for whenever you need to restore access.";
+    : "Thanks for your purchase — your setup is done and Pro is ready to use right now.";
   const activationNote = isResend
-    ? 'Click below to activate your Pro license in this browser — it only takes a second.'
-    : "<strong>Your Pro access is already active</strong> in the browser you checked out in — there's nothing else to do there. If you don't see it unlocked, switched devices, or cleared your browser, click below to reactivate it instantly.";
+    ? 'Click below to jump straight into Pro — it activates your license in this browser automatically.'
+    : "Click below to go straight into your new workspace — this activates your license in this browser automatically, so there's nothing else to set up.";
   return `
   <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#17211d">
     <p style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#146c4e;margin:0 0 10px">Painting Estimate Pro</p>
@@ -66,11 +71,11 @@ function customerHtml({ licenseKey, recoveryUrl, isResend }: { licenseKey: strin
 
     <p style="font-size:13px;line-height:1.6;color:#4c5a52;margin:0 0 18px">${activationNote}</p>
 
-    <a href="${recoveryUrl}" style="display:inline-block;background:#146c4e;color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:6px;margin:0 0 26px">Reactivate license</a>
+    <a href="${recoveryUrl}" style="display:inline-block;background:#146c4e;color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:6px;margin:0 0 26px">Go to app</a>
 
-    <p style="font-size:13px;font-weight:700;margin:0 0 8px">How to recover access if you ever lose this email</p>
+    <p style="font-size:13px;font-weight:700;margin:0 0 8px">How to activate your license if you ever forget this email, switch devices, or clear your browser</p>
     <ol style="font-size:13px;line-height:1.7;color:#4c5a52;margin:0 0 20px;padding-left:18px">
-      <li>Click <strong>Reactivate license</strong> above, on any device — it unlocks instantly, no login.</li>
+      <li>Click <strong>Go to app</strong> above, on any device — it unlocks instantly, no login.</li>
       <li>Or go to the <a href="${SITE_URL}/#pricing">pricing section</a>, open <strong>"Already purchased?"</strong>, and paste: <strong>${escapeHtml(licenseKey)}</strong></li>
       <li>Lost the key itself, not just this email? On that same section, click <strong>"Forgot your key?"</strong>, enter the email you paid with, and it gets re-sent automatically.</li>
     </ol>
@@ -85,10 +90,10 @@ function customerHtml({ licenseKey, recoveryUrl, isResend }: { licenseKey: strin
 function customerText({ licenseKey, recoveryUrl, isResend }: { licenseKey: string; recoveryUrl: string; isResend: boolean }): string {
   const intro = isResend
     ? 'You asked for your Painting Estimate Pro license key to be resent — here it is.'
-    : "Pro is unlocked — here's your license key for whenever you need to restore access.";
+    : 'Thanks for your purchase -- your setup is done and Pro is ready to use right now.';
   const activationNote = isResend
-    ? 'Click the link below to activate your Pro license in this browser -- it only takes a second.'
-    : "Your Pro access is already active in the browser you checked out in -- there's nothing else to do there. If you don't see it unlocked, switched devices, or cleared your browser, use the link below to reactivate it instantly.";
+    ? 'Click the link below to jump straight into Pro -- it activates your license in this browser automatically.'
+    : "Click the link below to go straight into your new workspace -- this activates your license in this browser automatically, so there's nothing else to set up.";
   return [
     intro,
     '',
@@ -97,10 +102,10 @@ function customerText({ licenseKey, recoveryUrl, isResend }: { licenseKey: strin
     '',
     activationNote,
     '',
-    `Reactivate license: ${recoveryUrl}`,
+    `Go to app: ${recoveryUrl}`,
     '',
-    'How to recover access if you ever lose this email:',
-    '1. Click the reactivate link above, on any device -- unlocks instantly, no login.',
+    'How to activate your license if you ever forget this email, switch devices, or clear your browser:',
+    '1. Click the "Go to app" link above, on any device -- unlocks instantly, no login.',
     `2. Or go to ${SITE_URL}/#pricing, open "Already purchased?", and paste: ${licenseKey}`,
     '3. Lost the key itself? On that same section, click "Forgot your key?", enter the email you paid with, and it gets re-sent automatically.',
     '',
@@ -134,12 +139,18 @@ export async function sendLicenseEmails({
   licenseKey,
   recoveryUrl,
   isResend = false,
+  payment,
 }: {
   customerEmail: string | null;
   customerName: string | null;
   licenseKey: string;
   recoveryUrl: string;
   isResend?: boolean;
+  /** The full raw Dodo payment object, when the caller has it in hand
+   * (verify.ts, the webhook, recover.ts all do) — included verbatim in the
+   * owner's email as a pretty-printed JSON block, in addition to the
+   * readable summary below, so the owner always has the complete record. */
+  payment?: unknown;
 }): Promise<SendLicenseEmailsResult> {
   const result: SendLicenseEmailsResult = { configured: false, customerSent: false, customerError: null, ownerSent: false, ownerError: null };
   const setup = getTransporter();
@@ -171,12 +182,26 @@ export async function sendLicenseEmails({
 
   if (OWNER_EMAIL) {
     try {
+      const rawJson = payment !== undefined ? JSON.stringify(payment, null, 2) : null;
       await transporter.sendMail({
         from: `"Painting Estimate Pro" <${gmailUser}>`,
         to: OWNER_EMAIL,
         subject: `[${SITE_NAME}] Order — Pro — ${licenseKey}`,
-        text: `New order on ${SITE_NAME} (${SITE_URL}).\n\nProduct: Pro ($99 lifetime)\nLicense key: ${licenseKey}\nCustomer: ${customerName || '(no name given)'} <${customerEmail || 'no email'}>\n${isResend ? '(This was a resend, not a new purchase.)' : ''}`,
-        html: `<p>New order on <strong>${escapeHtml(SITE_NAME)}</strong> (${escapeHtml(SITE_URL)}).</p><ul><li>Product: Pro ($99 lifetime)</li><li>License key: ${escapeHtml(licenseKey)}</li><li>Customer: ${escapeHtml(customerName || '(no name given)')} &lt;${escapeHtml(customerEmail || 'no email')}&gt;</li></ul>${isResend ? '<p><em>This was a resend, not a new purchase.</em></p>' : ''}`,
+        text: [
+          `New order on ${SITE_NAME} (${SITE_URL}).`,
+          '',
+          'Product: Pro ($99 lifetime)',
+          `License key: ${licenseKey}`,
+          `Customer: ${customerName || '(no name given)'} <${customerEmail || 'no email'}>`,
+          isResend ? '(This was a resend, not a new purchase.)' : '',
+          rawJson ? `\nFull payment object:\n${rawJson}` : '',
+        ].filter(Boolean).join('\n'),
+        html: [
+          `<p>New order on <strong>${escapeHtml(SITE_NAME)}</strong> (${escapeHtml(SITE_URL)}).</p>`,
+          `<ul><li>Product: Pro ($99 lifetime)</li><li>License key: ${escapeHtml(licenseKey)}</li><li>Customer: ${escapeHtml(customerName || '(no name given)')} &lt;${escapeHtml(customerEmail || 'no email')}&gt;</li></ul>`,
+          isResend ? '<p><em>This was a resend, not a new purchase.</em></p>' : '',
+          rawJson ? `<p style="font-weight:700;margin:16px 0 6px">Full payment object</p><pre style="background:#faf9f6;border:1px solid #dde3dd;border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;white-space:pre-wrap">${escapeHtml(rawJson)}</pre>` : '',
+        ].filter(Boolean).join(''),
       });
       result.ownerSent = true;
     } catch (err) {
@@ -186,4 +211,45 @@ export async function sendLicenseEmails({
   }
 
   return result;
+}
+
+/**
+ * Internal-only notification for a payment.failed webhook event — no
+ * customer email (there's no license to send), just the owner getting the
+ * complete raw object so a real decline/failure is never silent.
+ */
+export async function sendPaymentFailureEmail(payment: unknown): Promise<{ sent: boolean; error: string | null }> {
+  if (!OWNER_EMAIL) return { sent: false, error: 'OWNER_EMAIL not configured.' };
+  const setup = getTransporter();
+  if (!setup) return { sent: false, error: 'GMAIL_USER/GMAIL_APP_PASSWORD not configured.' };
+  const { transporter, gmailUser } = setup;
+
+  const p = (payment ?? {}) as { payment_id?: string; error_code?: string | null; error_message?: string | null; customer?: { email?: string | null; name?: string | null } };
+  const rawJson = JSON.stringify(payment, null, 2);
+  const reasonLine = p.error_message || p.error_code ? `Reason: ${p.error_message || p.error_code}` : 'Reason: not provided by Dodo.';
+
+  try {
+    await transporter.sendMail({
+      from: `"Painting Estimate Pro" <${gmailUser}>`,
+      to: OWNER_EMAIL,
+      subject: `[${SITE_NAME}] Payment failed${p.payment_id ? ` — ${p.payment_id}` : ''}`,
+      text: [
+        `A payment attempt failed on ${SITE_NAME} (${SITE_URL}).`,
+        '',
+        `Customer: ${p.customer?.name || '(no name given)'} <${p.customer?.email || 'no email'}>`,
+        reasonLine,
+        '',
+        `Full payment object:\n${rawJson}`,
+      ].join('\n'),
+      html: [
+        `<p>A payment attempt failed on <strong>${escapeHtml(SITE_NAME)}</strong> (${escapeHtml(SITE_URL)}).</p>`,
+        `<ul><li>Customer: ${escapeHtml(p.customer?.name || '(no name given)')} &lt;${escapeHtml(p.customer?.email || 'no email')}&gt;</li><li>${escapeHtml(reasonLine)}</li></ul>`,
+        `<p style="font-weight:700;margin:16px 0 6px">Full payment object</p><pre style="background:#fbeeec;border:1px solid #f0d3ce;border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;white-space:pre-wrap">${escapeHtml(rawJson)}</pre>`,
+      ].join(''),
+    });
+    return { sent: true, error: null };
+  } catch (err) {
+    console.error('Payment-failure email to owner failed:', err);
+    return { sent: false, error: String((err as Error)?.message || err) };
+  }
 }

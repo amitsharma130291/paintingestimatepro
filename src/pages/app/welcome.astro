@@ -53,6 +53,12 @@ const DASHBOARD_TABS = [
   <Header />
   <main id="main-content" class="section-pad">
     <div class="content-shell max-w-3xl">
+      <div id="purchase-confirmed-banner" hidden class="mb-6 flex items-center gap-2 rounded-btn border border-line bg-surface-sage px-4 py-3 text-sm font-medium text-primary-dark">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+        Payment confirmed — Pro is unlocked in this browser.
+      </div>
       <p class="eyebrow">Pro</p>
       <h1 class="mt-4 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
         Welcome to Pro
@@ -106,3 +112,30 @@ const DASHBOARD_TABS = [
   </main>
   <Footer />
 </BaseLayout>
+
+<script>
+  // Resolves a just-completed Dodo checkout (or a "Go to app"/recovery email
+  // link) the same way ProGate.tsx does on /app -- this page previously had
+  // no such logic at all, so landing here after paying never actually
+  // reflected the unlock until the user separately clicked through to /app.
+  import { resolvePendingCheckout, NetworkFailure } from '../../lib/license';
+
+  resolvePendingCheckout()
+    .then((result) => {
+      if (result && !('failed' in result)) {
+        const banner = document.getElementById('purchase-confirmed-banner');
+        if (banner) banner.hidden = false;
+        return;
+      }
+      if (result && 'failed' in result) {
+        window.location.href = `/pricing?payment=failed&reason=${encodeURIComponent(result.status || 'unknown')}`;
+      }
+      // result === null: an ordinary visit, not returning from a checkout --
+      // nothing to do.
+    })
+    .catch((err) => {
+      // Can't verify right now (connectivity) -- never redirect away on a
+      // blip; /app's own ProGate retries this normally when clicked through.
+      if (!(err instanceof NetworkFailure)) console.error(err);
+    });
+</script>

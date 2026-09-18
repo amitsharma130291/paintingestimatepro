@@ -131,7 +131,7 @@ describe('Complete Pro estimate lifecycle (one continuous session)', () => {
     // 8. Issue revision 2, then record a genuine PARTIAL actual-cost review (never fabricating a final one).
     fireEvent.click(screen.getByRole('button', { name: 'Issue estimate' }));
     await waitFor(async () => expect((await readProjects())[0].revisions.find((r) => r.revisionNumber === 2)!.state).toBe('issued'));
-    fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'materials' }));
     fireEvent.change(screen.getAllByPlaceholderText('0.00')[0], { target: { value: '350' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save actuals' }));
@@ -139,7 +139,7 @@ describe('Complete Pro estimate lifecycle (one continuous session)', () => {
     expect(screen.getByText(/In progress — 1\/4 categories confirmed/)).toBeTruthy(); // genuinely partial, never a fabricated final result
 
     // 9. Export a backup -- the download path runs with no error.
-    fireEvent.click(screen.getByRole('button', { name: 'Backup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Backup & Data' }));
     fireEvent.click(screen.getByRole('button', { name: 'Export backup (.json)' }));
     await waitFor(() => expect((URL.createObjectURL as ReturnType<typeof vi.fn>)).toHaveBeenCalled()); // handleExport awaits a fresh storage read first
 

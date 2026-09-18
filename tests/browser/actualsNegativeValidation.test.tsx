@@ -60,7 +60,7 @@ async function openActuals() {
   await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
   fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
   fireEvent.click(await screen.findByRole('button', { name: /^Audit project/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
 }
 
 describe('ACT-015: a negative actual expense is invalid, never silently zeroed/clamped, and blocks finalization', () => {

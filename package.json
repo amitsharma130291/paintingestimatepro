@@ -33,6 +33,7 @@
     "decimal.js": "^10.6.0",
     "dodopayments": "^2.50.0",
     "idb": "^8.0.3",
+    "lucide-react": "^0.460.0",
     "nodemailer": "^10.0.10",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

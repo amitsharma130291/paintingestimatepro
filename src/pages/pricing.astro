@@ -1,0 +1,55 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import Pricing from "../components/Pricing.astro";
+
+const title = "Pricing | PaintingPricing Calculator";
+const description = "Painting Estimate Pro — one-time purchase, lifetime access. See what's included and unlock the Pro workspace.";
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <main id="main-content">
+    <div class="content-shell pt-8">
+      <div
+        id="payment-failed-banner"
+        hidden
+        class="mx-auto max-w-3xl rounded-btn border border-bad-line bg-bad-soft px-5 py-4 text-sm text-bad"
+      >
+        <p id="payment-failed-message" class="font-semibold">That checkout didn't complete.</p>
+        <p class="mt-1 text-ink-soft">If you were charged, contact us and we'll sort it out right away.</p>
+      </div>
+    </div>
+    <Pricing />
+  </main>
+  <Footer />
+</BaseLayout>
+
+<script>
+  // Above-the-fold failure notice: a checkout/recovery attempt that came
+  // back non-success redirects here (see ProGate.tsx and app/welcome.astro)
+  // with ?payment=failed&reason=<status> rather than only showing a small
+  // note buried inside the /app paywall card.
+  const REASON_COPY: Record<string, string> = {
+    cancelled: "That checkout was cancelled — no charge was made.",
+    refunded: "This purchase was refunded, so Pro access is no longer active. Contact support if that seems wrong.",
+    not_configured: "Payments aren't fully set up yet — please try again shortly or contact us.",
+    wrong_product: "That payment didn't match the Pro product — contact us and we'll sort it out.",
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('payment') === 'failed') {
+    const reason = params.get('reason') || '';
+    const banner = document.getElementById('payment-failed-banner');
+    const message = document.getElementById('payment-failed-message');
+    if (message) message.textContent = REASON_COPY[reason] ?? "That checkout didn't complete — if you were charged, contact us and we'll sort it out.";
+    if (banner) banner.hidden = false;
+
+    // Clean the URL so refreshing the page doesn't re-show the banner.
+    params.delete('payment');
+    params.delete('reason');
+    const query = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''));
+  }
+</script>

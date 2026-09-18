@@ -34,7 +34,7 @@ describe('Independent v5 tools workflows', () => {
     fireEvent.click(screen.getByRole('button',{name:'Projects'}));
     fireEvent.click(await screen.findByRole('button',{name:/^Audit project/}));
     expect(await screen.findByText('$126.00')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button',{name:'Paint catalog'}));
+    fireEvent.click(screen.getByRole('button',{name:'Paint & Materials'}));
     fireEvent.change(screen.getByLabelText('Price/gal ($)'),{target:{value:'49'}});
     fireEvent.click(screen.getByRole('button',{name:'Projects'}));
     fireEvent.click(screen.getByRole('button',{name:'Check for rate updates'}));
@@ -86,7 +86,7 @@ describe('Independent v5 tools workflows', () => {
     for(const [label,value] of [['Length (ft)','10'],['Width (ft)','10'],['Height (ft)','8']]) fireEvent.change(screen.getByLabelText(label),{target:{value}});
     fireEvent.click(screen.getByRole('button',{name:'Issue estimate'}));
     await screen.findByText('Estimate issued and saved.');
-    fireEvent.click(screen.getByRole('button',{name:'Actual review'}));
+    fireEvent.click(screen.getByRole('button',{name:'Actual Costs'}));
     expect(screen.getByRole('radio',{name:/baseline allocation/i})).toHaveProperty('checked',true);
     fireEvent.click(screen.getByRole('checkbox',{name:'overhead'}));
     expect(screen.getByRole('button',{name:'Save actuals'})).toHaveProperty('disabled',false);

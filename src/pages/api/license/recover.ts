@@ -64,13 +64,17 @@ export const POST: APIRoute = async ({ request }) => {
 
     for (const payment of matches) {
       const licenseKey = buildLicenseKey(payment.payment_id);
-      const recoveryUrl = buildRecoveryUrl({ paymentId: payment.payment_id });
+      // Reactivating an existing customer -> straight to /app, not the
+      // first-purchase welcome page (requirement: "as soon as the key is
+      // reactivated, redirect user to paid app").
+      const recoveryUrl = buildRecoveryUrl({ paymentId: payment.payment_id, target: '/app' });
       await sendLicenseEmails({
         customerEmail: email,
         customerName: payment.customer?.name ?? null,
         licenseKey,
         recoveryUrl,
         isResend: true,
+        payment,
       });
     }
   } catch (err) {

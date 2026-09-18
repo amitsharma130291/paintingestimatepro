@@ -106,7 +106,7 @@ describe('BACK-026: an issued revision from a different engine version still dis
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
     fireEvent.click(await screen.findByRole('button', { name: /^Old engine job/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Actual review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actual Costs' }));
 
     expect(await screen.findByText(/1\.0\.0/)).toBeTruthy();
     expect(screen.getByText(/preserved exactly as issued/i)).toBeTruthy();

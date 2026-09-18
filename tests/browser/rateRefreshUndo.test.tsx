@@ -68,7 +68,7 @@ async function mountAndOpenProject() {
 }
 
 function changeLivePaintPriceTo(newPrice: string) {
-  fireEvent.click(screen.getByRole('button', { name: 'Paint catalog' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Paint & Materials' }));
   fireEvent.change(screen.getByLabelText('Price/gal ($)'), { target: { value: newPrice } });
 }
 
