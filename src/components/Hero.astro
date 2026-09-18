@@ -121,14 +121,23 @@ import {
     background-size: cover;
   }
 
+  /* CALIBRATION FIX: the gradient sits ON TOP of the image (first layer in
+     a background-image list paints highest), so its own stop opacity and
+     the element's overall `opacity` both dampen the image -- multiplicatively.
+     The first cut kept the gradient at 42% paper-wash even at the right
+     edge, which combined with opacity 0.20-0.24 to a net visible strength
+     of ~13% at the single most-visible point -- imperceptible in practice.
+     Right-edge stop is now near-transparent (6%) so the element's own
+     opacity (0.20-0.24, per the brief's "effective opacity" range) is what
+     actually shows there; the left stays at 98% so that side reads clean. */
   @media (min-width: 640px) {
     .hero-limewash {
       background-image:
         linear-gradient(
           90deg,
           color-mix(in srgb, var(--color-paper) 98%, transparent) 0%,
-          color-mix(in srgb, var(--color-paper) 88%, transparent) 42%,
-          color-mix(in srgb, var(--color-paper) 42%, transparent) 100%
+          color-mix(in srgb, var(--color-paper) 55%, transparent) 60%,
+          color-mix(in srgb, var(--color-paper) 6%, transparent) 100%
         ),
         url("/hero/painting-pricing-hero-limewash-1280.webp");
       opacity: 0.2;
@@ -141,8 +150,8 @@ import {
         linear-gradient(
           90deg,
           color-mix(in srgb, var(--color-paper) 98%, transparent) 0%,
-          color-mix(in srgb, var(--color-paper) 88%, transparent) 42%,
-          color-mix(in srgb, var(--color-paper) 42%, transparent) 100%
+          color-mix(in srgb, var(--color-paper) 55%, transparent) 60%,
+          color-mix(in srgb, var(--color-paper) 6%, transparent) 100%
         ),
         url("/hero/painting-pricing-hero-limewash.webp");
       opacity: 0.24;
