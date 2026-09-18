@@ -8,8 +8,9 @@ import {
 } from "../data/site";
 ---
 
-<section class="relative overflow-hidden pt-10 pb-8 sm:pt-14 sm:pb-[2.875rem] lg:pt-16 lg:pb-[3.25rem]">
-  <div class="content-shell grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16">
+<section class="relative isolate overflow-hidden pt-10 pb-8 sm:pt-14 sm:pb-[2.875rem] lg:pt-16 lg:pb-[3.25rem]">
+  <div class="hero-limewash" data-animate aria-hidden="true"></div>
+  <div class="content-shell relative z-10 grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16">
     <div data-animate>
       <p class="eyebrow">Painting estimating software for independent painters</p>
       <h1 class="mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-ink sm:text-5xl">
@@ -97,3 +98,54 @@ import {
     </div>
   </div>
 </section>
+
+<style>
+  /* Decorative limewash texture — see Option 4 brief. Purely visual: never
+     in the accessibility tree (aria-hidden), never intercepts input
+     (pointer-events: none), and stacked behind .content-shell (z-index:0
+     under isolate, vs. the content's z-10) so it can never obscure or
+     compete with the headline, CTA, or calculator card above it.
+     No background-image at all below 640px -- mobile never downloads
+     either asset. 640-1023px uses the smaller 1280w asset at a touch
+     lower opacity (the calculator card sits closer to the tinted region
+     at that width); 1024px+ uses the full 2048w asset. Reduced-motion and
+     the entrance fade are both inherited for free from the site's existing
+     [data-animate] system (global.css) -- no bespoke transition here. */
+  .hero-limewash {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-repeat: no-repeat;
+    background-position: center right;
+    background-size: cover;
+  }
+
+  @media (min-width: 640px) {
+    .hero-limewash {
+      background-image:
+        linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--color-paper) 98%, transparent) 0%,
+          color-mix(in srgb, var(--color-paper) 88%, transparent) 42%,
+          color-mix(in srgb, var(--color-paper) 42%, transparent) 100%
+        ),
+        url("/hero/painting-pricing-hero-limewash-1280.webp");
+      opacity: 0.2;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .hero-limewash {
+      background-image:
+        linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--color-paper) 98%, transparent) 0%,
+          color-mix(in srgb, var(--color-paper) 88%, transparent) 42%,
+          color-mix(in srgb, var(--color-paper) 42%, transparent) 100%
+        ),
+        url("/hero/painting-pricing-hero-limewash.webp");
+      opacity: 0.24;
+    }
+  }
+</style>
