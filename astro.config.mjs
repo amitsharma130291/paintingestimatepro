@@ -19,11 +19,18 @@ export default defineConfig({
   // build-time-only static page -- see that file's comment).
   adapter: vercel(),
   integrations: [
-    // Exclude the dev-only ProApp verification harness -- it 404s in
-    // production (see src/pages/dev/pro-harness.astro's own PROD guard),
-    // so listing it in the sitemap would have Google crawl a URL that
-    // returns nothing, wasting crawl budget and reporting a sitemap error.
-    sitemap({ filter: (page) => !page.includes('/dev/') }),
+    sitemap({
+      filter: (page) =>
+        // Exclude the dev-only ProApp verification harness -- it 404s in
+        // production (see src/pages/dev/pro-harness.astro's own PROD guard),
+        // so listing it in the sitemap would have Google crawl a URL that
+        // returns nothing, wasting crawl budget and reporting a sitemap error.
+        !page.includes('/dev/') &&
+        // Exclude /painting-estimating-software: it canonicalizes to
+        // /pricing (see that page's own comment), and a sitemap should list
+        // canonical URLs, not alternates -- /pricing is already included.
+        !page.includes('/painting-estimating-software'),
+    }),
     react(),
   ],
   vite: {

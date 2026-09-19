@@ -13,9 +13,17 @@ interface Props {
    * rendered alongside the site-wide Organization/WebSite graph every page
    * already gets. */
   schema?: readonly unknown[];
+  /** Root-relative override for the canonical URL, for a page that
+   * intentionally renders the same content as another URL (e.g.
+   * /painting-estimating-software mirrors /pricing) -- GSC's own "Alternate
+   * page with proper canonical tag" pattern: the URL still resolves with
+   * real content, but points Google at the one authoritative version
+   * instead of being treated as separate duplicate content. Defaults to
+   * this page's own path when omitted. */
+  canonicalPath?: string;
 }
 
-const { title, description, image = "/guide/overview.webp", schema = [] } = Astro.props;
+const { title, description, image = "/guide/overview.webp", schema = [], canonicalPath } = Astro.props;
 // Astro's own pathname carries a trailing slash for every non-root route
 // (e.g. "/pricing/"), but every internal <a href> site-wide links to the
 // no-trailing-slash form ("/pricing") -- a real mismatch between the
@@ -24,7 +32,7 @@ const { title, description, image = "/guide/overview.webp", schema = [] } = Astr
 // other way around (changing every href instead would be a much larger,
 // riskier change for the same result).
 const normalizedPathname = Astro.url.pathname.length > 1 ? Astro.url.pathname.replace(/\/$/, "") : Astro.url.pathname;
-const canonicalURL = new URL(normalizedPathname, Astro.site);
+const canonicalURL = new URL(canonicalPath ?? normalizedPathname, Astro.site);
 const imageURL = new URL(image, Astro.site);
 const siteOrigin = Astro.site ? Astro.site.origin : canonicalURL.origin;
 const jsonLd = [organizationSchema(siteOrigin), websiteSchema(siteOrigin), ...schema];

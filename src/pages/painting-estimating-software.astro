@@ -1,233 +1,38 @@
 ---
+// Keeps this keyword-targeted URL ("painting estimating software") live
+// and showing real content, while canonicalizing to /pricing -- the one
+// authoritative sales page -- via BaseLayout's canonicalPath override.
+// Content is the exact same PricingSalesPage component /pricing itself
+// renders (not a separate page that can drift out of sync), matching
+// Google's own "Alternate page with proper canonical tag" pattern: this
+// URL still resolves with substantial content, but Google is told to
+// index /pricing instead of treating this as separate duplicate content.
 import BaseLayout from "../layouts/BaseLayout.astro";
-import Header from "../components/Header.astro";
-import Footer from "../components/Footer.astro";
-import LicenseActions from "../components/tools/LicenseActions.tsx";
-import { PRICE, REFUND_GUARANTEE_DAYS } from "../data/site";
+import PricingSalesPage, { PRICING_TITLE, PRICING_DESCRIPTION, PRICING_FAQS } from "../components/PricingSalesPage.astro";
+import { PRICE } from "../data/site";
 import { productSchema, faqPageSchema } from "../lib/schema";
-
-const title = "Painting Estimating Software Without Another Monthly Subscription | Painting Estimate Pro";
-const description =
-  "Painting estimating software for solo painters and small painting businesses: measure rooms, calculate materials and labor, price to your target margin, and compare estimates against actual job costs — one-time payment, no monthly subscription.";
-
-// Real, working steps -- the same estimating workflow described throughout
-// the rest of the site (ProFeatures.astro, the homepage), written fresh
-// for this page rather than reusing that section's exact copy verbatim.
-const WORKFLOW = [
-  { step: "Measure", detail: "Room or exterior dimensions, surfaces, and openings." },
-  { step: "Materials", detail: "Paint quantity and cost from your own coverage and price per gallon." },
-  { step: "Labor", detail: "Hours and cost from your own production rates, not an industry guess." },
-  { step: "True cost", detail: "Materials, labor, and overhead brought together automatically." },
-  { step: "Margin", detail: "A suggested price at your target margin, checked before you send the quote." },
-  { step: "Estimate", detail: "A professional, print-ready document for the customer." },
-  { step: "Actual", detail: "Compare what you quoted against what the job really cost." },
-];
-
-const NOT_BUILT = [
-  "A CRM or lead-management system",
-  "Scheduling or crew dispatch",
-  "Invoicing, accounting, or payroll",
-  "Payment processing for your customers",
-  "An AI tool that guesses your costs for you",
-];
-
-const FAQS = [
-  {
-    question: "Is this a subscription?",
-    answer: `No. It's a ${PRICE.amount} one-time payment with lifetime access, including future updates — no recurring charges.`,
-  },
-  {
-    question: "Is there a mobile app?",
-    answer: "No separate app to install. It's a responsive web app that runs in any modern desktop or mobile browser, so there's nothing to download or keep updated.",
-  },
-  {
-    question: "Does it replace my CRM or scheduling software?",
-    answer: "No — it's estimating and job-costing only, on purpose. If you already use a CRM, scheduling tool, or invoicing software, this fits alongside it rather than replacing it.",
-  },
-  {
-    question: "Do I need an account?",
-    answer: "No account or login. A license key unlocks the workspace directly in your browser, and your project data stays on your device.",
-  },
-  {
-    question: "Can my whole team use one license?",
-    answer: "The license key itself works in any browser or device you paste it into, but each browser keeps its own separate local data — there's no shared or synced workspace across teammates today.",
-  },
-  {
-    question: `How does the ${REFUND_GUARANTEE_DAYS}-day guarantee work?`,
-    answer: `Email us within ${REFUND_GUARANTEE_DAYS} days of your purchase date, from the address you paid with, and we'll issue a full refund. See the Terms of Service for the complete policy.`,
-  },
-];
 
 const siteOrigin = Astro.site ? Astro.site.origin : new URL(Astro.url).origin;
 const rawPrice = PRICE.amount.replace(/[^0-9.]/g, "");
+const pricingUrl = `${siteOrigin}/pricing`;
+
 const schema = [
   productSchema(siteOrigin, {
-    url: `${siteOrigin}/pricing`,
-    description,
+    url: pricingUrl,
+    description: PRICING_DESCRIPTION,
     price: rawPrice,
     image: `${siteOrigin}/guide/overview.webp`,
   }),
-  faqPageSchema(FAQS),
+  faqPageSchema(PRICING_FAQS),
 ];
 ---
 
-<BaseLayout title={title} description={description} schema={schema} image="/guide/overview.webp">
-  <Header />
-  <main id="main-content">
-    <section class="section-pad pb-8">
-      <div class="content-shell grid grid-cols-1 items-center gap-10 lg:grid-cols-[1.05fr_1.2fr] lg:gap-12">
-        <div>
-          <p class="eyebrow">Painting estimating software</p>
-          <h1 class="mt-3 text-balance text-3xl font-semibold leading-[1.12] tracking-tight text-ink sm:text-4xl lg:text-[2.5rem]">
-            Painting estimating software without another monthly subscription.
-          </h1>
-          <p class="mt-4 max-w-lg text-base leading-relaxed text-ink-soft sm:text-lg">
-            Measure rooms, calculate materials and labor, price for your
-            target margin, and compare your estimate against what the job
-            actually cost — a focused estimating tool, not a full
-            contractor-management platform.
-          </p>
-
-          <div class="mt-5 flex items-baseline gap-3">
-            <span class="tabular-nums text-xl font-medium text-ink-soft/70 line-through">{PRICE.originalAmount}</span>
-            <span class="tabular-nums text-4xl font-semibold text-ink">{PRICE.amount}</span>
-            <span class="text-sm font-medium text-ink-soft">one time</span>
-          </div>
-          <p class="mt-0.5 text-sm font-medium text-ink-soft">Lifetime access. No monthly subscription.</p>
-
-          <div class="mt-5 flex flex-col items-start gap-3">
-            <LicenseActions client:load returnTo="/app" analyticsEvent="software_page_cta_clicked" />
-            <a href="/pricing" class="text-link text-sm">See full pricing, guarantee, and FAQ</a>
-          </div>
-        </div>
-
-        <div class="mx-auto w-full max-w-2xl lg:max-w-none">
-          <div class="overflow-hidden rounded-card border border-line shadow-[0_1px_2px_rgba(23,33,29,0.04),0_16px_40px_-20px_rgba(23,33,29,0.22)]">
-            <img
-              src="/guide/overview.webp"
-              alt="The Painting Estimate Pro Overview dashboard, showing active projects, estimated revenue $579.23, average margin 35.0%, and a recent-projects table"
-              width="1200"
-              height="860"
-              class="w-full"
-            />
-          </div>
-          <p class="mt-2 text-center text-sm text-ink-soft">The real workspace — not a mockup.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="section-pad border-t border-line">
-      <div class="content-shell">
-        <div class="mx-auto max-w-2xl text-center">
-          <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            What painting estimating software should actually do.
-          </h2>
-          <p class="mt-3 text-lg text-ink-soft">
-            Seven steps, in one place, instead of split across notes, a
-            calculator, and a spreadsheet.
-          </p>
-        </div>
-
-        <ol class="mx-auto mt-10 grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {
-            WORKFLOW.map((item, i) => (
-              <li class="card p-5">
-                <p class="text-xs font-semibold uppercase tracking-wide text-primary-dark">Step {i + 1}</p>
-                <p class="mt-1 text-base font-semibold text-ink">{item.step}</p>
-                <p class="mt-1.5 text-sm leading-relaxed text-ink-soft">{item.detail}</p>
-              </li>
-            ))
-          }
-        </ol>
-      </div>
-    </section>
-
-    <section class="section-pad border-t border-line">
-      <div class="content-shell">
-        <div class="mx-auto max-w-2xl text-center">
-          <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            Estimating software — not a contractor-management platform.
-          </h2>
-          <p class="mt-3 text-lg text-ink-soft">
-            Searching for "painting contractor software" usually means one
-            of two very different things. Here's which one this is.
-          </p>
-        </div>
-
-        <div class="mx-auto mt-10 max-w-3xl card p-6 sm:p-8">
-          <p class="text-sm font-semibold uppercase tracking-wide text-ink">This is not, on purpose</p>
-          <ul class="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            {
-              NOT_BUILT.map((item) => (
-                <li class="flex items-start gap-2.5 text-base text-ink-soft">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="mt-0.5 h-4 w-4 shrink-0 text-ink-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                  <span>{item}</span>
-                </li>
-              ))
-            }
-          </ul>
-          <p class="mt-5 text-base leading-relaxed text-ink">
-            If you're already running a CRM, scheduling tool, or invoicing
-            software, this sits alongside it — the one job it does is
-            turning your rates and a job's measurements into a price you
-            can trust, then checking that price against what the job
-            actually cost.
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <section class="section-pad border-t border-line">
-      <div class="content-shell max-w-3xl">
-        <h2 class="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-          Questions about the software
-        </h2>
-        <div class="mt-8 divide-y divide-line border-y border-line">
-          {
-            FAQS.map((faq) => (
-              <details class="group py-5">
-                <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-ink marker:content-none [&::-webkit-details-marker]:hidden">
-                  <span>{faq.question}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 text-ink-soft transition-transform duration-200 group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </summary>
-                <p class="mt-3 max-w-2xl text-base leading-relaxed text-ink-soft">{faq.answer}</p>
-              </details>
-            ))
-          }
-        </div>
-      </div>
-    </section>
-
-    <section class="section-pad border-t border-line">
-      <div class="content-shell text-center">
-        <div class="card mx-auto max-w-xl p-8 sm:p-9">
-          <h2 class="text-balance text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-            Try it free first, or buy Pro now.
-          </h2>
-          <p class="mx-auto mt-3 max-w-md text-base text-ink-soft">
-            Explore the free calculators with no account, or unlock the
-            full estimating and job-costing workspace for {PRICE.amount},
-            one time.
-          </p>
-          <div class="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <a href="/#free-tools" class="btn btn-secondary">Try the free tools</a>
-            <LicenseActions client:load returnTo="/app" analyticsEvent="software_page_final_cta_clicked" />
-          </div>
-          <ul class="mx-auto mt-6 flex max-w-md flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
-            <li><a href="/free/interior-calculator" class="text-link">Interior calculator</a></li>
-            <li><a href="/free/exterior-calculator" class="text-link">Exterior calculator</a></li>
-            <li><a href="/free/job-cost-calculator" class="text-link">Job cost calculator</a></li>
-            <li><a href="/free/estimate-template" class="text-link">Estimate template</a></li>
-          </ul>
-        </div>
-      </div>
-    </section>
-  </main>
-  <Footer />
+<BaseLayout
+  title={PRICING_TITLE}
+  description={PRICING_DESCRIPTION}
+  schema={schema}
+  image="/guide/overview.webp"
+  canonicalPath="/pricing"
+>
+  <PricingSalesPage />
 </BaseLayout>

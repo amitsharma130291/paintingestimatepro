@@ -107,9 +107,21 @@ describe('structured data: pages wire real content into JSON-LD, not placeholder
     }
   });
 
-  it("pricing.astro's FAQ schema is built from its own real FAQS array, not a duplicated copy", () => {
+  it("pricing.astro's FAQ schema is built from PricingSalesPage's shared PRICING_FAQS, not a duplicated copy", () => {
     const content = readFileSync(join(REPO_ROOT, 'src', 'pages', 'pricing.astro'), 'utf-8');
-    expect(content).toMatch(/faqPageSchema\(FAQS\)/);
+    expect(content).toMatch(/faqPageSchema\(PRICING_FAQS\)/);
+  });
+
+  it('painting-estimating-software.astro renders the same PricingSalesPage component as pricing.astro (not a separate, driftable copy) and canonicalizes to /pricing', () => {
+    const content = readFileSync(join(REPO_ROOT, 'src', 'pages', 'painting-estimating-software.astro'), 'utf-8');
+    expect(content).toMatch(/from ["']\.\.\/components\/PricingSalesPage\.astro["']/);
+    expect(content).toMatch(/<PricingSalesPage\s*\/>/);
+    expect(content).toMatch(/canonicalPath=["']\/pricing["']/);
+  });
+
+  it('painting-estimating-software is excluded from the sitemap (GSC: a sitemap should list canonical URLs, not alternates)', () => {
+    const config = readFileSync(join(REPO_ROOT, 'astro.config.mjs'), 'utf-8');
+    expect(config).toMatch(/painting-estimating-software/);
   });
 });
 
