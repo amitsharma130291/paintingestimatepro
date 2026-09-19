@@ -16,7 +16,14 @@ export default defineConfig({
   // same pattern as qrworkbench/barcodeflow, not a switch to server-rendering
   // the whole site.
   adapter: vercel(),
-  integrations: [sitemap(), react()],
+  integrations: [
+    // Exclude the dev-only ProApp verification harness -- it 404s in
+    // production (see src/pages/dev/pro-harness.astro's own PROD guard),
+    // so listing it in the sitemap would have Google crawl a URL that
+    // returns nothing, wasting crawl budget and reporting a sitemap error.
+    sitemap({ filter: (page) => !page.includes('/dev/') }),
+    react(),
+  ],
   vite: {
     plugins: [tailwindcss()],
   },

@@ -112,3 +112,22 @@ describe('structured data: pages wire real content into JSON-LD, not placeholder
     expect(content).toMatch(/faqPageSchema\(FAQS\)/);
   });
 });
+
+describe('technical SEO hygiene: sitemap, robots.txt, and canonical URLs', () => {
+  it('robots.txt exists, allows crawling, and points at the real sitemap', () => {
+    const robots = readFileSync(join(REPO_ROOT, 'public', 'robots.txt'), 'utf-8');
+    expect(robots).toMatch(/Allow:\s*\//);
+    expect(robots).toMatch(/Sitemap:\s*https:\/\/paintingpricingcalculator\.com\/sitemap-index\.xml/);
+  });
+
+  it("astro.config.mjs excludes the dev-only /dev/ harness from the generated sitemap (it 404s in production)", () => {
+    const config = readFileSync(join(REPO_ROOT, 'astro.config.mjs'), 'utf-8');
+    expect(config).toMatch(/sitemap\(\{\s*filter:/);
+    expect(config).toMatch(/\/dev\//);
+  });
+
+  it("BaseLayout's canonical URL strips the trailing slash Astro.url.pathname adds, matching every internal href site-wide (which never uses one)", () => {
+    const layout = readFileSync(join(REPO_ROOT, 'src', 'layouts', 'BaseLayout.astro'), 'utf-8');
+    expect(layout).toMatch(/replace\(\/\\\/\$\/,\s*["']["']\)/);
+  });
+});

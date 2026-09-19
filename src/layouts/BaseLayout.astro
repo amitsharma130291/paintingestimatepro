@@ -16,7 +16,15 @@ interface Props {
 }
 
 const { title, description, image = "/guide/overview.webp", schema = [] } = Astro.props;
-const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+// Astro's own pathname carries a trailing slash for every non-root route
+// (e.g. "/pricing/"), but every internal <a href> site-wide links to the
+// no-trailing-slash form ("/pricing") -- a real mismatch between the
+// canonical URL and the URL every internal link actually reinforces.
+// Normalize to match the site's own linking convention rather than the
+// other way around (changing every href instead would be a much larger,
+// riskier change for the same result).
+const normalizedPathname = Astro.url.pathname.length > 1 ? Astro.url.pathname.replace(/\/$/, "") : Astro.url.pathname;
+const canonicalURL = new URL(normalizedPathname, Astro.site);
 const imageURL = new URL(image, Astro.site);
 const siteOrigin = Astro.site ? Astro.site.origin : canonicalURL.origin;
 const jsonLd = [organizationSchema(siteOrigin), websiteSchema(siteOrigin), ...schema];
