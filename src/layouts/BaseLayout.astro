@@ -36,6 +36,13 @@ const canonicalURL = new URL(canonicalPath ?? normalizedPathname, Astro.site);
 const imageURL = new URL(image, Astro.site);
 const siteOrigin = Astro.site ? Astro.site.origin : canonicalURL.origin;
 const jsonLd = [organizationSchema(siteOrigin), websiteSchema(siteOrigin), ...schema];
+
+// Google Analytics (GA4). See privacy.astro's "Analytics" section for the
+// real disclosure -- this is the one analytics platform actually
+// connected. Production only, so local dev/preview traffic never pollutes
+// real analytics data.
+const GA_MEASUREMENT_ID = "G-SML9ZVEQ8E";
+const analyticsEnabled = import.meta.env.PROD;
 ---
 
 <!doctype html>
@@ -71,6 +78,18 @@ const jsonLd = [organizationSchema(siteOrigin), websiteSchema(siteOrigin), ...sc
     {jsonLd.map((entry) => (
       <script type="application/ld+json" set:html={toLdJson(entry)} />
     ))}
+
+    {analyticsEnabled && (
+      <>
+        <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}></script>
+        <script define:vars={{ GA_MEASUREMENT_ID }}>
+          window.dataLayer = window.dataLayer || [];
+          function gtag() { dataLayer.push(arguments); }
+          gtag('js', new Date());
+          gtag('config', GA_MEASUREMENT_ID);
+        </script>
+      </>
+    )}
   </head>
   <body class="font-sans antialiased">
     <a href="#main-content" class="skip-link">Skip to content</a>
