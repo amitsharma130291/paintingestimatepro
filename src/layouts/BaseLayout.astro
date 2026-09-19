@@ -48,6 +48,23 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
       document.documentElement.setAttribute("data-animate-ready", "");
 
       import { shouldSkipEntranceAnimation, markVisible } from "../lib/reducedMotionVisibility";
+      import { getStoredPayment } from "../lib/license";
+      import { HEADER_CTA_UNLOCKED } from "../data/site";
+
+      // Every "buy Pro" CTA site-wide (header, hero, closing) is tagged
+      // data-pro-cta rather than each having its own copy of this check --
+      // one stored license swaps all of them to "Go to app" at once. This
+      // only reads a local flag (never verifies it against Dodo) purely to
+      // pick which label/destination to show; /app's own ProGate is what
+      // actually re-verifies access, so a stale or cleared local record
+      // never grants anything here, it just shows the wrong button label
+      // until the next real check.
+      if (getStoredPayment()) {
+        document.querySelectorAll<HTMLAnchorElement>("[data-pro-cta]").forEach((el) => {
+          el.textContent = HEADER_CTA_UNLOCKED.label;
+          el.href = HEADER_CTA_UNLOCKED.href;
+        });
+      }
 
       const animatedEls = document.querySelectorAll(
         "[data-animate], [data-animate-emphasis]"

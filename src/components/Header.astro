@@ -25,7 +25,7 @@ import { NAV_LINKS, HEADER_CTA } from "../data/site";
     </nav>
 
     <div class="hidden lg:block">
-      <a href={HEADER_CTA.href} class="btn btn-primary">
+      <a href={HEADER_CTA.href} data-pro-cta class="btn btn-primary">
         {HEADER_CTA.label}
       </a>
     </div>
@@ -69,6 +69,7 @@ import { NAV_LINKS, HEADER_CTA } from "../data/site";
       <a
         href={HEADER_CTA.href}
         data-mobile-link
+        data-pro-cta
         class="btn btn-primary mt-2 w-full"
       >
         {HEADER_CTA.label}

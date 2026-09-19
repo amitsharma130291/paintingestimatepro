@@ -2,10 +2,41 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import Pricing from "../components/Pricing.astro";
+import ProHero from "../components/ProHero.astro";
+import ProFeatures from "../components/ProFeatures.astro";
+import HowItWorks from "../components/HowItWorks.astro";
+import LicenseActions from "../components/tools/LicenseActions.tsx";
+import { PRICE, PRICING_AVAILABILITY_NOTE } from "../data/site";
 
-const title = "Pricing | PaintingPricing Calculator";
-const description = "Painting Estimate Pro — one-time purchase, lifetime access. See what's included and unlock the Pro workspace.";
+const title = "Painting Estimate Pro | Pricing";
+const description = "Painting Estimate Pro — one-time purchase, lifetime access. Room-by-room takeoffs, reusable rates, Price Book Health, and actual-cost review.";
+
+const FAQS = [
+  {
+    question: "Who is Pro built for?",
+    answer: "Independent painters and small painting businesses that want a focused estimating and profitability workflow — not a full job-management platform with a learning curve.",
+  },
+  {
+    question: "Will this tell me what to charge?",
+    answer: "No. Pro shows how your proposed price relates to your estimated costs and margin. You decide what to charge — Pro just makes sure you're deciding with real numbers in front of you.",
+  },
+  {
+    question: "What if my actual costs turn out different?",
+    answer: "That's exactly what the Actual Costs tab is for — record what a finished job really cost and compare it against what you quoted, so you learn whether your rates hold up on real jobs, not just on paper.",
+  },
+  {
+    question: "Is this a subscription?",
+    answer: `No — Pro is a ${PRICE.amount} one-time purchase (launch price, down from ${PRICE.originalAmount}) with lifetime access. No recurring fees, ever.`,
+  },
+  {
+    question: "Where does my data live?",
+    answer: "In this browser, only — there's no account and no server copy of your projects. Export a full backup any time from the Backup & Data tab, and restore it on another device whenever you need to.",
+  },
+  {
+    question: "What if I already bought Pro on another device?",
+    answer: "Click \"Already purchased?\" below and paste your license key, or use \"Forgot your key?\" to have it emailed to you — either way, no repurchasing.",
+  },
+];
 ---
 
 <BaseLayout title={title} description={description}>
@@ -21,7 +52,66 @@ const description = "Painting Estimate Pro — one-time purchase, lifetime acces
         <p class="mt-1 text-ink-soft">If you were charged, contact us and we'll sort it out right away.</p>
       </div>
     </div>
-    <Pricing />
+
+    <ProHero />
+    <ProFeatures />
+    <HowItWorks />
+
+    <section id="pricing" class="section-pad scroll-mt-16 border-t border-line">
+      <div class="content-shell">
+        <div data-animate class="card mx-auto max-w-2xl p-8 text-center sm:p-10">
+          <p class="eyebrow justify-center">Launch price</p>
+          <h2 class="mt-4 text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+            One quote where the margin holds is worth more than {PRICE.amount}.
+          </h2>
+          <div class="mt-6 flex items-baseline justify-center gap-3">
+            <span class="tabular-nums text-2xl font-medium text-ink-soft/70 line-through">{PRICE.originalAmount}</span>
+            <span class="tabular-nums text-5xl font-semibold text-ink">{PRICE.amount}</span>
+          </div>
+          <p class="mt-2 text-sm font-medium text-ink-soft">{PRICE.caption}</p>
+
+          <div class="mt-7 flex flex-col items-center gap-3">
+            <LicenseActions client:load returnTo="/app" />
+          </div>
+
+          <p class="status-note mt-6 justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+            </svg>
+            {PRICING_AVAILABILITY_NOTE}
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="section-pad scroll-mt-16 border-t border-line">
+      <div class="content-shell max-w-3xl">
+        <h2 data-animate class="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+          Questions before you buy
+        </h2>
+
+        <div data-animate class="mt-8 divide-y divide-line border-y border-line">
+          {
+            FAQS.map((faq) => (
+              <details class="group py-5">
+                <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-ink marker:content-none [&::-webkit-details-marker]:hidden">
+                  <span>{faq.question}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 text-ink-soft transition-transform duration-200 group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                </summary>
+                <p class="mt-3 max-w-2xl text-sm leading-relaxed text-ink-soft">{faq.answer}</p>
+              </details>
+            ))
+          }
+        </div>
+
+        <p data-animate class="mt-8 text-center text-sm text-ink-soft">
+          Still have a question? <a href="/contact" class="text-link">Get in touch</a> — we're happy to help.
+        </p>
+      </div>
+    </section>
   </main>
   <Footer />
 </BaseLayout>

@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { Loader2, CheckCircle2, MailCheck } from 'lucide-react';
-import { startCheckout, redeemLicenseKey, requestLicenseRecovery } from '../../lib/license';
+import { startCheckout, redeemLicenseKey, requestLicenseRecovery, getStoredPayment } from '../../lib/license';
 import { PRICE } from '../../data/site';
 
 function Spinner() {
@@ -15,6 +15,17 @@ function Spinner() {
  * never to Dodo directly — see src/lib/license.ts.
  */
 export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: string; onUnlocked?: () => void }) {
+  // Server-rendered (client:load) markup always starts as "Buy Pro" --
+  // localStorage doesn't exist during SSR -- then this effect, client-side
+  // only, swaps to "Go to app" for a returning customer. Same "only ever a
+  // display choice, never a real access decision" caveat as the site-wide
+  // data-pro-cta swap in BaseLayout.astro: /app's own ProGate is still what
+  // actually re-verifies the stored license against Dodo.
+  const [alreadyPurchased, setAlreadyPurchased] = useState(false);
+  useEffect(() => {
+    if (getStoredPayment()) setAlreadyPurchased(true);
+  }, []);
+
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [showRecovery, setShowRecovery] = useState(false);
@@ -76,6 +87,16 @@ export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: str
     } finally {
       setRecovering(false);
     }
+  }
+
+  if (alreadyPurchased) {
+    return (
+      <div>
+        <a href="/app" className="btn btn-primary">
+          Go to app
+        </a>
+      </div>
+    );
   }
 
   return (

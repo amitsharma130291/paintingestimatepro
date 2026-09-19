@@ -98,7 +98,7 @@ function customerHtml({ licenseKey, recoveryUrl, isResend }: { licenseKey: strin
     <p style="font-size:13px;font-weight:700;margin:0 0 8px">How to activate your license if you ever forget this email, switch devices, or clear your browser</p>
     <ol style="font-size:13px;line-height:1.7;color:#4c5a52;margin:0 0 20px;padding-left:18px">
       <li>Click <strong>Go to app</strong> above, on any device — it unlocks instantly, no login.</li>
-      <li>Or go to the <a href="${SITE_URL}/#pricing">pricing section</a>, open <strong>"Already purchased?"</strong>, and paste: <strong>${escapeHtml(licenseKey)}</strong></li>
+      <li>Or go to the <a href="${SITE_URL}/pricing">pricing page</a>, open <strong>"Already purchased?"</strong>, and paste: <strong>${escapeHtml(licenseKey)}</strong></li>
       <li>Lost the key itself, not just this email? On that same section, click <strong>"Forgot your key?"</strong>, enter the email you paid with, and it gets re-sent automatically.</li>
     </ol>
 
@@ -128,7 +128,7 @@ function customerText({ licenseKey, recoveryUrl, isResend }: { licenseKey: strin
     '',
     'How to activate your license if you ever forget this email, switch devices, or clear your browser:',
     '1. Click the "Go to app" link above, on any device -- unlocks instantly, no login.',
-    `2. Or go to ${SITE_URL}/#pricing, open "Already purchased?", and paste: ${licenseKey}`,
+    `2. Or go to ${SITE_URL}/pricing, open "Already purchased?", and paste: ${licenseKey}`,
     '3. Lost the key itself? On that same section, click "Forgot your key?", enter the email you paid with, and it gets re-sent automatically.',
     '',
     'Pro is a one-time purchase -- this key never expires and works on any device.',

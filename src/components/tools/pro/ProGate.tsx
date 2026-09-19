@@ -145,7 +145,7 @@ export default function ProGate() {
           <a href="/help" className="text-link text-sm">
             See exactly what's inside, with screenshots
           </a>
-          <a href="/#pricing" className="text-link text-xs">
+          <a href="/pricing" className="text-link text-xs">
             Back to full pricing details
           </a>
         </div>

@@ -1,0 +1,59 @@
+---
+import { PRICE, PRICING_AVAILABILITY_NOTE } from "../data/site";
+import LicenseActions from "./tools/LicenseActions.tsx";
+
+const TRUST_ITEMS = [
+  "One-time payment, lifetime access",
+  "Instant access after purchase",
+  "Your data stays in this browser",
+];
+---
+
+<section class="section-pad pt-10 sm:pt-14 lg:pt-16">
+  <div class="content-shell">
+    <div data-animate class="mx-auto max-w-3xl text-center">
+      <p class="eyebrow justify-center">Painting Estimate Pro</p>
+      <h1 class="mt-4 text-balance text-4xl font-semibold leading-[1.1] tracking-tight text-ink sm:text-5xl">
+        Stop finding out your margin after the job is done.
+      </h1>
+      <p class="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
+        Pro is the estimating workspace for independent painters who are
+        tired of guessing: room-by-room takeoffs, reusable rates, a price
+        book that flags underpriced services, and an actual-cost review that
+        tells you whether your bids are actually working — before the next
+        one goes out.
+      </p>
+
+      <div class="mt-8 flex items-baseline justify-center gap-3">
+        <span class="tabular-nums text-2xl font-medium text-ink-soft/70 line-through">{PRICE.originalAmount}</span>
+        <span class="tabular-nums text-5xl font-semibold text-ink">{PRICE.amount}</span>
+      </div>
+      <p class="mt-2 text-sm font-medium text-ink-soft">{PRICE.caption}</p>
+      <p class="mt-1 status-pill status-pill-brass inline-flex">Launch price — save $20</p>
+
+      <div class="mt-7 flex flex-col items-center gap-3">
+        <LicenseActions client:load returnTo="/app" />
+      </div>
+
+      <ul class="mx-auto mt-9 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2">
+        {
+          TRUST_ITEMS.map((item) => (
+            <li class="flex items-center gap-1.5 text-sm text-ink-soft">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              {item}
+            </li>
+          ))
+        }
+      </ul>
+
+      <p class="status-note mt-6 justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+        </svg>
+        {PRICING_AVAILABILITY_NOTE}
+      </p>
+    </div>
+  </div>
+</section>

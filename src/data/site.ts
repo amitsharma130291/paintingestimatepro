@@ -11,20 +11,34 @@ export const SITE_NAME = "Painting Estimate Pro";
 // leading "/" makes each link work correctly both from the homepage
 // itself (still a same-page scroll) and from anywhere else (navigates to
 // "/" and lands on the anchor).
+// NAV-002: "Pro preview" (-> the homepage demo section) and "Open Pro"
+// (-> /app, which just shows the same pricing card to anyone who hasn't
+// bought yet) were two more ways to reach the same place the header's own
+// CTA button and this "Pro" link already cover -- three nav items for one
+// destination reads as noise, not choice. One link to the real sales page
+// replaces both; the CTA button (dynamic, see HEADER_CTA/HEADER_CTA_UNLOCKED
+// below) is the actual buy/launch action.
 export const NAV_LINKS = [
-  { href: "/#price-book-health", label: "Pro preview" },
   { href: "/#how-it-works", label: "How it works" },
   { href: "/#free-tools", label: "Free tools" },
   { href: "/#faq", label: "FAQ" },
   { href: "/help", label: "Help" },
-  { href: "/app", label: "Open Pro" },
+  { href: "/pricing", label: "Pro" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
-// "View Pro preview" always points at the static product demonstration —
-// used by the header and the hero's primary action — never at a working
-// app, checkout, or signup.
-export const HEADER_CTA = { label: "View Pro preview", href: "/#price-book-health" };
+// The header/hero/closing CTA button's default (never-purchased) state --
+// every element tagged data-pro-cta swaps to HEADER_CTA_UNLOCKED instead,
+// site-wide, the instant a stored license is found in this browser (see
+// BaseLayout.astro's inline script). Points at the real sales page, not a
+// bare demo anchor -- that page is where "Buy Pro" itself actually lives.
+export const HEADER_CTA = { label: "Buy Pro", href: "/pricing" };
+export const HEADER_CTA_UNLOCKED = { label: "Go to app", href: "/app" };
+
+// The homepage hero keeps its own "see the demo first" framing -- distinct
+// from the header CTA's direct buy intent -- so changing one never silently
+// changes the other's copy.
+export const HERO_CTA = { label: "See how it works", href: "/#price-book-health" };
 
 export const FREE_TOOLS_LINK = { label: "Explore free painting tools", href: "/#free-tools" };
 
