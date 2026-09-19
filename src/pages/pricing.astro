@@ -3,45 +3,75 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import ProHero from "../components/ProHero.astro";
-import ProProof from "../components/ProProof.astro";
-import ProFeatures from "../components/ProFeatures.astro";
 import ProROI from "../components/ProROI.astro";
+import ProProof from "../components/ProProof.astro";
+import ProComparison from "../components/ProComparison.astro";
+import ProQualification from "../components/ProQualification.astro";
+import ProFeatures from "../components/ProFeatures.astro";
+import ProNewProduct from "../components/ProNewProduct.astro";
 import ProGuarantee from "../components/ProGuarantee.astro";
-import HowItWorks from "../components/HowItWorks.astro";
 import LicenseActions from "../components/tools/LicenseActions.tsx";
-import { PRICE, PRICING_AVAILABILITY_NOTE } from "../data/site";
+import { PRICE, REFUND_GUARANTEE_DAYS, PRICING_AVAILABILITY_NOTE } from "../data/site";
 
-const title = "Painting Estimate Pro | Pricing";
-const description = "Painting Estimate Pro — one-time purchase, lifetime access. Room-by-room takeoffs, reusable rates, Price Book Health, and actual-cost review.";
+const title = "Painting Estimate Pro | Know Your True Job Cost";
+const description = "Painting Estimate Pro — one-time $79 payment, lifetime access. Calculate materials, labor, overhead and margin before you quote, then compare it to what the job actually cost.";
 
 const FAQS = [
   {
-    question: "Who is Pro built for?",
-    answer: "Independent painters and small painting businesses that want a focused estimating and profitability workflow — not a full job-management platform with a learning curve.",
-  },
-  {
-    question: "Will this tell me what to charge?",
-    answer: "No. Pro shows how your proposed price relates to your estimated costs and margin. You decide what to charge — Pro just makes sure you're deciding with real numbers in front of you.",
-  },
-  {
-    question: "What if my actual costs turn out different?",
-    answer: "That's exactly what the Actual Costs tab is for — record what a finished job really cost and compare it against what you quoted, so you learn whether your rates hold up on real jobs, not just on paper.",
+    question: "What exactly do I receive?",
+    answer: "Lifetime access to the Pro workspace: project estimating, Price Book Health, actual-cost review, and backup/restore, plus all future updates. You get a license key by email right after purchase — nothing to install.",
   },
   {
     question: "Is this a subscription?",
-    answer: `No — Pro is a ${PRICE.amount} one-time purchase (launch price, down from ${PRICE.originalAmount}) with lifetime access. No recurring fees, ever.`,
+    answer: `No. Pro is a ${PRICE.amount} one-time payment with lifetime access — no recurring charges, ever.`,
   },
   {
-    question: "Where does my data live?",
-    answer: "In this browser, only — there's no account and no server copy of your projects. Export a full backup any time from the Backup & Data tab, and restore it on another device whenever you need to.",
+    question: "Do I need to create an account?",
+    answer: "No. There's no account or login — your license key unlocks the workspace directly in your browser.",
   },
   {
-    question: "What if I already bought Pro on another device?",
-    answer: "Click \"Already purchased?\" below and paste your license key, or use \"Forgot your key?\" to have it emailed to you — either way, no repurchasing.",
+    question: "Where is my project data stored?",
+    answer: "In your own browser's local storage, only — there's no server copy of your projects. Export a full backup any time from the Backup & Data tab.",
   },
   {
-    question: "What's your refund policy?",
-    answer: "A full refund within 7 days of your purchase date, no questions asked — just email us with the address you paid with. Your local project data is never touched either way. See the Terms of Service for the full policy.",
+    question: "Can I use it on more than one device?",
+    answer: "Yes — your license key works on any device or browser; paste it under \"Already purchased?\" to unlock it there too. Project data itself stays local to each browser, so use an exported backup to bring your projects along.",
+  },
+  {
+    question: "Can I print or download estimates?",
+    answer: "Yes — every estimate has a \"Print / Save as PDF\" button that produces a clean, customer-facing document with no cost or margin figures on it.",
+  },
+  {
+    question: "Does it calculate markup and margin?",
+    answer: "Yes — every estimate shows the estimated job cost, a suggested price at your target margin (or your own custom price), profit, and margin, before you send anything.",
+  },
+  {
+    question: "Can it replace my current spreadsheet?",
+    answer: "For painting estimating and job costing, yes — that's exactly what it replaces. It isn't a general-purpose spreadsheet or a business-management platform.",
+  },
+  {
+    question: "Is this a CRM or scheduling system?",
+    answer: "No. It doesn't handle scheduling, dispatch, payroll, or leads — see \"Built for painters who need better estimates\" above for exactly what it does and doesn't do.",
+  },
+  {
+    question: "What happens if I clear my browser data or change devices?",
+    answer: "Clearing your browser's site data permanently erases local project data unless you've exported a backup first — worth doing regularly from Backup & Data. Your license isn't affected either way: redeem your key again on any device, any time.",
+  },
+  {
+    question: "Are future updates included?",
+    answer: "Yes. Pro is a continuously updated web app under one license — there's no separate charge for future improvements to it.",
+  },
+  {
+    question: `How does the ${REFUND_GUARANTEE_DAYS}-day guarantee work?`,
+    answer: `Email us within ${REFUND_GUARANTEE_DAYS} days of your purchase date, from the address you paid with, and we'll issue a full refund. Your local project data is never deleted as part of a refund. See the Terms of Service for the complete policy.`,
+  },
+  {
+    question: "What payment methods are accepted?",
+    answer: "Checkout is handled by Dodo Payments, our payment processor — major credit and debit cards are accepted there.",
+  },
+  {
+    question: "Is tax included in the displayed price?",
+    answer: `${PRICE.amount} is the base price. Dodo Payments calculates any sales tax or VAT that applies to you at checkout, shown before you pay.`,
   },
 ];
 ---
@@ -61,34 +91,37 @@ const FAQS = [
     </div>
 
     <ProHero />
-    <ProProof />
-    <HowItWorks />
-    <ProFeatures />
     <ProROI />
+    <ProProof />
+    <ProComparison />
+    <ProQualification />
+    <ProFeatures />
+    <ProNewProduct />
     <ProGuarantee />
 
     <section id="pricing" class="section-pad scroll-mt-16 border-t border-line">
       <div class="content-shell">
         <div data-animate class="card mx-auto max-w-2xl p-8 text-center sm:p-10">
-          <p class="eyebrow justify-center">Launch price</p>
-          <h2 class="mt-4 text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            One quote where the margin holds is worth more than {PRICE.amount}.
+          <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+            Protect the margin before the job begins.
           </h2>
+          <p class="mx-auto mt-3 max-w-md text-lg text-ink-soft">
+            Bring your materials, labor, overhead, margin, and actual job
+            costs into one painting-specific estimating workflow.
+          </p>
+
           <div class="mt-6 flex items-baseline justify-center gap-3">
             <span class="tabular-nums text-2xl font-medium text-ink-soft/70 line-through">{PRICE.originalAmount}</span>
             <span class="tabular-nums text-5xl font-semibold text-ink">{PRICE.amount}</span>
           </div>
-          <p class="mt-2 text-sm font-medium text-ink-soft">{PRICE.caption}</p>
+          <p class="mt-2 text-sm font-medium text-ink-soft">{PRICE.caption} · No monthly subscription</p>
 
           <div class="mt-7 flex flex-col items-center gap-3">
             <LicenseActions client:load returnTo="/app" />
           </div>
 
-          <p class="status-note mt-6 justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-            </svg>
-            {PRICING_AVAILABILITY_NOTE}
+          <p class="mt-6 text-sm text-ink-soft">
+            {REFUND_GUARANTEE_DAYS}-day money-back guarantee · {PRICING_AVAILABILITY_NOTE}
           </p>
         </div>
       </div>
@@ -111,7 +144,7 @@ const FAQS = [
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
                 </summary>
-                <p class="mt-3 max-w-2xl text-sm leading-relaxed text-ink-soft">{faq.answer}</p>
+                <p class="mt-3 max-w-2xl text-base leading-relaxed text-ink-soft">{faq.answer}</p>
               </details>
             ))
           }

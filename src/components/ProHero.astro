@@ -1,41 +1,43 @@
 ---
-import { PRICE, PRICING_AVAILABILITY_NOTE } from "../data/site";
+import { PRICE, REFUND_GUARANTEE_DAYS, BUY_CTA_LABEL } from "../data/site";
 import LicenseActions from "./tools/LicenseActions.tsx";
 
 const TRUST_ITEMS = [
-  "One-time payment, lifetime access",
-  "7-day money-back guarantee",
-  "Your data stays in this browser",
+  "One-time payment",
+  "No monthly subscription",
+  "No account required",
+  `${REFUND_GUARANTEE_DAYS}-day money-back guarantee`,
 ];
 ---
 
 <section class="section-pad pt-10 sm:pt-14 lg:pt-16">
-  <div class="content-shell">
-    <div data-animate class="mx-auto max-w-3xl text-center">
-      <p class="eyebrow justify-center">Painting Estimate Pro</p>
+  <div class="content-shell grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16">
+    <div data-animate>
+      <p class="eyebrow">Painting estimating + job profitability</p>
       <h1 class="mt-4 text-balance text-4xl font-semibold leading-[1.1] tracking-tight text-ink sm:text-5xl">
-        Stop finding out your margin after the job is done.
+        Know your true job cost before you send the quote.
       </h1>
-      <p class="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
-        Pro is the estimating workspace for independent painters who are
-        tired of guessing: room-by-room takeoffs, reusable rates, a price
-        book that flags underpriced services, and an actual-cost review that
-        tells you whether your bids are actually working — before the next
-        one goes out.
+      <p class="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
+        Calculate materials, labor, overhead and target margin in one
+        focused workspace. Build the estimate, check the numbers, and
+        compare the quote with what the job actually cost.
       </p>
 
-      <div class="mt-8 flex items-baseline justify-center gap-3">
-        <span class="tabular-nums text-2xl font-medium text-ink-soft/70 line-through">{PRICE.originalAmount}</span>
-        <span class="tabular-nums text-5xl font-semibold text-ink">{PRICE.amount}</span>
+      <div class="mt-7 rounded-btn border border-line bg-card px-5 py-4">
+        <p class="eyebrow">Launch price</p>
+        <div class="mt-1.5 flex items-baseline gap-3">
+          <span class="tabular-nums text-2xl font-medium text-ink-soft/70 line-through">{PRICE.originalAmount}</span>
+          <span class="tabular-nums text-4xl font-semibold text-ink">{PRICE.amount}</span>
+        </div>
+        <p class="mt-1 text-sm font-medium text-ink-soft">One-time payment. Lifetime access. No monthly subscription.</p>
       </div>
-      <p class="mt-2 text-sm font-medium text-ink-soft">{PRICE.caption}</p>
-      <p class="mt-1 status-pill status-pill-brass inline-flex">Launch price — save $20</p>
 
-      <div class="mt-7 flex flex-col items-center gap-3">
+      <div class="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
         <LicenseActions client:load returnTo="/app" />
+        <a href="#demo" class="text-link text-sm">See how it works</a>
       </div>
 
-      <ul class="mx-auto mt-9 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2">
+      <ul class="mt-7 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
         {
           TRUST_ITEMS.map((item) => (
             <li class="flex items-center gap-1.5 text-sm text-ink-soft">
@@ -47,13 +49,19 @@ const TRUST_ITEMS = [
           ))
         }
       </ul>
+    </div>
 
-      <p class="status-note mt-6 justify-center">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-        </svg>
-        {PRICING_AVAILABILITY_NOTE}
-      </p>
+    <div data-animate class="mx-auto w-full max-w-xl lg:max-w-none">
+      <div class="overflow-hidden rounded-card border border-line shadow-[0_1px_2px_rgba(23,33,29,0.04),0_16px_40px_-20px_rgba(23,33,29,0.22)]">
+        <img
+          src="/guide/overview.png"
+          alt="The Painting Estimate Pro Overview dashboard, showing active projects, estimated revenue, average margin, and a recent-projects table"
+          width="1200"
+          height="1144"
+          class="w-full"
+        />
+      </div>
+      <p class="mt-2 text-center text-xs text-ink-soft">The real workspace — not a mockup.</p>
     </div>
   </div>
 </section>

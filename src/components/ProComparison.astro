@@ -1,0 +1,67 @@
+---
+const MANUAL = [
+  "Information spread across notes and spreadsheets",
+  "Easy to omit a cost — a coat, a supply, an hour of prep",
+  "Markup and margin can get confused with each other",
+  "Estimated and actual costs are rarely compared afterward",
+  "Every job rebuilds the same calculations from scratch",
+];
+
+const PRO = [
+  "One painting-specific estimating workflow",
+  "Labor, materials, and overhead brought together automatically",
+  "Margin checked before the quote goes out, not after",
+  "Estimate-versus-actual comparison built in",
+  "Reusable project structure and business assumptions",
+];
+---
+
+<section class="section-pad border-t border-line">
+  <div class="content-shell">
+    <div data-animate class="mx-auto max-w-2xl text-center">
+      <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        A spreadsheet can total numbers. Pro helps you inspect the assumptions behind them.
+      </h2>
+      <p class="mt-4 text-lg text-ink-soft">
+        A spreadsheet can absolutely work — plenty of painters have quoted
+        successfully with one for years. This is about what stays
+        consistent when you're moving fast between jobs.
+      </p>
+    </div>
+
+    <div data-animate class="mx-auto mt-10 grid max-w-4xl grid-cols-1 gap-5 sm:grid-cols-2">
+      <div class="card p-6 sm:p-7">
+        <p class="text-sm font-semibold uppercase tracking-wide text-ink-soft">Manual estimating</p>
+        <ul class="mt-4 flex flex-col gap-3">
+          {
+            MANUAL.map((item) => (
+              <li class="flex items-start gap-2.5 text-base text-ink">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mt-0.5 h-4 w-4 shrink-0 text-ink-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+                <span>{item}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <div class="card border-primary/30 bg-surface-sage/30 p-6 sm:p-7">
+        <p class="text-sm font-semibold uppercase tracking-wide text-primary-dark">Painting Estimate Pro</p>
+        <ul class="mt-4 flex flex-col gap-3">
+          {
+            PRO.map((item) => (
+              <li class="flex items-start gap-2.5 text-base text-ink">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mt-0.5 h-4 w-4 shrink-0 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>{item}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>

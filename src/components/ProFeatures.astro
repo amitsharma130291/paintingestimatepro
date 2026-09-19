@@ -1,56 +1,53 @@
 ---
-// The other three tabs (Overview, Price Book Health, Actual Costs) already
-// get a full screenshot-and-copy treatment in ProProof.astro just above
-// this section on the sales page -- repeating them here as small text
-// cards would just be the same claim twice. This is deliberately the
-// REST of what's included, not the full seven.
-const FEATURES = [
-  {
-    title: "Reusable business settings",
-    body: "Your loaded hourly rate, overhead, target margin, and per-surface throughput, entered once. Every new estimate starts from your own numbers instead of a blank form.",
-  },
-  {
-    title: "One paint catalog",
-    body: "Price, coverage, and sheen for every product you buy, entered once. Update a price when your supplier changes it, instead of hunting down every estimate that used it.",
-  },
-  {
-    title: "Room-by-room takeoffs",
-    body: "Add rooms, doors, and windows; Pro handles the area math — coats, waste, and coverage — that's easy to get wrong by hand on a job with more than one room.",
-  },
-  {
-    title: "Backup & data ownership",
-    body: "Everything lives in your browser, not a server you don't control. Export a full backup any time, and restore it with a previewed, three-mode import that never silently overwrites anything.",
-  },
+import { PRICE } from "../data/site";
+
+// Every line here is a real, working feature -- verified against the
+// actual ProApp implementation, not an aspirational feature list.
+const INCLUDED = [
+  "Painting project workspace",
+  "Labor-cost calculations (computed automatically from your rates)",
+  "Material and supply costs",
+  "Overhead and additional job expenses",
+  "Markup and margin calculations",
+  "Professional, print-ready estimate builder",
+  "Estimate-versus-actual job costing",
+  "Reusable settings and business assumptions",
+  "Unlimited local projects",
+  "Print or PDF export",
+  "Lifetime access",
+  "All future updates to the workspace",
 ];
 ---
 
 <section id="features" class="section-pad scroll-mt-16 border-t border-line">
   <div class="content-shell">
     <div data-animate class="mx-auto max-w-2xl text-center">
-      <p class="eyebrow justify-center">And everything else</p>
-      <h2 class="mt-4 text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-        The rest of the workspace, built the same way.
+      <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        Everything included for one payment.
       </h2>
-      <p class="mt-4 text-lg text-ink-soft">
-        One purchase, seven tools that work together — not seven separate
-        upsells.
-      </p>
     </div>
 
-    <div class="mx-auto mt-10 grid max-w-4xl grid-cols-1 gap-5 sm:grid-cols-2">
-      {
-        FEATURES.map((feature) => (
-          <div data-animate class="card flex flex-col gap-2.5 p-6">
-            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-surface-sage text-primary-dark">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <div data-animate class="card mx-auto mt-10 max-w-3xl p-6 sm:p-8">
+      <ul class="grid grid-cols-1 gap-x-8 gap-y-3.5 sm:grid-cols-2">
+        {
+          INCLUDED.map((item) => (
+            <li class="flex items-start gap-2.5 text-base text-ink">
+              <svg xmlns="http://www.w3.org/2000/svg" class="mt-0.5 h-4 w-4 shrink-0 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-            </span>
-            <h3 class="text-base font-semibold text-ink">{feature.title}</h3>
-            <p class="text-sm leading-relaxed text-ink-soft">{feature.body}</p>
-          </div>
-        ))
-      }
+              <span>{item}</span>
+            </li>
+          ))
+        }
+      </ul>
     </div>
+
+    <p data-animate class="mx-auto mt-6 max-w-2xl text-center text-sm leading-relaxed text-ink-soft">
+      Every project lives in your own browser's local storage, not a server —
+      export a backup any time to move it between devices or protect
+      against clearing your browser data. Because Pro is a continuously
+      updated web app, your one-time {PRICE.amount} payment covers every
+      future improvement to it, with nothing to repurchase.
+    </p>
   </div>
 </section>

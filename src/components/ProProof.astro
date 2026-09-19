@@ -1,59 +1,95 @@
 ---
-const SHOWCASE = [
+import { BUY_CTA_LABEL } from "../data/site";
+
+// Combines the brief's "show the workflow" and "product demonstration"
+// sections into one walkthrough -- a separate demo gallery right after
+// this one would just show several of the same screens again. Every step
+// is a real screenshot of the actual app (captured via Playwright driving
+// the real ProApp component), not a mockup or an illustration.
+const STEPS = [
   {
-    heading: "One screen, the whole business.",
-    body: "Active projects, estimates issued this month, estimated revenue, and your average margin — the moment you open Pro, before you dig into any single job.",
-    image: "/guide/overview.png",
-    alt: "The Overview dashboard showing active projects, estimated revenue, average margin, and a recent-projects table",
+    step: "1",
+    heading: "Create the project",
+    body: "Start a new project in seconds — no account, no setup wizard. Add your customer's name and job-site address as you go; it flows straight onto the estimate later.",
+    image: "/guide/projects-empty.png",
+    alt: "The Projects tab with a '+ New project' button and a note that project data is stored only in this browser",
   },
   {
-    heading: "Catch the rate that's quietly losing money.",
-    body: "Price Book Health checks your own standing prices against their real modeled cost — so a rate you've charged for years, that's slipped below target as your costs changed, gets flagged before it costs you on the next ten jobs that use it.",
-    image: "/guide/price-book-health.png",
-    alt: "A Price Book Health service card showing modeled cost per unit, current price, status 'Above target', margin, and required price for target margin",
+    step: "2",
+    heading: "Add rooms, surfaces, and materials",
+    body: "Enter each room's dimensions and pick a paint from your catalog. Pro works out the wall area, coats, and waste automatically — you never hand-calculate labor hours or paint quantity.",
+    image: "/guide/project-rooms.png",
+    alt: "A room editor showing a 16 by 13 by 9 foot room with door and window deductions, and its auto-created Wall surface with a paint variant selected",
   },
   {
-    heading: "Find out if your bids actually held up.",
-    body: "Record what a finished job really cost — materials, labor, overhead — and Pro compares it to what you quoted: real profit, real margin, real variance. Not a guess about whether your rates work. An answer.",
+    step: "3",
+    heading: "Set your rates and overhead once",
+    body: "Your loaded hourly rate, overhead ratio, and target margin, entered a single time. Every new project starts from these — you're not re-typing your business assumptions on every job.",
+    image: "/guide/business-settings.png",
+    alt: "The Business Settings tab showing loaded hourly rate, overhead, target margin, and per-surface throughput fields",
+  },
+  {
+    step: "4",
+    heading: "Choose your margin, see the calculated quote",
+    body: "Materials, labor, direct cost, and overhead roll up automatically. Pick a suggested price at your target margin or set your own — profit and margin update live, before you send anything.",
+    image: "/guide/estimate-summary.png",
+    alt: "The Estimate summary card showing Materials, Labor, Direct cost, Overhead, Estimated job cost, and a Proposed price with Profit, Margin, and an 'Above target' status badge",
+  },
+  {
+    step: "5",
+    heading: "Produce a clean customer estimate",
+    body: "A print-ready, customer-facing document — ready to print or save as a PDF. No cost, overhead, or margin figures ever appear on it, by design.",
+    image: "/guide/customer-document.png",
+    alt: "The customer-facing document: business info, project title, customer name, an estimate number and date, a line item, and a total price",
+  },
+  {
+    step: "6",
+    heading: "Record actual costs and compare",
+    body: "Once the job's done, log what it really cost. Pro compares it to what you quoted — real profit, real margin, real variance — so you find out where an assumption held up or missed.",
     image: "/guide/actual-review.png",
-    alt: "The Actual Costs tab showing Materials, Labor, Other Expenses, and Overhead confirmed, with Actual cost, Profit vs. original quote, Margin, and Total variance",
+    alt: "The Actual Costs tab with Materials, Labor, Other Expenses, and Overhead confirmed, showing Actual cost, Profit vs. original quote, Margin, and Total variance",
   },
 ];
 ---
 
-<section id="proof" class="section-pad scroll-mt-16 border-t border-line">
+<section id="demo" class="section-pad scroll-mt-16 border-t border-line">
   <div class="content-shell">
     <div data-animate class="mx-auto max-w-2xl text-center">
-      <p class="eyebrow justify-center">See it, don't just take our word for it</p>
+      <p class="eyebrow justify-center">See exactly what you're buying</p>
       <h2 class="mt-4 text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-        The actual workspace, not a mockup.
+        From measurements to margin — in one real workflow.
       </h2>
+      <p class="mt-4 text-lg text-ink-soft">
+        Painting Estimate Pro is new, so this isn't a highlight reel — it's
+        one realistic job, start to finish, in the actual application.
+      </p>
     </div>
 
-    <div class="mt-14 flex flex-col gap-16 sm:gap-20">
+    <ol class="mt-14 flex flex-col gap-16 sm:gap-20">
       {
-        SHOWCASE.map((item, i) => (
-          <div
+        STEPS.map((item, i) => (
+          <li
             data-animate
             class={`grid grid-cols-1 items-center gap-8 sm:gap-12 lg:grid-cols-2 lg:gap-16 ${i % 2 === 1 ? "lg:[&>*:first-child]:order-2" : ""}`}
           >
             <div class="rounded-card border border-line shadow-[0_1px_2px_rgba(23,33,29,0.04),0_16px_40px_-20px_rgba(23,33,29,0.22)]">
-              <img
-                src={item.image}
-                alt={item.alt}
-                width="1200"
-                height="1144"
-                loading="lazy"
-                class="w-full rounded-card"
-              />
+              <img src={item.image} alt={item.alt} width="1200" height="1144" loading="lazy" class="w-full rounded-card" />
             </div>
             <div class="mx-auto max-w-md lg:mx-0">
-              <h3 class="text-balance text-2xl font-semibold tracking-tight text-ink">{item.heading}</h3>
+              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-ink">
+                {item.step}
+              </span>
+              <h3 class="mt-4 text-balance text-2xl font-semibold tracking-tight text-ink">{item.heading}</h3>
               <p class="mt-3 text-base leading-relaxed text-ink-soft">{item.body}</p>
             </div>
-          </div>
+          </li>
         ))
       }
+    </ol>
+
+    <div data-animate class="mt-14 flex flex-col items-center gap-3 text-center">
+      <a href="#pricing" class="btn btn-primary">{BUY_CTA_LABEL}</a>
+      <p class="text-sm text-ink-soft">One-time payment. No subscription.</p>
     </div>
   </div>
 </section>

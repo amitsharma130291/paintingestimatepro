@@ -82,6 +82,18 @@ export const PRICE = {
   caption: "One-time purchase · Lifetime access",
 };
 
+// The real, live policy in terms.astro's "Refunds" section — kept as one
+// constant so the guarantee is never quoted at a different length in two
+// places on the sales page. Change terms.astro FIRST if this ever changes;
+// this is marketing copy, not the policy itself.
+export const REFUND_GUARANTEE_DAYS = 7;
+
+// The one purchase-CTA phrase used everywhere someone can actually buy
+// (LicenseActions.tsx's own button, plus every marketing section that
+// talks about clicking it) — so the promise made in copy always matches
+// the button's own label.
+export const BUY_CTA_LABEL = `Get lifetime access — ${PRICE.amount}`;
+
 export const TARGET_MARGIN = "35%";
 
 // UX-012: the homepage's Price Book Health section is a hand-authored,

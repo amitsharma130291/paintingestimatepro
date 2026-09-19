@@ -1,20 +1,33 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { Loader2, CheckCircle2, MailCheck } from 'lucide-react';
 import { startCheckout, redeemLicenseKey, requestLicenseRecovery, getStoredPayment } from '../../lib/license';
-import { PRICE } from '../../data/site';
+import { BUY_CTA_LABEL } from '../../data/site';
 
 function Spinner() {
   return <Loader2 size={15} strokeWidth={2.5} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />;
 }
 
 /**
- * The one purchase/unlock UI, used both on the homepage pricing section and
- * inside the Pro workspace's paywall — a "Buy Pro" button plus an "Already
- * purchased?" box (paste a license key, or request a resend by email).
+ * The one purchase/unlock UI, used on the sales page, the homepage pricing
+ * section, and inside the Pro workspace's paywall — the BUY_CTA_LABEL button
+ * plus an "Already purchased?" box (paste a license key, or request a
+ * resend by email).
  * Talks only to this app's own /api/checkout and /api/license routes,
  * never to Dodo directly — see src/lib/license.ts.
  */
-export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: string; onUnlocked?: () => void }) {
+export default function LicenseActions({
+  returnTo,
+  onUnlocked,
+  buyLabel = BUY_CTA_LABEL,
+}: {
+  returnTo: string;
+  onUnlocked?: () => void;
+  /** Overrides the buy button's own text (e.g. the guarantee section's
+   * "Try Painting Estimate Pro" framing) without duplicating the whole
+   * component just to change one string. Defaults to the standard,
+   * site-wide purchase phrase. */
+  buyLabel?: string;
+}) {
   // Server-rendered (client:load) markup always starts as "Buy Pro" --
   // localStorage doesn't exist during SSR -- then this effect, client-side
   // only, swaps to "Go to app" for a returning customer. Same "only ever a
@@ -103,13 +116,7 @@ export default function LicenseActions({ returnTo, onUnlocked }: { returnTo: str
     <div>
       <button type="button" className="btn btn-primary" onClick={handleBuy} disabled={buying}>
         {buying && <Spinner />}
-        {buying ? (
-          'Starting checkout…'
-        ) : (
-          <>
-            Buy Pro — <span className="text-primary-ink/60 line-through">{PRICE.originalAmount}</span> {PRICE.amount} one-time
-          </>
-        )}
+        {buying ? 'Starting checkout…' : buyLabel}
       </button>
       {buyError && <p className="mt-2 text-sm text-bad">{buyError}</p>}
 

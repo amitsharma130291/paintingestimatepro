@@ -1,4 +1,9 @@
-<section class="section-pad border-t border-line">
+---
+import { REFUND_GUARANTEE_DAYS, PRICE } from "../data/site";
+import LicenseActions from "./tools/LicenseActions.tsx";
+---
+
+<section id="guarantee" class="section-pad scroll-mt-16 border-t border-line">
   <div class="content-shell">
     <div data-animate class="card mx-auto flex max-w-2xl flex-col items-center gap-3 p-8 text-center sm:p-10">
       <span class="flex h-12 w-12 items-center justify-center rounded-full bg-surface-sage text-primary-dark">
@@ -7,13 +12,23 @@
           <polyline points="9 12 11 14 15 10" />
         </svg>
       </span>
-      <h2 class="text-2xl font-semibold tracking-tight text-ink">Try Pro without the risk.</h2>
+      <h2 class="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+        Try the complete product for {REFUND_GUARANTEE_DAYS} days.
+      </h2>
       <p class="max-w-md text-base leading-relaxed text-ink-soft">
-        If Pro isn't a fit within your first 7 days, email us and we'll
-        refund your purchase in full — no long form, no retention pitch.
-        Your local project data is never touched either way.
+        Purchase Painting Estimate Pro and use the full workspace with your
+        own estimating process. If it's not a good fit, request a refund
+        within {REFUND_GUARANTEE_DAYS} days — just email us with the
+        address you paid with. Your local project data is never touched
+        either way.
       </p>
-      <a href="/terms" class="text-link text-sm">Read the full refund policy</a>
+
+      <div class="mt-3 flex flex-col items-center gap-2">
+        <LicenseActions client:load returnTo="/app" buyLabel={`Try Painting Estimate Pro — ${PRICE.amount}`} />
+        <p class="text-sm text-ink-soft">One payment. No subscription.</p>
+      </div>
+
+      <a href="/terms" class="text-link mt-2 text-sm">Read the full refund policy</a>
     </div>
   </div>
 </section>
