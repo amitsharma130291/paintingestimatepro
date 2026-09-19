@@ -66,8 +66,8 @@ export const POST: APIRoute = async ({ request }) => {
       } else {
         const licenseKey = buildLicenseKey(paymentId);
         // Backstop for the same first-purchase confirmation verify.ts sends
-        // on the browser-redirect path -- same /app/welcome target.
-        const recoveryUrl = buildRecoveryUrl({ paymentId, target: '/app/welcome' });
+        // on the browser-redirect path -- same /app target.
+        const recoveryUrl = buildRecoveryUrl({ paymentId });
         await sendLicenseEmails({ customerEmail, customerName, licenseKey, recoveryUrl, payment: data });
       }
     } catch (err) {

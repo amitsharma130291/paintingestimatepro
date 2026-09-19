@@ -41,9 +41,11 @@ describe('buildLicenseKey / parseLicenseKey round-trip', () => {
 describe('buildRecoveryUrl', () => {
   // BUG FIX: this used to point at `/#pricing`, but nothing on the homepage
   // ever consumes `checkout=recover` -- only ProGate.tsx does, mounted on
-  // /app and /app/welcome. A recovery link built the old way looked fine
-  // but silently did nothing when clicked. Default target is now /app.
-  it('defaults to /app, where checkout=recover is actually resolved', () => {
+  // /app. A recovery link built the old way looked fine but silently did
+  // nothing when clicked. Every purchase/recovery/reactivation flow lands
+  // on /app now (including checkout's own return_url), so this always
+  // targets it -- no configurable target/welcome-page landing anymore.
+  it('always targets /app, where checkout=recover is actually resolved', () => {
     const url = buildRecoveryUrl({ sessionId: 'sess_1' });
     expect(url).toContain('checkout=recover');
     expect(url).toContain('sessionId=sess_1');
@@ -55,6 +57,7 @@ describe('buildRecoveryUrl', () => {
   it('falls back to paymentId when no sessionId is given', () => {
     const url = buildRecoveryUrl({ paymentId: 'pay_1' });
     expect(url).toContain('paymentId=pay_1');
+    expect(new URL(url).pathname).toBe('/app');
     expect(url).not.toContain('sessionId=');
   });
 
@@ -62,11 +65,5 @@ describe('buildRecoveryUrl', () => {
     const url = buildRecoveryUrl({ sessionId: 'sess_1', paymentId: 'pay_1' });
     expect(url).toContain('sessionId=sess_1');
     expect(url).not.toContain('paymentId=');
-  });
-
-  it('accepts an explicit target for the first-purchase welcome-page landing', () => {
-    const url = buildRecoveryUrl({ paymentId: 'pay_1', target: '/app/welcome' });
-    expect(new URL(url).pathname).toBe('/app/welcome');
-    expect(url).toContain('paymentId=pay_1');
   });
 });

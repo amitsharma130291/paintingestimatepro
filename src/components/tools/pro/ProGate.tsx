@@ -148,7 +148,7 @@ export default function ProGate() {
           <span className="text-ink-soft/70 line-through">{PRICE.originalAmount}</span> <span className="font-semibold text-ink">{PRICE.amount} one-time</span> · lifetime access. Multi-room projects, per-surface materials, Price Book Health, customer documents, and actual-cost review — everything computes and saves locally in your browser.
         </p>
         <div className="mt-6 flex flex-col items-center gap-3">
-          <LicenseActions returnTo="/app/welcome" onUnlocked={() => setState({ status: 'unlocked' })} />
+          <LicenseActions returnTo="/app" onUnlocked={() => setState({ status: 'unlocked' })} />
           <a href="/help" className="text-link text-sm">
             See exactly what's inside, with screenshots
           </a>

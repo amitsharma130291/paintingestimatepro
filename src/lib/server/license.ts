@@ -52,13 +52,14 @@ export function parseLicenseKey(rawKey: unknown): { paymentId: string } | null {
  * BUG FIX: this used to point at `/#pricing` — but the code that actually
  * consumes `checkout=recover` (consumeRecoveryParams() inside
  * resolvePendingCheckout(), src/lib/license.ts) only ever runs from
- * ProGate.tsx, which is mounted on /app and /app/welcome, never on the
- * homepage. A recovery/reactivation email link built the old way landed on
- * the pricing section and did nothing — no auto-unlock. `target` must be a
- * page that actually resolves these params.
+ * ProGate.tsx, mounted on /app, never on the homepage. A recovery/
+ * reactivation email link built the old way landed on the pricing section
+ * and did nothing — no auto-unlock. Every purchase/recovery/reactivation
+ * flow now lands on /app directly (checkout's own return_url included —
+ * see Pricing.astro/ProGate.tsx's `returnTo`), so this always targets it.
  */
-export function buildRecoveryUrl({ sessionId, paymentId, target = '/app' }: { sessionId?: string | null; paymentId?: string | null; target?: '/app' | '/app/welcome' }): string {
-  const url = new URL(target, SITE_URL);
+export function buildRecoveryUrl({ sessionId, paymentId }: { sessionId?: string | null; paymentId?: string | null }): string {
+  const url = new URL('/app', SITE_URL);
   url.searchParams.set('checkout', 'recover');
   if (sessionId) url.searchParams.set('sessionId', sessionId);
   else if (paymentId) url.searchParams.set('paymentId', paymentId);
