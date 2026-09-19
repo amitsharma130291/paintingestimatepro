@@ -1,0 +1,75 @@
+---
+import { STATUS_EXAMPLE, PRICE } from "../data/site";
+---
+
+<section class="section-pad border-t border-line">
+  <div class="content-shell">
+    <div class="mx-auto max-w-4xl">
+      <div data-animate class="text-center">
+        <p class="eyebrow justify-center">The math</p>
+        <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+          One caught pricing mistake covers Pro many times over.
+        </h2>
+      </div>
+
+      <div data-animate class="card mt-10 grid grid-cols-1 divide-y divide-line sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+        <div class="p-7 sm:p-8">
+          <span class="tag-preview">{STATUS_EXAMPLE}</span>
+          <p class="mt-3 text-sm font-semibold text-ink-soft">Without Price Book Health</p>
+          <p class="mt-1 text-lg font-semibold text-ink">A standard door at $85</p>
+          <dl class="mt-4 space-y-2 text-sm">
+            <div class="flex items-center justify-between">
+              <dt class="text-ink-soft">Estimated cost</dt>
+              <dd class="tabular-nums font-medium text-ink">$67</dd>
+            </div>
+            <div class="flex items-center justify-between">
+              <dt class="text-ink-soft">Margin</dt>
+              <dd class="tabular-nums font-medium text-warn">21.2%</dd>
+            </div>
+            <div class="flex items-center justify-between">
+              <dt class="text-ink-soft">Sample target margin</dt>
+              <dd class="tabular-nums text-ink-soft">35%</dd>
+            </div>
+          </dl>
+          <p class="mt-4 text-sm leading-relaxed text-ink-soft">
+            A rate that's felt normal for years, quietly sitting 14 points
+            under target — the kind of gap Price Book Health exists to
+            surface before you charge it again.
+          </p>
+        </div>
+
+        <div class="p-7 sm:p-8">
+          <span class="status-pill status-pill-primary">Corrected</span>
+          <p class="mt-3 text-sm font-semibold text-ink-soft">With Price Book Health</p>
+          <p class="mt-1 text-lg font-semibold text-ink">Priced to hit the 35% target</p>
+          <dl class="mt-4 space-y-2 text-sm">
+            <div class="flex items-center justify-between">
+              <dt class="text-ink-soft">Price to reach target margin</dt>
+              <dd class="tabular-nums font-medium text-ink">About $103.08</dd>
+            </div>
+            <div class="flex items-center justify-between">
+              <dt class="text-ink-soft">Recovered per door</dt>
+              <dd class="tabular-nums font-semibold text-primary-dark">+$18.08</dd>
+            </div>
+            <div class="flex items-center justify-between">
+              <dt class="text-ink-soft">Doors to cover {PRICE.amount}</dt>
+              <dd class="tabular-nums font-medium text-ink">~4-5</dd>
+            </div>
+          </dl>
+          <p class="mt-4 text-sm leading-relaxed text-ink-soft">
+            Most jobs aren't priced one door at a time — they're a dozen
+            line items. Catching this gap across a single real job's
+            worth of doors, trim, and walls pays for Pro on that job
+            alone, then keeps paying on every job after it.
+          </p>
+        </div>
+      </div>
+
+      <p data-animate class="mt-4 text-center text-xs leading-relaxed text-ink-soft">
+        Illustrative figures, not suggested market rates — assumes the same
+        $67 cost held constant. Your own costs, throughput, and target
+        margin drive every real number inside Pro.
+      </p>
+    </div>
+  </div>
+</section>

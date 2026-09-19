@@ -3,7 +3,10 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import ProHero from "../components/ProHero.astro";
+import ProProof from "../components/ProProof.astro";
 import ProFeatures from "../components/ProFeatures.astro";
+import ProROI from "../components/ProROI.astro";
+import ProGuarantee from "../components/ProGuarantee.astro";
 import HowItWorks from "../components/HowItWorks.astro";
 import LicenseActions from "../components/tools/LicenseActions.tsx";
 import { PRICE, PRICING_AVAILABILITY_NOTE } from "../data/site";
@@ -36,6 +39,10 @@ const FAQS = [
     question: "What if I already bought Pro on another device?",
     answer: "Click \"Already purchased?\" below and paste your license key, or use \"Forgot your key?\" to have it emailed to you — either way, no repurchasing.",
   },
+  {
+    question: "What's your refund policy?",
+    answer: "A full refund within 7 days of your purchase date, no questions asked — just email us with the address you paid with. Your local project data is never touched either way. See the Terms of Service for the full policy.",
+  },
 ];
 ---
 
@@ -54,8 +61,11 @@ const FAQS = [
     </div>
 
     <ProHero />
-    <ProFeatures />
+    <ProProof />
     <HowItWorks />
+    <ProFeatures />
+    <ProROI />
+    <ProGuarantee />
 
     <section id="pricing" class="section-pad scroll-mt-16 border-t border-line">
       <div class="content-shell">
