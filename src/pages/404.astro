@@ -1,0 +1,35 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+
+const title = "Page not found | Painting Estimate Pro";
+const description = "This page doesn't exist. Head back to the homepage or see Pro pricing.";
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <main id="main-content" class="section-pad">
+    <div class="content-shell max-w-xl text-center">
+      <p class="eyebrow justify-center">404</p>
+      <h1 class="mt-4 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        Page not found
+      </h1>
+      <p class="mt-3 text-lg text-ink-soft">
+        The page you're looking for doesn't exist, or the link may be out of
+        date.
+      </p>
+
+      <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <a href="/" class="btn btn-primary">Go to homepage</a>
+        <a href="/pricing" class="btn btn-secondary">See Pro pricing</a>
+      </div>
+
+      <p class="mt-8 text-sm text-ink-soft">
+        Looking for a free tool instead?
+        <a href="/#free-tools" class="text-link">Browse the free calculators</a>.
+      </p>
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>
