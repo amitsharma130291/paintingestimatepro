@@ -8,6 +8,18 @@ const description = "Business settings, catalog, projects, Price Book Health, an
 
 <BaseLayout title={title} description={description}>
   <main id="main-content">
-    <ProGate client:only="react" />
+    {/* GSC-001: client:load, not client:only. Unlike ProApp/EstimateTemplate,
+        ProGate's initial render is fully deterministic -- its useState seed
+        is either a build-time-constant PAYWALL_DISABLED flag or the plain
+        literal {status:'checking'}, and it never touches window/localStorage
+        outside a useEffect -- so there's no hydration-mismatch risk here.
+        Server-rendering it means a real visitor (and Googlebot's initial,
+        no-JS fetch) sees genuine content -- the real "Checking access…"
+        shell with the real logo -- instead of an empty <main>, which is
+        exactly what /app was serving before this change (confirmed live:
+        0 words in the raw response). The actual entitlement check still
+        only ever runs client-side, in the same useEffect as before -- this
+        doesn't change what's required to unlock anything. */}
+    <ProGate client:load />
   </main>
 </BaseLayout>
