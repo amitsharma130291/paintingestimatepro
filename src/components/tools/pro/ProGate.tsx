@@ -4,7 +4,7 @@ import LicenseActions from '../LicenseActions';
 import ProApp from './ProApp';
 import { PRICE } from '../../../data/site';
 
-type GateState = { status: 'checking' } | { status: 'locked' } | { status: 'unavailable' } | { status: 'unlocked' };
+type GateState = { status: 'checking' } | { status: 'locked' } | { status: 'unavailable' } | { status: 'unlocked'; justUnlocked?: boolean };
 
 /** Minimal branded shell for every pre-unlock state (checking/locked/
  * unavailable) now that /app/index.astro no longer wraps this in the
@@ -50,7 +50,10 @@ export default function ProGate() {
       try {
         const resolved = await resolvePendingCheckout();
         if (resolved && !('failed' in resolved)) {
-          if (!cancelled) setState({ status: 'unlocked' });
+          // A real checkout/recovery-link resolution just happened, not a
+          // silent re-verification of an already-stored payment -- this is
+          // the one moment ProApp lands on Overview with a welcome heading.
+          if (!cancelled) setState({ status: 'unlocked', justUnlocked: true });
           return;
         }
         const access = await checkAccess();
@@ -108,6 +111,7 @@ export default function ProGate() {
     return (
       <ProApp
         testMode={PAYWALL_DISABLED}
+        justUnlocked={state.justUnlocked}
         onLockBrowser={
           PAYWALL_DISABLED
             ? undefined
@@ -148,7 +152,7 @@ export default function ProGate() {
           <span className="text-ink-soft/70 line-through">{PRICE.originalAmount}</span> <span className="font-semibold text-ink">{PRICE.amount} one-time</span> · lifetime access. Multi-room projects, per-surface materials, Price Book Health, customer documents, and actual-cost review — everything computes and saves locally in your browser.
         </p>
         <div className="mt-6 flex flex-col items-center gap-3">
-          <LicenseActions returnTo="/app" onUnlocked={() => setState({ status: 'unlocked' })} />
+          <LicenseActions returnTo="/app" onUnlocked={() => setState({ status: 'unlocked', justUnlocked: true })} />
           <a href="/help" className="text-link text-sm">
             See exactly what's inside, with screenshots
           </a>

@@ -111,6 +111,19 @@ body {
     transform: translateY(1px);
   }
 
+  /* No .btn:disabled rule existed anywhere before this -- every disabled
+     button sitewide (this one included) rendered pixel-identical to an
+     enabled one, so clicking it looked like nothing happened. pointer-events:
+     none also suppresses the :hover color-shift rules below (they need an
+     actual pointer interaction to match, which this blocks), so a single
+     rule covers every button variant without overriding each one's :hover. */
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none;
+  }
+
   .btn-primary {
     background-color: var(--color-primary);
     color: var(--color-primary-ink);

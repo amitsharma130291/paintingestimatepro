@@ -97,16 +97,18 @@ interface ProAppProps {
    * testMode) — moved from ProGate's own banner into the app shell's
    * account menu. Same clearStoredPayment()-based action as before. */
   onLockBrowser?: () => void;
+  /** True only for the single render right after a fresh unlock (checkout
+   * return, recovery-link click, or manual key redemption) — set by
+   * ProGate.tsx. Landed on 'overview' with a one-time welcome heading for
+   * that specific moment; an ordinary subsequent visit to /app (silent
+   * checkAccess() re-verification) leaves this unset and keeps the default
+   * 'projects' landing, since dozens of existing tests assume Projects is
+   * what's showing with no prior navigation. */
+  justUnlocked?: boolean;
 }
 
-export default function ProApp({ testMode = false, onLockBrowser }: ProAppProps = {}) {
-  // Kept as 'projects' (not the new 'overview' tab) as the default landing
-  // view — dozens of existing tests assume the Projects list is what's
-  // showing immediately after render with no prior navigation. Overview is
-  // fully built and one click away in the sidebar; only its "always-on
-  // landing page" framing from the redesign spec is traded off here to
-  // avoid restructuring that many tests' navigation flow.
-  const [tab, setTab] = useState<Tab>('projects');
+export default function ProApp({ testMode = false, onLockBrowser, justUnlocked = false }: ProAppProps = {}) {
+  const [tab, setTab] = useState<Tab>(justUnlocked ? 'overview' : 'projects');
   const [searchQuery, setSearchQuery] = useState('');
   const [projectStatusFilter, setProjectStatusFilter] = useState<'all' | 'draft' | 'issued' | 'superseded'>('all');
   const [loading, setLoading] = useState(true);
@@ -1259,6 +1261,7 @@ export default function ProApp({ testMode = false, onLockBrowser }: ProAppProps 
             catalog={catalog}
             settings={settings}
             searchQuery={searchQuery}
+            justUnlocked={justUnlocked}
             onCreateEstimate={startNewEstimate}
             onOpenProject={(id) => {
               openProject(id);

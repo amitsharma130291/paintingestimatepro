@@ -15,6 +15,10 @@ interface OverviewPanelProps {
   catalog: PaintVariant[];
   settings: BusinessSettings;
   searchQuery: string;
+  /** True only right after a fresh unlock (checkout return, recovery link,
+   * or manual key redemption) -- shows a one-time welcome heading instead
+   * of the standing "Welcome back", set by ProGate.tsx/ProApp.tsx. */
+  justUnlocked?: boolean;
   onCreateEstimate: () => void;
   onOpenProject: (projectId: string) => void;
   onGoTo: (tab: 'catalog' | 'settings' | 'health' | 'backup' | 'projects') => void;
@@ -44,7 +48,7 @@ function activeRevisionOf(p: Project) {
  * recalculates a price or margin; it only reads and formats what's already
  * on disk, the same way the customer document and Price Book Health tab do.
  */
-export default function OverviewPanel({ projects, serviceDefinitions, catalog, settings, searchQuery, onCreateEstimate, onOpenProject, onGoTo }: OverviewPanelProps) {
+export default function OverviewPanel({ projects, serviceDefinitions, catalog, settings, searchQuery, justUnlocked, onCreateEstimate, onOpenProject, onGoTo }: OverviewPanelProps) {
   const stats = useMemo(() => {
     const now = new Date();
     const thisMonth = now.getUTCFullYear() * 12 + now.getUTCMonth();
@@ -108,12 +112,24 @@ export default function OverviewPanel({ projects, serviceDefinitions, catalog, s
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-ink">Good morning</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-ink">
+            {justUnlocked ? "Welcome to Pro — you're all set" : 'Welcome back'}
+          </h2>
           <p className="mt-1 text-sm text-ink-soft">Here's how your estimating business is performing.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <Button variant="secondary" onClick={() => onGoTo('projects')}>Add project</Button>
-          <Button variant="primary" onClick={onCreateEstimate} disabled={catalog.length === 0}>Create estimate</Button>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex flex-wrap gap-3">
+            <Button variant="secondary" onClick={() => onGoTo('projects')}>Add project</Button>
+            <Button variant="primary" onClick={onCreateEstimate} disabled={catalog.length === 0}>Create estimate</Button>
+          </div>
+          {catalog.length === 0 && (
+            <p className="text-xs text-warn">
+              <button type="button" onClick={() => onGoTo('catalog')} className="underline underline-offset-2">
+                Add a paint product
+              </button>{' '}
+              first to start an estimate.
+            </p>
+          )}
         </div>
       </div>
 
