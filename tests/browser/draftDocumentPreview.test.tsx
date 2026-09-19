@@ -6,7 +6,7 @@
 // DRAFT, and must show PRICE PENDING rather than a blank or $0.00 when
 // no price has actually been set.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import ProApp from '../../src/components/tools/pro/ProApp';
 import { openAppDb, STORES } from '../../src/storage/db';
 
@@ -55,7 +55,14 @@ describe('DOC-004: draft (pre-issue) customer document preview', () => {
     expect(screen.queryByText('$0.00')).toBeNull();
   });
 
-  it('a COMPLETE but not-yet-issued draft still shows PRICE PENDING until the user actually issues it', async () => {
+  it('a COMPLETE but not-yet-issued draft shows the live proposed price immediately, still marked DRAFT', async () => {
+    // BUG fix: the preview used to keep showing PRICE PENDING here until
+    // the user separately clicked "Save draft", even though the Estimate
+    // summary card right above it already showed a real, complete price —
+    // confusing, since every OTHER field in the preview (scope lines,
+    // business/customer info) already reflects live, unsaved typing. The
+    // preview now mirrors the same live price the summary shows, without
+    // requiring a save first; only issuing still freezes it permanently.
     render(<ProApp />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: '+ New project' }));
@@ -65,8 +72,14 @@ describe('DOC-004: draft (pre-issue) customer document preview', () => {
     }
     await screen.findByText('$126.00'); // materials computed -> calculation is complete
 
+    const proposedPriceRow = screen.getByText('Proposed price').closest('div')!;
+    const livePrice = within(proposedPriceRow).getByText(/^\$[\d,]+\.\d{2}$/).textContent;
+
     expect(screen.getByText(/DRAFT — not yet issued/i)).toBeTruthy();
-    expect(screen.getByText('PRICE PENDING')).toBeTruthy(); // proposedPrice is still null until Issue is clicked
+    expect(screen.queryByText('PRICE PENDING')).toBeNull();
+    // The exact same price string appears twice: once in the live Estimate
+    // summary card, once in the customer-document preview below it.
+    expect(screen.getAllByText(livePrice!).length).toBeGreaterThanOrEqual(2);
   });
 
   it('after issuing, the document shows the real price and drops the DRAFT marker', async () => {

@@ -641,13 +641,27 @@ export default function ProApp({ testMode = false, justUnlocked = false }: ProAp
   const previewDocument = useMemo(() => {
     if (draftEdit?.customerDocumentSnapshot) return draftEdit.customerDocumentSnapshot;
     if (!draftEdit || !activeProject) return null;
-    return buildCustomerDocument(draftEdit, {
-      estimateNumber: `DRAFT-${activeProject.id.slice(-6)}-${draftEdit.revisionNumber}`,
-      estimateDate: now().slice(0, 10),
-      projectAddress: draftEdit.customerInfo.address,
-      revisionLabel: `Rev ${draftEdit.revisionNumber}`,
-    });
-  }, [draftEdit, activeProject]);
+    // BUG: draftEdit.proposedPrice only ever updates inside saveDraft()/
+    // issueEstimate() -- every OTHER field a customer would see (rooms,
+    // business/customer info, notes) already reflects live, unsaved
+    // typing here, so a live draft showed a real "Proposed price" in the
+    // Estimate summary card while this preview kept saying "PRICE
+    // PENDING" until the user separately clicked Save draft. Mirrors the
+    // exact same price resolution saveDraft()/issueEstimate() use, live,
+    // instead of waiting for a persisted save.
+    const livePrice = draftEdit.priceMode === 'custom'
+      ? (customPriceRaw.trim() === '' ? null : customPriceRaw)
+      : summary?.effectivePrice?.toFixed(2) ?? null;
+    return buildCustomerDocument(
+      { ...draftEdit, proposedPrice: livePrice },
+      {
+        estimateNumber: `DRAFT-${activeProject.id.slice(-6)}-${draftEdit.revisionNumber}`,
+        estimateDate: now().slice(0, 10),
+        projectAddress: draftEdit.customerInfo.address,
+        revisionLabel: `Rev ${draftEdit.revisionNumber}`,
+      }
+    );
+  }, [draftEdit, activeProject, summary, customPriceRaw]);
 
   async function issueEstimate() {
     if (!draftEdit || !activeProject || !summary || summary.calculationState !== 'complete') return;
