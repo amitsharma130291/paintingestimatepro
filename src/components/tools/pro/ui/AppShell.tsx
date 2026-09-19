@@ -133,7 +133,9 @@ export default function AppShell({
           height, which pushed the bottom links off-screen on tall pages. */}
       <aside className="sticky top-0 hidden h-screen w-[250px] shrink-0 flex-col border-r border-line bg-card lg:flex">
         <div className="flex items-center gap-2 px-5 py-5">
-          <img src="/brand/logo-primary-512.png" alt="PaintingPricing Calculator" width={512} height={130} className="h-8 w-auto" />
+          <a href="/" className="flex items-center gap-2">
+            <img src="/brand/logo-primary-512.png" alt="PaintingPricing Calculator" width={512} height={130} className="h-8 w-auto" />
+          </a>
           <span className="status-pill-brass status-pill">PRO</span>
         </div>
         {navList}
@@ -183,7 +185,9 @@ export default function AppShell({
           <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-card shadow-lg">
             <div className="flex items-center justify-between gap-2 px-4 py-4">
               <div className="flex items-center gap-2">
-                <img src="/brand/logo-primary-512.png" alt="PaintingPricing Calculator" width={512} height={130} className="h-7 w-auto" />
+                <a href="/" className="flex items-center gap-2">
+                  <img src="/brand/logo-primary-512.png" alt="PaintingPricing Calculator" width={512} height={130} className="h-7 w-auto" />
+                </a>
                 <span className="status-pill-brass status-pill">PRO</span>
               </div>
               <button type="button" onClick={() => setDrawerOpen(false)} aria-label="Close menu" className="rounded-btn p-2 text-ink-soft hover:bg-surface-sage">
