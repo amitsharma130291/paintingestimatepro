@@ -2,7 +2,7 @@
 import BaseLayout from "../layouts/LegalLayout.astro";
 
 const title = "Help & Guide | PaintingPricing Calculator";
-const description = "A complete walkthrough of every part of the Pro workspace, and how each one helps you price and run real jobs.";
+const description = "A complete walkthrough of every part of the Pro workspace, with screenshots, and how each one helps you price and run real jobs.";
 
 const SECTIONS = [
   { id: "overview", label: "Overview" },
@@ -31,7 +31,7 @@ const SECTIONS = [
       it does, and why it's there. New to Pro? The{" "}
       <a href="/app/welcome">Welcome page</a> is a faster five-step version
       of just the "how do I start" part. This page goes deeper, section by
-      section.
+      section, with real screenshots.
     </p>
     <nav aria-label="Sections" class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
       {
@@ -61,6 +61,13 @@ const SECTIONS = [
       workspace shows a five-step "how to get started" guide here instead,
       so the very first screen you see tells you exactly what to do next.
     </p>
+    <img
+      src="/guide/overview.png"
+      alt="The Overview dashboard with one active project, one estimate this month, estimated revenue, average gross margin, a recent-projects table, Quick actions, and a Price Book Health summary"
+      width="1200"
+      height="1144"
+      loading="lazy"
+    />
   </section>
 
   <section id="business-settings">
@@ -80,6 +87,13 @@ const SECTIONS = [
       picks up new numbers when you explicitly run a rate refresh on it, so
       an old quote can't drift out from under you.
     </p>
+    <img
+      src="/guide/business-settings.png"
+      alt="The Business Settings tab, showing loaded hourly rate, overhead, target margin, and per-surface throughput fields"
+      width="1200"
+      height="1144"
+      loading="lazy"
+    />
   </section>
 
   <section id="paint-catalog">
@@ -96,6 +110,13 @@ const SECTIONS = [
       when your supplier's prices change, rather than hunting down every
       estimate that used it.
     </p>
+    <img
+      src="/guide/paint-catalog.png"
+      alt="The Paint & Materials tab with three paint products, each with name, price per gallon, coverage, and sheen"
+      width="1200"
+      height="1144"
+      loading="lazy"
+    />
   </section>
 
   <section id="projects">
@@ -136,6 +157,34 @@ const SECTIONS = [
       send a customer an estimate built on missing information.
     </p>
     <p>Once you've saved a project, it shows up back in your Projects list, and in the Overview dashboard's recent-projects table.</p>
+    <img
+      src="/guide/project-info.png"
+      alt="The Business & customer info card, filled in with a business name, contact, address, and the customer's name, contact, and job-site address"
+      width="846"
+      height="294"
+      loading="lazy"
+    />
+    <img
+      src="/guide/project-rooms.png"
+      alt="A room editor showing a 16 by 13 by 9 foot Living Room with opening deduction enabled for 1 door and 2 windows, and its auto-created Wall surface"
+      width="846"
+      height="639"
+      loading="lazy"
+    />
+    <img
+      src="/guide/estimate-summary.png"
+      alt="The Estimate summary card showing Materials, Labor, Direct cost, Overhead, Estimated job cost, and a Proposed price with Profit, Margin, and an 'Above target' status badge"
+      width="846"
+      height="486"
+      loading="lazy"
+    />
+    <img
+      src="/guide/projects-list.png"
+      alt="The Projects list showing one saved project, '123 Oak Street — Exterior Repaint', marked issued, revision 1"
+      width="1200"
+      height="1144"
+      loading="lazy"
+    />
   </section>
 
   <section id="customer-document">
@@ -152,6 +201,13 @@ const SECTIONS = [
       (the job, the price, your business info). You never have to remember
       to hide your numbers or build a separate quote template by hand.
     </p>
+    <img
+      src="/guide/customer-document.png"
+      alt="The customer-facing document: business info, project title and address, customer name, estimate number and date, a line item, and a total price -- with no cost, overhead, or margin figures anywhere on it"
+      width="846"
+      height="369"
+      loading="lazy"
+    />
   </section>
 
   <section id="price-book-health">
@@ -171,6 +227,13 @@ const SECTIONS = [
       material or labor costs changed, before it costs you money on the
       next ten jobs that use it.
     </p>
+    <img
+      src="/guide/price-book-health.png"
+      alt="A Price Book Health service card for 'Interior wall painting' showing modeled cost per unit, current price, status 'Above target', margin, and required price for target margin"
+      width="1200"
+      height="1144"
+      loading="lazy"
+    />
   </section>
 
   <section id="actual-costs">
@@ -189,6 +252,13 @@ const SECTIONS = [
       Over time, this is how you learn whether your rates and throughput
       assumptions actually hold up on real jobs, not just on paper.
     </p>
+    <img
+      src="/guide/actual-review.png"
+      alt="The Actual Costs tab with Materials, Labor, Other Expenses, and Overhead all confirmed, showing Actual cost, Profit vs. original quote, Margin, and Total variance vs. estimate"
+      width="1200"
+      height="1144"
+      loading="lazy"
+    />
   </section>
 
   <section id="revisions">
@@ -219,6 +289,13 @@ const SECTIONS = [
       catalog, your services, your settings — lives only in this browser.
       The Backup &amp; Data tab is how you protect that.
     </p>
+    <img
+      src="/guide/backup.png"
+      alt="The Backup & Data tab with an 'Export backup (.json)' button and a 'Restore from backup' section with an import-mode dropdown and file picker"
+      width="1200"
+      height="1144"
+      loading="lazy"
+    />
     <p><strong>Export backup (.json)</strong> downloads everything in one file. Keep it somewhere safe — it's the only way to recover your data if you ever clear your browser's storage or switch devices.</p>
     <p>Restoring from a backup file gives you three modes:</p>
     <ul>
