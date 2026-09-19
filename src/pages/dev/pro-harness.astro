@@ -53,6 +53,14 @@ const title = "Pro harness (dev only)";
           id: "paint-1", name: "White", color: "white", sheen: "eggshell", pricePerGal: "42",
           coverageFt2PerGal: "350", purchaseIncrementGal: "1", createdAt: now, updatedAt: now,
         });
+        await db.put(STORES.paintVariants, {
+          id: "paint-2", name: "Warm White", color: "warm white", sheen: "satin", pricePerGal: "48",
+          coverageFt2PerGal: "375", purchaseIncrementGal: "1", createdAt: now, updatedAt: now,
+        });
+        await db.put(STORES.paintVariants, {
+          id: "paint-3", name: "Cloud Gray", color: "gray", sheen: "flat", pricePerGal: "45",
+          coverageFt2PerGal: "400", purchaseIncrementGal: "1", createdAt: now, updatedAt: now,
+        });
       }
     } finally {
       db.close();
