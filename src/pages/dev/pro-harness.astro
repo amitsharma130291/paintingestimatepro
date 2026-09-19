@@ -7,6 +7,18 @@
 // which this page never imports or touches. Never linked from any
 // production page/nav.
 //
+// GSC-001: this page's own PROD guard below only ever runs for real on a
+// live request -- for the rest of the site (output: "static"), every
+// page's frontmatter runs once at BUILD time, so `import.meta.env.PROD`
+// is already true during `astro build` itself and a `return new
+// Response(...)` here would just make the STATIC GENERATION step produce
+// nothing useful, not a real per-request 404 (confirmed live: the
+// deployed site was serving this route with a 200, not a 404, exactly
+// this bug). Opting this one route out of prerendering makes it a real
+// Vercel serverless function like the api/** routes already are, so the
+// guard below actually executes against a live production request.
+export const prerender = false;
+
 // Excluded from production: if this somehow ships and is requested from a
 // production build, it 404s instead of rendering anything.
 if (import.meta.env.PROD) {

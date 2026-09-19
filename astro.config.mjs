@@ -9,12 +9,14 @@ const SITE_URL = 'https://paintingpricingcalculator.com';
 
 export default defineConfig({
   site: SITE_URL,
-  // Every page stays statically prerendered (the marketing homepage, free
-  // tools, and Pro app are unchanged). Only src/pages/api/** opts out of
-  // prerendering per-route (`export const prerender = false`) for the Dodo
-  // Payments checkout/webhook endpoints, which need a real server request —
-  // same pattern as qrworkbench/barcodeflow, not a switch to server-rendering
-  // the whole site.
+  // Every real page stays statically prerendered (the marketing homepage,
+  // free tools, and Pro app are unchanged). Two things opt out of
+  // prerendering per-route (`export const prerender = false`): all of
+  // src/pages/api/** (the Dodo Payments checkout/webhook endpoints, which
+  // need a real server request -- same pattern as qrworkbench/barcodeflow)
+  // and src/pages/dev/pro-harness.astro (GSC-001: its own PROD-guard 404
+  // only takes effect against a real per-request server function, not a
+  // build-time-only static page -- see that file's comment).
   adapter: vercel(),
   integrations: [
     // Exclude the dev-only ProApp verification harness -- it 404s in
