@@ -93,10 +93,6 @@ interface ProAppProps {
   /** True while PUBLIC_PAYWALL_DISABLED lets this browser in for free — see
    * ProGate.tsx. Purely a small badge in the app shell; changes no behavior. */
   testMode?: boolean;
-  /** Present only when a real license is unlocking this session (i.e. not
-   * testMode) — moved from ProGate's own banner into the app shell's
-   * account menu. Same clearStoredPayment()-based action as before. */
-  onLockBrowser?: () => void;
   /** True only for the single render right after a fresh unlock (checkout
    * return, recovery-link click, or manual key redemption) — set by
    * ProGate.tsx. Landed on 'overview' with a one-time welcome heading for
@@ -107,7 +103,7 @@ interface ProAppProps {
   justUnlocked?: boolean;
 }
 
-export default function ProApp({ testMode = false, onLockBrowser, justUnlocked = false }: ProAppProps = {}) {
+export default function ProApp({ testMode = false, justUnlocked = false }: ProAppProps = {}) {
   const [tab, setTab] = useState<Tab>(justUnlocked ? 'overview' : 'projects');
   const [searchQuery, setSearchQuery] = useState('');
   const [projectStatusFilter, setProjectStatusFilter] = useState<'all' | 'draft' | 'issued' | 'superseded'>('all');
@@ -1194,7 +1190,6 @@ export default function ProApp({ testMode = false, onLockBrowser, justUnlocked =
       searchQuery={searchQuery}
       onSearchChange={setSearchQuery}
       testMode={testMode}
-      onLockBrowser={onLockBrowser}
     >
       {saveMessage && (
         <div className="print:hidden">

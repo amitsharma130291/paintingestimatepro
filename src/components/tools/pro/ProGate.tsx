@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, type ReactNode } from 'react';
-import { resolvePendingCheckout, checkAccess, clearStoredPayment, NetworkFailure } from '../../../lib/license';
+import { resolvePendingCheckout, checkAccess, NetworkFailure } from '../../../lib/license';
 import LicenseActions from '../LicenseActions';
 import ProApp from './ProApp';
 import { PRICE } from '../../../data/site';
@@ -109,18 +109,7 @@ export default function ProGate() {
 
   if (state.status === 'unlocked') {
     return (
-      <ProApp
-        testMode={PAYWALL_DISABLED}
-        justUnlocked={state.justUnlocked}
-        onLockBrowser={
-          PAYWALL_DISABLED
-            ? undefined
-            : () => {
-                clearStoredPayment();
-                setState({ status: 'locked' });
-              }
-        }
-      />
+      <ProApp testMode={PAYWALL_DISABLED} justUnlocked={state.justUnlocked} />
     );
   }
 

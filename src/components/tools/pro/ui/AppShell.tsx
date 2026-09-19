@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Menu, X, Search, Bell, ChevronDown, Lock, Plus, Database, HelpCircle, Compass } from 'lucide-react';
+import { Menu, X, Search, Bell, ChevronDown, Plus, Database, HelpCircle, Compass } from 'lucide-react';
 import { NAV_ITEMS, NAV_LABELS, type NavKey } from './navConfig';
 
 interface AppShellProps {
@@ -9,7 +9,6 @@ interface AppShellProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   testMode: boolean;
-  onLockBrowser?: () => void;
   children: ReactNode;
 }
 
@@ -31,7 +30,6 @@ export default function AppShell({
   searchQuery,
   onSearchChange,
   testMode,
-  onLockBrowser,
   children,
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -157,21 +155,7 @@ export default function AppShell({
                 {testMode && (
                   <p className="px-2.5 py-1.5 text-xs text-ink-soft">Test mode is on for this browser.</p>
                 )}
-                {onLockBrowser ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onLockBrowser();
-                      setAccountOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-btn px-2.5 py-2 text-left text-sm text-ink-soft hover:bg-surface-sage hover:text-ink"
-                  >
-                    <Lock size={16} strokeWidth={2} aria-hidden="true" />
-                    Lock this browser
-                  </button>
-                ) : (
-                  <p className="px-2.5 py-1.5 text-xs text-ink-soft">No account needed — Pro unlocks per browser.</p>
-                )}
+                <p className="px-2.5 py-1.5 text-xs text-ink-soft">No account needed — Pro unlocks per browser.</p>
               </div>
             )}
           </div>
