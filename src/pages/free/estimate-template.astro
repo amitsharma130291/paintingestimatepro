@@ -21,6 +21,31 @@ const description =
         Add line items, review the total, and print or save as a PDF — a
         useful document without registering or paying.
       </p>
+
+      <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <h2 class="text-sm font-semibold text-ink">What's on it</h2>
+          <ul class="mt-2 space-y-1 text-sm text-ink-soft">
+            <li>Your business name and the customer's name</li>
+            <li>An estimate number, generated for you</li>
+            <li>Line items — description, quantity, and unit price</li>
+            <li>An optional tax percentage, applied to the subtotal</li>
+            <li>Notes or terms, and a running total</li>
+          </ul>
+        </div>
+        <div>
+          <h2 class="text-sm font-semibold text-ink">When to use this one</h2>
+          <p class="mt-2 text-sm text-ink-soft">
+            Good for a quick, professional-looking estimate when you already
+            know your price — no room measurements, paint math, or margin
+            check involved. If you want the price itself calculated from
+            materials, labor, and overhead first, start with the
+            <a href="/free/job-cost-calculator" class="text-link">job cost calculator</a>
+            and bring the result here.
+          </p>
+        </div>
+      </div>
+
       <div class="mt-8">
         {/* client:only, not client:load: EstimateTemplate's initial state
             (newDraft()) bakes in a crypto.randomUUID()-based estimate
