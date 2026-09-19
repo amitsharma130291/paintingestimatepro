@@ -15,14 +15,12 @@ export interface StoredPayment {
 }
 
 export async function startCheckout(returnTo: string): Promise<void> {
-  const res = await fetch('/api/checkout/create', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ returnTo }),
-  });
-  const data = await res.json();
-  if (!res.ok || !data.checkoutUrl) {
-    throw new Error(data.error || "Couldn't start checkout.");
+  // postJson (below) is a hoisted function declaration, so calling it here
+  // — ahead of its own definition in the file — is safe; it gives this the
+  // same real-network-failure-vs-server-said-no split as every other call.
+  const data = (await postJson('/api/checkout/create', { returnTo })) as { checkoutUrl?: string; sessionId?: string };
+  if (!data.checkoutUrl) {
+    throw new Error("Couldn't start checkout.");
   }
   // Survives the round trip to Dodo's hosted checkout and back since
   // sessionStorage is same-origin and untouched by the third-party
@@ -128,42 +126,47 @@ export async function resolvePendingCheckout(): Promise<StoredPayment | { failed
   return { failed: true, status: result.status };
 }
 
+/** Both restore-access requests below need the exact same "was this a real
+ * network outage, or did the server actually answer" split `verify()`
+ * already relies on — a dropped connection must read as a temporary,
+ * retry-worthy problem, never as "that key/email isn't valid." */
+async function postJson(url: string, body: unknown): Promise<unknown> {
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch (networkErr) {
+    throw new NetworkFailure(networkErr instanceof Error ? networkErr.message : 'Network request failed.');
+  }
+  const data: unknown = await res.json();
+  if (!res.ok) throw new Error((data as { error?: string })?.error || "Couldn't process that request.");
+  return data;
+}
+
 /**
  * Manual unlock: paste in a license key from the purchase/recovery email.
  * Works on any device, since the key is fully self-verifying against Dodo
  * — no dependency on this browser's sessionStorage/localStorage history.
  */
 export async function redeemLicenseKey(licenseKey: string): Promise<StoredPayment> {
-  const res = await fetch('/api/license/redeem', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ licenseKey }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Couldn't verify that license key.");
+  const data = (await postJson('/api/license/redeem', { licenseKey })) as { ok: boolean; status?: string; paymentId?: string; licenseKey?: string };
   if (!data.ok) {
     const messages: Record<string, string> = {
       failed: "That payment hasn't gone through yet.",
       cancelled: 'That checkout was cancelled — no charge was made.',
       refunded: 'This purchase was refunded, so the license is no longer active. Contact support if that seems wrong.',
     };
-    throw new Error(messages[data.status] || "That license key isn't valid yet.");
+    throw new Error(messages[data.status ?? ''] || "We couldn't verify a purchase with those details. Check the key and try again, or contact support.");
   }
-  const payment: StoredPayment = { sessionId: null, paymentId: data.paymentId, licenseKey: data.licenseKey };
+  const payment: StoredPayment = { sessionId: null, paymentId: data.paymentId!, licenseKey: data.licenseKey! };
   storePayment(payment);
   return payment;
 }
 
 /** "Forgot your key" — always resolves to a generic message, whether or
- * not anything was actually found for that email. */
+ * not anything was actually found for that email (see /api/license/recover
+ * — this never distinguishes "no match" from "found it" to the caller). */
 export async function requestLicenseRecovery(email: string): Promise<string> {
-  const res = await fetch('/api/license/recover', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Couldn't process that request.");
+  const data = (await postJson('/api/license/recover', { email })) as { message: string };
   return data.message;
 }
 

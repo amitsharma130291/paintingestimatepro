@@ -1,14 +1,16 @@
 ---
 import { BUY_CTA_LABEL } from "../data/site";
+import ProWalkthrough from "./tools/ProWalkthrough.tsx";
 
 // Four steps, each a real screenshot of the actual app (captured via
 // Playwright driving the real ProApp component). The cost and margin
 // crops are two halves of the SAME Estimate summary card -- the real UI
 // shows cost breakdown directly above the price/margin result -- not two
-// separate claims stitched together.
+// separate claims stitched together. No genuine screen recording exists,
+// so this stays the "compact interactive walkthrough" fallback the brief
+// asks for instead of fabricating a video -- see ProWalkthrough.tsx.
 const STEPS = [
   {
-    step: "1",
     heading: "Build the job",
     body: "Enter the project, its rooms and surfaces, the paint you're using, and any expected extra costs.",
     image: "/guide/project-rooms.webp",
@@ -17,7 +19,6 @@ const STEPS = [
     height: 639,
   },
   {
-    step: "2",
     heading: "Check the true cost",
     body: "Materials, labor, direct cost, and overhead roll up into one estimated job cost — no separate spreadsheet to reconcile.",
     image: "/guide/estimate-cost.webp",
@@ -26,7 +27,6 @@ const STEPS = [
     height: 232,
   },
   {
-    step: "3",
     heading: "Protect the margin",
     body: "Set your target margin and see the selling price it actually requires — profit and margin, before you send anything.",
     image: "/guide/estimate-margin.webp",
@@ -35,7 +35,6 @@ const STEPS = [
     height: 208,
   },
   {
-    step: "4",
     heading: "Compare estimate with actual",
     body: "Once the job's done, record what it really cost. Pro shows you which assumptions held up and which missed.",
     image: "/guide/actual-review.webp",
@@ -46,36 +45,21 @@ const STEPS = [
 ];
 ---
 
-<section id="demo" class="section-pad scroll-mt-16 border-t border-line" data-analytics-view="walkthrough_started">
+<section id="demo" class="section-pad scroll-mt-16 border-t border-line">
   <div class="content-shell">
     <div data-animate class="mx-auto max-w-2xl text-center">
       <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">See exactly how it works.</h2>
       <p class="mt-3 text-lg text-ink-soft">Follow one painting job from the first cost assumption to the final margin check.</p>
     </div>
 
-    <ol class="mt-12 flex flex-col gap-14 sm:gap-16">
-      {
-        STEPS.map((item, i) => (
-          <li
-            data-animate
-            class={`grid grid-cols-1 items-center gap-8 sm:gap-10 lg:grid-cols-2 lg:gap-14 ${i % 2 === 1 ? "lg:[&>*:first-child]:order-2" : ""}`}
-          >
-            <div class="rounded-card border border-line shadow-[0_1px_2px_rgba(23,33,29,0.04),0_16px_40px_-20px_rgba(23,33,29,0.22)]">
-              <img src={item.image} alt={item.alt} width={item.width} height={item.height} loading="lazy" class="w-full rounded-card" />
-            </div>
-            <div class="mx-auto max-w-md lg:mx-0">
-              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-ink">
-                {item.step}
-              </span>
-              <h3 class="mt-3 text-balance text-xl font-semibold tracking-tight text-ink">{item.heading}</h3>
-              <p class="mt-2 text-base leading-relaxed text-ink-soft">{item.body}</p>
-            </div>
-          </li>
-        ))
-      }
-    </ol>
+    <div data-animate class="mx-auto mt-10 max-w-4xl">
+      <ProWalkthrough client:load steps={STEPS} />
+      <p class="mt-3 text-center text-sm text-ink-soft">
+        Use the arrow keys, swipe, or the buttons below to step through.
+      </p>
+    </div>
 
-    <div data-animate data-analytics-view="walkthrough_completed" class="mt-12 flex flex-col items-center gap-2 text-center">
+    <div data-animate class="mt-10 flex flex-col items-center gap-2 text-center">
       <a href="#pricing" data-analytics-event="workflow_cta_clicked" class="btn btn-primary">{BUY_CTA_LABEL}</a>
     </div>
   </div>

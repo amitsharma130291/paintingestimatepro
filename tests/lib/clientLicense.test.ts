@@ -147,3 +147,77 @@ describe('checkAccess() — never grants access from an editable local record al
     expect(getStoredPayment()).not.toBeNull(); // never treated as revoked either
   });
 });
+
+// Restore-access requirement: "temporary verification outage" must read
+// differently from "that key/email genuinely isn't valid" so the UI can
+// show a retry-worthy message instead of implying the purchase itself is
+// bad. redeemLicenseKey()/requestLicenseRecovery()/startCheckout() all
+// throw NetworkFailure specifically for a dropped connection, mirroring
+// verify()'s existing split — this locks that in for the three call sites
+// LicenseActions.tsx actually uses.
+describe('redeemLicenseKey() / requestLicenseRecovery() / startCheckout() — network failure vs. definitive rejection', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubGlobal('localStorage', makeMemoryStorage());
+    vi.stubGlobal('sessionStorage', makeMemoryStorage());
+  });
+
+  it('redeemLicenseKey() throws NetworkFailure (not a generic Error) on a dropped connection', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      })
+    );
+    const { redeemLicenseKey, NetworkFailure } = await import('../../src/lib/license');
+    await expect(redeemLicenseKey('PEP-PRO-anything')).rejects.toBeInstanceOf(NetworkFailure);
+  });
+
+  it('redeemLicenseKey() throws a plain Error (never NetworkFailure) when the server actually answers "not found"', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ ok: false, status: 'not_found' }) }))
+    );
+    const { redeemLicenseKey, NetworkFailure } = await import('../../src/lib/license');
+    let caught: unknown;
+    try {
+      await redeemLicenseKey('PEP-PRO-anything');
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).not.toBeInstanceOf(NetworkFailure);
+    expect((caught as Error).message).toMatch(/couldn't verify a purchase/i);
+  });
+
+  it('requestLicenseRecovery() throws NetworkFailure on a dropped connection', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      })
+    );
+    const { requestLicenseRecovery, NetworkFailure } = await import('../../src/lib/license');
+    await expect(requestLicenseRecovery('someone@example.com')).rejects.toBeInstanceOf(NetworkFailure);
+  });
+
+  it('requestLicenseRecovery() resolves with the server\'s generic message on success — never reveals whether the email matched', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, message: "If that email has a completed purchase, we've sent the license key to it." }) }))
+    );
+    const { requestLicenseRecovery } = await import('../../src/lib/license');
+    const message = await requestLicenseRecovery('someone@example.com');
+    expect(message).toBe("If that email has a completed purchase, we've sent the license key to it.");
+  });
+
+  it('startCheckout() throws NetworkFailure on a dropped connection, never silently proceeding to Dodo', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      })
+    );
+    const { startCheckout, NetworkFailure } = await import('../../src/lib/license');
+    await expect(startCheckout('/app')).rejects.toBeInstanceOf(NetworkFailure);
+  });
+});

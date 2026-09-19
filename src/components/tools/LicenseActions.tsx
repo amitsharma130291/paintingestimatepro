@@ -1,11 +1,31 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { Loader2, CheckCircle2, MailCheck } from 'lucide-react';
-import { startCheckout, redeemLicenseKey, requestLicenseRecovery, getStoredPayment } from '../../lib/license';
+import { Loader2, CheckCircle2, MailCheck, AlertCircle } from 'lucide-react';
+import { startCheckout, redeemLicenseKey, requestLicenseRecovery, getStoredPayment, NetworkFailure } from '../../lib/license';
 import { BUY_CTA_LABEL } from '../../data/site';
 import { track } from '../../lib/analytics';
 
 function Spinner() {
   return <Loader2 size={15} strokeWidth={2.5} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />;
+}
+
+// A dropped connection is a temporary, retry-worthy problem — never the
+// same message as "that key/email genuinely isn't valid." Both
+// redeemLicenseKey() and requestLicenseRecovery() throw NetworkFailure
+// specifically (not a generic Error) for exactly this case; see license.ts.
+const TEMPORARY_ERROR_MESSAGE = "We couldn't check your purchase right now. Please try again in a moment.";
+
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof NetworkFailure) return TEMPORARY_ERROR_MESSAGE;
+  return err instanceof Error ? err.message : fallback;
+}
+
+// The real, existing /contact page — never a fabricated support address.
+function ContactSupportLink() {
+  return (
+    <a href="/contact" className="text-link">
+      contact support
+    </a>
+  );
 }
 
 /**
@@ -57,6 +77,7 @@ export default function LicenseActions({
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recovering, setRecovering] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState(false);
 
   async function handleBuy() {
     setBuying(true);
@@ -67,7 +88,7 @@ export default function LicenseActions({
       await startCheckout(returnTo);
       // startCheckout navigates away on success; nothing further runs here.
     } catch (err) {
-      setBuyError(err instanceof Error ? err.message : "Couldn't start checkout.");
+      setBuyError(describeError(err, "Couldn't start checkout."));
       setBuying(false);
     }
   }
@@ -89,7 +110,7 @@ export default function LicenseActions({
       if (onUnlocked) onUnlocked();
       else window.location.href = '/app';
     } catch (err) {
-      setRedeemError(err instanceof Error ? err.message : "Couldn't verify that license key.");
+      setRedeemError(describeError(err, "Couldn't verify that license key."));
     } finally {
       setRedeeming(false);
     }
@@ -101,11 +122,13 @@ export default function LicenseActions({
     if (!email) return;
     setRecovering(true);
     setRecoveryMessage(null);
+    setRecoveryError(false);
     try {
       const message = await requestLicenseRecovery(email);
       setRecoveryMessage(message);
     } catch (err) {
-      setRecoveryMessage(err instanceof Error ? err.message : "Couldn't process that request.");
+      setRecoveryError(true);
+      setRecoveryMessage(describeError(err, "Couldn't process that request."));
     } finally {
       setRecovering(false);
     }
@@ -130,15 +153,18 @@ export default function LicenseActions({
       {buyError && <p className="mt-2 text-sm text-bad">{buyError}</p>}
 
       <div className="mt-6">
+        {/* Hidden once alreadyPurchased is true (the early return above) --
+            never shown to a visitor this browser already recognizes as
+            verified. */}
         <button type="button" className="text-link text-sm" onClick={() => setShowRecovery((s) => !s)}>
-          Already purchased?
+          Already purchased? Restore access
         </button>
         {showRecovery && (
           <div className="mt-3 max-w-sm text-left">
             {redeemSuccess ? (
               <p className="flex items-center gap-1.5 text-sm font-medium text-primary-dark">
                 <CheckCircle2 size={16} strokeWidth={2} aria-hidden="true" />
-                License verified — Pro is unlocked in this browser.
+                Access restored. You can now open Painting Estimate Pro.
               </p>
             ) : (
               <form onSubmit={handleRedeem} className="flex gap-2">
@@ -149,7 +175,7 @@ export default function LicenseActions({
                   placeholder="License key"
                   aria-label="License key"
                   autoComplete="off"
-                  className="w-full rounded-btn border border-line bg-card px-3 py-2 text-sm text-ink"
+                  className="w-full rounded-btn border border-line bg-card px-3 py-2 text-base text-ink sm:text-sm"
                 />
                 <button type="submit" className="btn btn-secondary shrink-0" disabled={redeeming}>
                   {redeeming && <Spinner />}
@@ -157,9 +183,13 @@ export default function LicenseActions({
                 </button>
               </form>
             )}
-            {redeemError && <p className="mt-2 text-sm text-bad">{redeemError}</p>}
+            {redeemError && (
+              <p className="mt-2 text-sm text-bad">
+                {redeemError} {!redeemError.includes(TEMPORARY_ERROR_MESSAGE) && <ContactSupportLink />}
+              </p>
+            )}
 
-            <button type="button" className="text-link mt-3 block text-xs" onClick={() => setShowForgot((s) => !s)}>
+            <button type="button" className="text-link mt-3 block text-sm" onClick={() => setShowForgot((s) => !s)}>
               Forgot your key?
             </button>
             {showForgot && (
@@ -171,7 +201,7 @@ export default function LicenseActions({
                   placeholder="Email used at checkout"
                   aria-label="Email used at checkout"
                   autoComplete="email"
-                  className="w-full rounded-btn border border-line bg-card px-3 py-2 text-sm text-ink"
+                  className="w-full rounded-btn border border-line bg-card px-3 py-2 text-base text-ink sm:text-sm"
                 />
                 <button type="submit" className="btn btn-secondary shrink-0" disabled={recovering}>
                   {recovering && <Spinner />}
@@ -180,9 +210,15 @@ export default function LicenseActions({
               </form>
             )}
             {recoveryMessage && (
-              <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-soft">
-                <MailCheck size={14} strokeWidth={2} className="mt-0.5 shrink-0" aria-hidden="true" />
-                {recoveryMessage}
+              <p className={`mt-2 flex items-start gap-1.5 text-sm ${recoveryError ? 'text-bad' : 'text-ink-soft'}`}>
+                {recoveryError ? (
+                  <AlertCircle size={14} strokeWidth={2} className="mt-0.5 shrink-0" aria-hidden="true" />
+                ) : (
+                  <MailCheck size={14} strokeWidth={2} className="mt-0.5 shrink-0" aria-hidden="true" />
+                )}
+                <span>
+                  {recoveryMessage} {recoveryError && <ContactSupportLink />}
+                </span>
               </p>
             )}
           </div>
