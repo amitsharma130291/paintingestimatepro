@@ -121,26 +121,29 @@ import {
     background-size: cover;
   }
 
-  /* CALIBRATION FIX: the gradient sits ON TOP of the image (first layer in
-     a background-image list paints highest), so its own stop opacity and
-     the element's overall `opacity` both dampen the image -- multiplicatively.
-     The first cut kept the gradient at 42% paper-wash even at the right
-     edge, which combined with opacity 0.20-0.24 to a net visible strength
-     of ~13% at the single most-visible point -- imperceptible in practice.
-     Right-edge stop is now near-transparent (6%) so the element's own
-     opacity (0.20-0.24, per the brief's "effective opacity" range) is what
-     actually shows there; the left stays at 98% so that side reads clean. */
+  /* CALIBRATION, take 2: pixel-sampled the actual asset -- its upper-right
+     corner is rgb(134,148,134) against our paper token rgb(247,247,243), a
+     real ~100-unit-per-channel difference. Compositing math
+     (final = layer*opacity + paper*(1-opacity)) showed the first two
+     attempts (opacity 0.24 with a 42%, then 6%, residual gradient wash at
+     the edge) both landed under a ~25-unit visible difference -- reported
+     as "near to none" against a real monitor. Right-edge gradient stop is
+     now fully transparent (0%, no residual wash) and element opacity
+     raised to ~0.42-0.48, which computes to a ~45-50 unit difference at
+     the edge -- clearly perceptible while the left stays clean regardless,
+     since the gradient there is still ~98% opaque paper (composited result
+     is already near-identical to paper before opacity is even applied). */
   @media (min-width: 640px) {
     .hero-limewash {
       background-image:
         linear-gradient(
           90deg,
           color-mix(in srgb, var(--color-paper) 98%, transparent) 0%,
-          color-mix(in srgb, var(--color-paper) 55%, transparent) 60%,
-          color-mix(in srgb, var(--color-paper) 6%, transparent) 100%
+          color-mix(in srgb, var(--color-paper) 50%, transparent) 62%,
+          color-mix(in srgb, var(--color-paper) 0%, transparent) 100%
         ),
         url("/hero/painting-pricing-hero-limewash-1280.webp");
-      opacity: 0.2;
+      opacity: 0.42;
     }
   }
 
@@ -150,11 +153,11 @@ import {
         linear-gradient(
           90deg,
           color-mix(in srgb, var(--color-paper) 98%, transparent) 0%,
-          color-mix(in srgb, var(--color-paper) 55%, transparent) 60%,
-          color-mix(in srgb, var(--color-paper) 6%, transparent) 100%
+          color-mix(in srgb, var(--color-paper) 50%, transparent) 62%,
+          color-mix(in srgb, var(--color-paper) 0%, transparent) 100%
         ),
         url("/hero/painting-pricing-hero-limewash.webp");
-      opacity: 0.24;
+      opacity: 0.48;
     }
   }
 </style>
