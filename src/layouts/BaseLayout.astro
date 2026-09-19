@@ -1,13 +1,25 @@
 ---
 import "../styles/global.css";
+import { organizationSchema, websiteSchema, toLdJson } from "../lib/schema";
 
 interface Props {
   title: string;
   description: string;
+  /** Absolute or root-relative path to a real product image for social
+   * previews (og:image/twitter:image) — defaults to an actual Overview
+   * dashboard screenshot rather than leaving previews imageless. */
+  image?: string;
+  /** Extra JSON-LD objects specific to this page (Product, FAQPage, etc.),
+   * rendered alongside the site-wide Organization/WebSite graph every page
+   * already gets. */
+  schema?: readonly unknown[];
 }
 
-const { title, description } = Astro.props;
+const { title, description, image = "/guide/overview.webp", schema = [] } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const imageURL = new URL(image, Astro.site);
+const siteOrigin = Astro.site ? Astro.site.origin : canonicalURL.origin;
+const jsonLd = [organizationSchema(siteOrigin), websiteSchema(siteOrigin), ...schema];
 ---
 
 <!doctype html>
@@ -31,12 +43,18 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
+    <meta property="og:image" content={imageURL} />
 
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageURL} />
 
     <meta name="theme-color" content="#154D3B" />
+
+    {jsonLd.map((entry) => (
+      <script type="application/ld+json" set:html={toLdJson(entry)} />
+    ))}
   </head>
   <body class="font-sans antialiased">
     <a href="#main-content" class="skip-link">Skip to content</a>

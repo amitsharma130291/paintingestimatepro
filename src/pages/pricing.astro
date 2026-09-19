@@ -12,6 +12,7 @@ import ProGuarantee from "../components/ProGuarantee.astro";
 import ProStickyCTA from "../components/ProStickyCTA.astro";
 import LicenseActions from "../components/tools/LicenseActions.tsx";
 import { PRICE, REFUND_GUARANTEE_DAYS } from "../data/site";
+import { productSchema, faqPageSchema } from "../lib/schema";
 
 const title = "Painting Estimate Pro | Know Your True Job Cost";
 const description = "Painting Estimate Pro — one-time $79 payment, lifetime access. Calculate materials, labor, overhead and margin before you quote, then compare it to what the job actually cost.";
@@ -74,9 +75,23 @@ const FAQS = [
     answer: "Checkout is handled by Dodo Payments, our payment processor — major credit and debit cards are accepted there.",
   },
 ];
+
+const siteOrigin = Astro.site ? Astro.site.origin : new URL(Astro.url).origin;
+const rawPrice = PRICE.amount.replace(/[^0-9.]/g, "");
+const pricingUrl = `${siteOrigin}/pricing`;
+
+const schema = [
+  productSchema(siteOrigin, {
+    url: pricingUrl,
+    description,
+    price: rawPrice,
+    image: `${siteOrigin}/guide/overview.webp`,
+  }),
+  faqPageSchema(FAQS),
+];
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} schema={schema} image="/guide/overview.webp">
   <Header />
   <main id="main-content">
     <div class="content-shell pt-4">

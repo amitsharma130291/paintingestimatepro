@@ -10,13 +10,61 @@ import FreeTools from "../components/FreeTools.astro";
 import FAQ from "../components/FAQ.astro";
 import Closing from "../components/Closing.astro";
 import Footer from "../components/Footer.astro";
+import { productSchema, faqPageSchema } from "../lib/schema";
+import { PRICE } from "../data/site";
 
 const title = "Painting Calculators & Estimating Software | Painting Estimate Pro";
 const description =
   "See where painting quotes lose their margin, preview Painting Estimate Pro's job costing tools, and explore upcoming free painting calculators.";
+
+const siteOrigin = Astro.site ? Astro.site.origin : new URL(Astro.url).origin;
+const rawPrice = PRICE.amount.replace(/[^0-9.]/g, "");
+
+// Same FAQ copy rendered by <FAQ />, kept in sync manually since that
+// component owns its own content and isn't set up to export it.
+const HOME_FAQS = [
+  {
+    question: "Who is Pro built for?",
+    answer:
+      "Independent painters and small painting businesses that want a focused estimating and profitability workflow.",
+  },
+  {
+    question: "Will this tell me what to charge?",
+    answer:
+      "No. Pro shows how your proposed price relates to estimated costs and margin. You decide what to charge.",
+  },
+  {
+    question: "What if my actual costs change?",
+    answer:
+      "An estimate depends on its assumptions. Actual labor and material costs may differ, which is exactly what the Actual review tab is for — compare what a job actually cost against what you quoted.",
+  },
+  {
+    question: "Are the sample prices recommended rates?",
+    answer: "No. They illustrate the product concept and are not market-rate recommendations.",
+  },
+  {
+    question: "Will there be a monthly subscription?",
+    answer: `No — Pro is a ${PRICE.amount} one-time purchase (launch price, down from ${PRICE.originalAmount}) with lifetime access. No recurring fees.`,
+  },
+  {
+    question: "Can I use it today?",
+    answer: "Yes — Pro is live now, and the free tools are available with no account needed.",
+  },
+] as const;
+
+const schema = [
+  productSchema(siteOrigin, {
+    url: `${siteOrigin}/pricing`,
+    description:
+      "For independent painters and small painting businesses that want focused estimating tools without a full management platform.",
+    price: rawPrice,
+    image: `${siteOrigin}/guide/overview.webp`,
+  }),
+  faqPageSchema(HOME_FAQS),
+];
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} schema={schema}>
   <Header />
   <main id="main-content">
     <Hero />
