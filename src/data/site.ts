@@ -32,7 +32,7 @@ export const NAV_LINKS = [
 // site-wide, the instant a stored license is found in this browser (see
 // BaseLayout.astro's inline script). Points at the real sales page, not a
 // bare demo anchor -- that page is where "Buy Pro" itself actually lives.
-export const HEADER_CTA = { label: "Buy Pro", href: "/pricing" };
+export const HEADER_CTA = { label: "Buy Pro — $79", href: "/pricing" };
 export const HEADER_CTA_UNLOCKED = { label: "Go to app", href: "/app" };
 
 // The homepage hero keeps its own "see the demo first" framing -- distinct
