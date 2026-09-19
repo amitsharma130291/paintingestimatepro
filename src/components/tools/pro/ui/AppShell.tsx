@@ -129,7 +129,7 @@ export default function AppShell({
           one viewport (nav scrolls internally via overflow-y-auto if it
           ever overflows) instead of stretching to match the main column's
           height, which pushed the bottom links off-screen on tall pages. */}
-      <aside className="sticky top-0 hidden h-screen w-[250px] shrink-0 flex-col border-r border-line bg-card lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-[250px] shrink-0 flex-col border-r border-line bg-card lg:flex print:hidden">
         <div className="flex items-center gap-2 px-5 py-5">
           <a href="/" className="flex items-center gap-2">
             <img src="/brand/logo-primary-512.png" alt="PaintingPricing Calculator" width={512} height={130} className="h-8 w-auto" />
@@ -186,7 +186,7 @@ export default function AppShell({
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur sm:px-6 print:hidden">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}

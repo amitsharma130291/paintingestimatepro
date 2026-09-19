@@ -1503,7 +1503,7 @@ export default function ProApp({ testMode = false, justUnlocked = false }: ProAp
             )}
 
             {draftEdit.state === 'draft' && (
-              <>
+              <div className="space-y-4 print:hidden">
                 <div className="card p-6">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="font-semibold">Rooms</h3>
@@ -1756,7 +1756,7 @@ export default function ProApp({ testMode = false, justUnlocked = false }: ProAp
                     ) : null;
                   })()}
                 </div>
-              </>
+              </div>
             )}
 
             {previewDocument && (
