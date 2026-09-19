@@ -1,0 +1,50 @@
+---
+import { PRICE } from "../data/site";
+---
+
+<div
+  id="pro-sticky-cta"
+  class="fixed inset-x-0 bottom-0 z-40 -translate-y-full opacity-0 pointer-events-none border-t border-line bg-card/95 px-4 py-2.5 backdrop-blur transition-[transform,opacity] duration-200 sm:hidden [&.is-visible]:pointer-events-auto [&.is-visible]:translate-y-0 [&.is-visible]:opacity-100"
+>
+  <div class="flex items-center justify-between gap-3">
+    <p class="text-sm font-semibold leading-tight text-ink">
+      Painting Estimate Pro <span class="block font-normal text-ink-soft">{PRICE.amount} once</span>
+    </p>
+    <a href="#pricing" data-analytics-event="sticky_cta_clicked" class="btn btn-primary shrink-0 !px-4 !py-2 !text-sm">
+      Get lifetime access
+    </a>
+  </div>
+</div>
+
+<script>
+  // Compact, mobile-only purchase bar -- appears once the hero (and its
+  // own full-size CTA) has scrolled out of view, and hides again once the
+  // FAQ/footer comes into view so it never sits on top of content that
+  // still needs a normal tap target (see FAQ_LINK note in pricing.astro).
+  const bar = document.getElementById('pro-sticky-cta');
+  const hero = document.querySelector('main > section');
+  const hideBelow = document.getElementById('faq');
+  if (bar && hero) {
+    let pastHero = false;
+    let nearFooter = false;
+    const sync = () => {
+      bar.classList.toggle('is-visible', pastHero && !nearFooter);
+    };
+    new IntersectionObserver(
+      ([entry]) => {
+        pastHero = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+        sync();
+      },
+      { threshold: 0 }
+    ).observe(hero);
+    if (hideBelow) {
+      new IntersectionObserver(
+        ([entry]) => {
+          nearFooter = entry.isIntersecting;
+          sync();
+        },
+        { rootMargin: '0px 0px -70% 0px' }
+      ).observe(hideBelow);
+    }
+  }
+</script>

@@ -1,64 +1,52 @@
 ---
 import { STATUS_EXAMPLE, PRICE } from "../data/site";
+
+const ROWS = [
+  { label: "Original quote", value: "$4,800" },
+  { label: "Expected job cost", value: "$3,600" },
+  { label: "Expected profit", value: "$1,200", strong: true },
+  { label: "Overlooked labor and overhead", value: "$340", warn: true },
+  { label: "Corrected job cost", value: "$3,940" },
+  { label: "Corrected expected profit", value: "$860", strong: true },
+];
 ---
 
-<section class="section-pad border-t border-line">
+<section class="section-pad border-t border-line" data-analytics-view="roi_section_viewed">
   <div class="content-shell">
-    <div class="mx-auto max-w-3xl">
-      <div data-animate class="text-center">
-        <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-          One missed cost can be worth more than the price of Pro.
-        </h2>
-      </div>
+    <div class="mx-auto max-w-2xl">
+      <h2 data-animate class="text-balance text-center text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+        One missed cost can be worth more than the price of Pro.
+      </h2>
 
-      <div data-animate class="card mt-9 overflow-hidden">
-        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-line-soft px-6 py-3 sm:px-7">
-          <span class="text-sm font-semibold text-ink">A $4,800 painting job</span>
-          <span class="tag-preview">{STATUS_EXAMPLE}</span>
-        </div>
-        <div class="grid grid-cols-1 divide-y divide-line sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <div class="p-6 sm:p-7">
-            <p class="text-sm font-semibold text-ink-soft">As quoted</p>
-            <dl class="mt-3 space-y-2.5 text-base">
-              <div class="flex items-center justify-between">
-                <dt class="text-ink-soft">Quoted price</dt>
-                <dd class="tabular-nums font-medium text-ink">$4,800</dd>
+      <div data-animate class="card mt-8 p-6 sm:p-7">
+        <span class="tag-preview">{STATUS_EXAMPLE}</span>
+        <dl class="mt-4 space-y-2 text-base">
+          {
+            ROWS.map((row) => (
+              <div class={`flex items-center justify-between ${row.warn ? "rounded-btn bg-warn-soft px-3 py-1.5" : ""}`}>
+                <dt class={row.warn ? "font-medium text-warn" : "text-ink-soft"}>{row.label}</dt>
+                <dd class={`tabular-nums ${row.strong ? "font-semibold text-ink" : row.warn ? "font-semibold text-warn" : "text-ink"}`}>{row.value}</dd>
               </div>
-              <div class="flex items-center justify-between">
-                <dt class="text-ink-soft">Expected cost</dt>
-                <dd class="tabular-nums font-medium text-ink">$3,600</dd>
-              </div>
-              <div class="flex items-center justify-between border-t border-line-soft pt-2.5">
-                <dt class="font-semibold text-ink">Expected profit</dt>
-                <dd class="tabular-nums font-semibold text-primary-dark">$1,200</dd>
-              </div>
-            </dl>
+            ))
+          }
+        </dl>
+
+        <div class="mt-6 grid grid-cols-1 gap-4 border-t border-line pt-6 text-center sm:grid-cols-2">
+          <div>
+            <p class="tabular-nums text-4xl font-bold text-primary-dark sm:text-5xl">$340</p>
+            <p class="mt-1 text-sm font-medium text-ink-soft">in costs caught before quoting</p>
           </div>
-          <div class="bg-warn-soft/40 p-6 sm:p-7">
-            <p class="text-sm font-semibold text-warn">After adding overlooked labor and overhead</p>
-            <dl class="mt-3 space-y-2.5 text-base">
-              <div class="flex items-center justify-between">
-                <dt class="text-ink-soft">Actual expected cost</dt>
-                <dd class="tabular-nums font-medium text-ink">$3,940</dd>
-              </div>
-              <div class="flex items-center justify-between">
-                <dt class="text-ink-soft">Real expected profit</dt>
-                <dd class="tabular-nums font-medium text-ink">$860</dd>
-              </div>
-              <div class="flex items-center justify-between border-t border-warn-line pt-2.5">
-                <dt class="font-semibold text-ink">Pricing difference caught before quoting</dt>
-                <dd class="tabular-nums font-semibold text-warn">$340</dd>
-              </div>
-            </dl>
+          <div>
+            <p class="tabular-nums text-4xl font-bold text-ink sm:text-5xl">{PRICE.amount}</p>
+            <p class="mt-1 text-sm font-medium text-ink-soft">Painting Estimate Pro, once</p>
           </div>
         </div>
       </div>
 
-      <p data-animate class="mx-auto mt-6 max-w-xl text-center text-base leading-relaxed text-ink">
-        Painting Estimate Pro costs {PRICE.amount} once. It does not need to
-        rescue every estimate to justify its price.
+      <p data-animate class="mx-auto mt-5 max-w-lg text-center text-base leading-relaxed text-ink">
+        Pro does not need to rescue every estimate to justify its price.
       </p>
-      <p data-animate class="mt-2 text-center text-xs text-ink-soft">
+      <p data-animate class="mt-1.5 text-center text-xs text-ink-soft">
         Illustrative example only. Your jobs, costs, and results will vary.
       </p>
     </div>

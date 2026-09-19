@@ -8,14 +8,18 @@ import ProProof from "../components/ProProof.astro";
 import ProComparison from "../components/ProComparison.astro";
 import ProQualification from "../components/ProQualification.astro";
 import ProFeatures from "../components/ProFeatures.astro";
-import ProNewProduct from "../components/ProNewProduct.astro";
 import ProGuarantee from "../components/ProGuarantee.astro";
+import ProStickyCTA from "../components/ProStickyCTA.astro";
 import LicenseActions from "../components/tools/LicenseActions.tsx";
-import { PRICE, REFUND_GUARANTEE_DAYS, PRICING_AVAILABILITY_NOTE } from "../data/site";
+import { PRICE, REFUND_GUARANTEE_DAYS } from "../data/site";
 
 const title = "Painting Estimate Pro | Know Your True Job Cost";
 const description = "Painting Estimate Pro — one-time $79 payment, lifetime access. Calculate materials, labor, overhead and margin before you quote, then compare it to what the job actually cost.";
 
+// Exactly the 13 objection-handling questions this pass calls for --
+// trimmed from the previous 14 (dropped the tax question, split "another
+// device" from "multiple devices" since those are two different claims:
+// the LICENSE works anywhere; project DATA does not travel automatically).
 const FAQS = [
   {
     question: "What exactly do I receive?",
@@ -31,31 +35,31 @@ const FAQS = [
   },
   {
     question: "Where is my project data stored?",
-    answer: "In your own browser's local storage, only — there's no server copy of your projects. Export a full backup any time from the Backup & Data tab.",
+    answer: "In your own browser's local storage, only — there's no server copy of your projects.",
   },
   {
-    question: "Can I use it on more than one device?",
-    answer: "Yes — your license key works on any device or browser; paste it under \"Already purchased?\" to unlock it there too. Project data itself stays local to each browser, so use an exported backup to bring your projects along.",
+    question: "What happens if I clear my browser data?",
+    answer: "Local project data is erased permanently unless you've exported a backup first — worth doing regularly from Backup & Data. Your license isn't affected: redeem your key again any time.",
+  },
+  {
+    question: "Can I move projects to another device?",
+    answer: "Yes, manually — export a backup from Backup & Data on the old device and import it on the new one. Projects don't sync automatically between devices.",
+  },
+  {
+    question: "Can I use it on multiple devices?",
+    answer: "Yes — your license key itself works on any device or browser; paste it under \"Already purchased?\" to unlock it there too.",
   },
   {
     question: "Can I print or download estimates?",
     answer: "Yes — every estimate has a \"Print / Save as PDF\" button that produces a clean, customer-facing document with no cost or margin figures on it.",
   },
   {
-    question: "Does it calculate markup and margin?",
+    question: "Does it calculate both markup and margin?",
     answer: "Yes — every estimate shows the estimated job cost, a suggested price at your target margin (or your own custom price), profit, and margin, before you send anything.",
   },
   {
-    question: "Can it replace my current spreadsheet?",
-    answer: "For painting estimating and job costing, yes — that's exactly what it replaces. It isn't a general-purpose spreadsheet or a business-management platform.",
-  },
-  {
-    question: "Is this a CRM or scheduling system?",
+    question: "Is this a CRM or scheduling platform?",
     answer: "No. It doesn't handle scheduling, dispatch, payroll, or leads — see \"Built for painters who need better estimates\" above for exactly what it does and doesn't do.",
-  },
-  {
-    question: "What happens if I clear my browser data or change devices?",
-    answer: "Clearing your browser's site data permanently erases local project data unless you've exported a backup first — worth doing regularly from Backup & Data. Your license isn't affected either way: redeem your key again on any device, any time.",
   },
   {
     question: "Are future updates included?",
@@ -69,17 +73,13 @@ const FAQS = [
     question: "What payment methods are accepted?",
     answer: "Checkout is handled by Dodo Payments, our payment processor — major credit and debit cards are accepted there.",
   },
-  {
-    question: "Is tax included in the displayed price?",
-    answer: `${PRICE.amount} is the base price. Dodo Payments calculates any sales tax or VAT that applies to you at checkout, shown before you pay.`,
-  },
 ];
 ---
 
 <BaseLayout title={title} description={description}>
   <Header />
   <main id="main-content">
-    <div class="content-shell pt-8">
+    <div class="content-shell pt-4">
       <div
         id="payment-failed-banner"
         hidden
@@ -96,33 +96,31 @@ const FAQS = [
     <ProComparison />
     <ProQualification />
     <ProFeatures />
-    <ProNewProduct />
     <ProGuarantee />
 
     <section id="pricing" class="section-pad scroll-mt-16 border-t border-line">
       <div class="content-shell">
-        <div data-animate class="card mx-auto max-w-2xl p-8 text-center sm:p-10">
+        <div data-animate class="card mx-auto max-w-xl p-8 text-center sm:p-9">
           <h2 class="text-balance text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
             Protect the margin before the job begins.
           </h2>
           <p class="mx-auto mt-3 max-w-md text-lg text-ink-soft">
-            Bring your materials, labor, overhead, margin, and actual job
+            Bring materials, labor, overhead, target margin, and actual job
             costs into one painting-specific estimating workflow.
           </p>
 
           <div class="mt-6 flex items-baseline justify-center gap-3">
             <span class="tabular-nums text-2xl font-medium text-ink-soft/70 line-through">{PRICE.originalAmount}</span>
             <span class="tabular-nums text-5xl font-semibold text-ink">{PRICE.amount}</span>
+            <span class="text-sm font-medium text-ink-soft">one time</span>
           </div>
-          <p class="mt-2 text-sm font-medium text-ink-soft">{PRICE.caption} · No monthly subscription</p>
+          <p class="mt-1 text-sm font-medium text-ink-soft">Lifetime access. No monthly subscription.</p>
 
-          <div class="mt-7 flex flex-col items-center gap-3">
-            <LicenseActions client:load returnTo="/app" />
+          <div class="mt-6 flex flex-col items-center gap-3">
+            <LicenseActions client:load returnTo="/app" analyticsEvent="final_cta_clicked" />
           </div>
 
-          <p class="mt-6 text-sm text-ink-soft">
-            {REFUND_GUARANTEE_DAYS}-day money-back guarantee · {PRICING_AVAILABILITY_NOTE}
-          </p>
+          <p class="mt-5 text-sm text-ink-soft">{REFUND_GUARANTEE_DAYS}-day money-back guarantee · Secure checkout</p>
         </div>
       </div>
     </section>
@@ -133,7 +131,7 @@ const FAQS = [
           Questions before you buy
         </h2>
 
-        <div data-animate class="mt-8 divide-y divide-line border-y border-line">
+        <div data-animate class="mt-8 divide-y divide-line border-y border-line" id="faq-list">
           {
             FAQS.map((faq) => (
               <details class="group py-5">
@@ -157,9 +155,12 @@ const FAQS = [
     </section>
   </main>
   <Footer />
+  <ProStickyCTA />
 </BaseLayout>
 
 <script>
+  import { track } from "../lib/analytics";
+
   // Above-the-fold failure notice: a checkout/recovery attempt that came
   // back non-success redirects here (see ProGate.tsx and app/welcome.astro)
   // with ?payment=failed&reason=<status> rather than only showing a small
@@ -185,4 +186,41 @@ const FAQS = [
     const query = params.toString();
     window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''));
   }
+
+  // Generic click tracking for every plain link/button tagged
+  // data-analytics-event (the real LicenseActions buy buttons track their
+  // own "checkout_started" + analyticsEvent prop directly instead).
+  document.addEventListener('click', (e) => {
+    const el = (e.target as HTMLElement)?.closest<HTMLElement>('[data-analytics-event]');
+    if (el) track(el.dataset.analyticsEvent!);
+  });
+
+  // Fire each data-analytics-view element's event once, the first time it
+  // enters the viewport -- covers "ROI section viewed", "Guarantee
+  // viewed", and the walkthrough's start/complete markers.
+  const seen = new Set<Element>();
+  const viewObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && !seen.has(entry.target)) {
+          seen.add(entry.target);
+          track((entry.target as HTMLElement).dataset.analyticsView!);
+          viewObserver.unobserve(entry.target);
+        }
+      }
+    },
+    { threshold: 0.4 }
+  );
+  document.querySelectorAll<HTMLElement>('[data-analytics-view]').forEach((el) => viewObserver.observe(el));
+
+  // "FAQ item opened" -- <details>'s native toggle event fires on both
+  // open and close; only track the open transition.
+  document.getElementById('faq-list')?.querySelectorAll('details').forEach((el) => {
+    el.addEventListener('toggle', () => {
+      if (el.open) {
+        const question = el.querySelector('summary span')?.textContent ?? '';
+        track('faq_item_opened', { question });
+      }
+    });
+  });
 </script>

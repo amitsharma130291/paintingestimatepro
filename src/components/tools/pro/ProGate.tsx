@@ -3,6 +3,7 @@ import { resolvePendingCheckout, checkAccess, NetworkFailure } from '../../../li
 import LicenseActions from '../LicenseActions';
 import ProApp from './ProApp';
 import { PRICE } from '../../../data/site';
+import { track } from '../../../lib/analytics';
 
 type GateState = { status: 'checking' } | { status: 'locked' } | { status: 'unavailable' } | { status: 'unlocked'; justUnlocked?: boolean };
 
@@ -53,6 +54,11 @@ export default function ProGate() {
           // A real checkout/recovery-link resolution just happened, not a
           // silent re-verification of an already-stored payment -- this is
           // the one moment ProApp lands on Overview with a welcome heading.
+          // NOTE: this fires for both a fresh purchase and a recovery-link
+          // click -- resolvePendingCheckout() doesn't currently distinguish
+          // them in its return value, matching this same conflation in the
+          // existing justUnlocked logic below.
+          track('purchase_completed');
           if (!cancelled) setState({ status: 'unlocked', justUnlocked: true });
           return;
         }

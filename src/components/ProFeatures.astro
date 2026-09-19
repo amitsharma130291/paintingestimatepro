@@ -1,5 +1,5 @@
 ---
-import { PRICE } from "../data/site";
+import { PRICE, BUY_CTA_LABEL } from "../data/site";
 
 // Every line here is a real, working feature -- verified against the
 // actual ProApp implementation, not an aspirational feature list.
@@ -42,12 +42,17 @@ const INCLUDED = [
       </ul>
     </div>
 
-    <p data-animate class="mx-auto mt-6 max-w-2xl text-center text-sm leading-relaxed text-ink-soft">
-      Every project lives in your own browser's local storage, not a server —
-      export a backup any time to move it between devices or protect
-      against clearing your browser data. Because Pro is a continuously
-      updated web app, your one-time {PRICE.amount} payment covers every
-      future improvement to it, with nothing to repurchase.
+    <p data-animate class="mx-auto mt-6 max-w-2xl text-center text-base leading-relaxed text-ink">
+      <strong class="font-semibold">Worth knowing:</strong> every project
+      lives in your own browser's local storage, not a server — clearing
+      your browser data erases it unless you've exported a backup, and
+      moving to a new device means importing that backup there. Your
+      one-time {PRICE.amount} payment still covers every future update to
+      the workspace.
     </p>
+
+    <div data-animate class="mt-8 flex justify-center">
+      <a href="#pricing" class="btn btn-primary">{BUY_CTA_LABEL}</a>
+    </div>
   </div>
 </section>

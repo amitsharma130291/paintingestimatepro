@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { Loader2, CheckCircle2, MailCheck } from 'lucide-react';
 import { startCheckout, redeemLicenseKey, requestLicenseRecovery, getStoredPayment } from '../../lib/license';
 import { BUY_CTA_LABEL } from '../../data/site';
+import { track } from '../../lib/analytics';
 
 function Spinner() {
   return <Loader2 size={15} strokeWidth={2.5} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />;
@@ -19,6 +20,7 @@ export default function LicenseActions({
   returnTo,
   onUnlocked,
   buyLabel = BUY_CTA_LABEL,
+  analyticsEvent,
 }: {
   returnTo: string;
   onUnlocked?: () => void;
@@ -27,6 +29,11 @@ export default function LicenseActions({
    * component just to change one string. Defaults to the standard,
    * site-wide purchase phrase. */
   buyLabel?: string;
+  /** An extra, location-specific event (e.g. "hero_cta_clicked") tracked
+   * alongside the standard "checkout_started" every buy click already
+   * fires — lets each placement of this same component be told apart in
+   * analytics without this component knowing what "hero" or "final" mean. */
+  analyticsEvent?: string;
 }) {
   // Server-rendered (client:load) markup always starts as "Buy Pro" --
   // localStorage doesn't exist during SSR -- then this effect, client-side
@@ -54,6 +61,8 @@ export default function LicenseActions({
   async function handleBuy() {
     setBuying(true);
     setBuyError(null);
+    if (analyticsEvent) track(analyticsEvent);
+    track('checkout_started');
     try {
       await startCheckout(returnTo);
       // startCheckout navigates away on success; nothing further runs here.

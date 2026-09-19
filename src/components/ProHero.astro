@@ -1,63 +1,45 @@
 ---
-import { PRICE, REFUND_GUARANTEE_DAYS, BUY_CTA_LABEL } from "../data/site";
+import { PRICE, REFUND_GUARANTEE_DAYS } from "../data/site";
 import LicenseActions from "./tools/LicenseActions.tsx";
 
-const TRUST_ITEMS = [
-  "One-time payment",
-  "No monthly subscription",
-  "No account required",
-  `${REFUND_GUARANTEE_DAYS}-day money-back guarantee`,
-];
+const TRUST_LINE = `One-time payment · No account required · ${REFUND_GUARANTEE_DAYS}-day money-back guarantee`;
 ---
 
-<section class="section-pad pt-10 sm:pt-14 lg:pt-16">
-  <div class="content-shell grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16">
+<section class="pb-8 pt-6 sm:pb-10 sm:pt-8 lg:pb-12 lg:pt-10">
+  <div class="content-shell grid grid-cols-1 items-center gap-10 lg:grid-cols-[1.05fr_1.2fr] lg:gap-10">
     <div data-animate>
       <p class="eyebrow">Painting estimating + job profitability</p>
-      <h1 class="mt-4 text-balance text-4xl font-semibold leading-[1.1] tracking-tight text-ink sm:text-5xl">
+      <h1 class="mt-3 text-balance text-3xl font-semibold leading-[1.12] tracking-tight text-ink sm:text-4xl lg:text-[2.65rem]">
         Know your true job cost before you send the quote.
       </h1>
-      <p class="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
+      <p class="mt-4 max-w-lg text-base leading-relaxed text-ink-soft sm:text-lg">
         Calculate materials, labor, overhead and target margin in one
-        focused workspace. Build the estimate, check the numbers, and
-        compare the quote with what the job actually cost.
+        painting-specific workspace. Build the estimate, check the numbers
+        and compare the quote with what the job actually cost.
       </p>
 
-      <div class="mt-7 rounded-btn border border-line bg-card px-5 py-4">
-        <p class="eyebrow">Launch price</p>
-        <div class="mt-1.5 flex items-baseline gap-3">
-          <span class="tabular-nums text-2xl font-medium text-ink-soft/70 line-through">{PRICE.originalAmount}</span>
-          <span class="tabular-nums text-4xl font-semibold text-ink">{PRICE.amount}</span>
-        </div>
-        <p class="mt-1 text-sm font-medium text-ink-soft">One-time payment. Lifetime access. No monthly subscription.</p>
+      <div class="mt-5 flex items-baseline gap-3">
+        <span class="tabular-nums text-xl font-medium text-ink-soft/70 line-through">{PRICE.originalAmount}</span>
+        <span class="tabular-nums text-4xl font-semibold text-ink">{PRICE.amount}</span>
+        <span class="text-sm font-medium text-ink-soft">one time</span>
       </div>
+      <p class="mt-0.5 text-sm font-medium text-ink-soft">Lifetime access. No monthly subscription.</p>
 
-      <div class="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-        <LicenseActions client:load returnTo="/app" />
+      <div class="mt-5 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+        <LicenseActions client:load returnTo="/app" analyticsEvent="hero_cta_clicked" />
         <a href="#demo" class="text-link text-sm">See how it works</a>
       </div>
 
-      <ul class="mt-7 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-        {
-          TRUST_ITEMS.map((item) => (
-            <li class="flex items-center gap-1.5 text-sm text-ink-soft">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              {item}
-            </li>
-          ))
-        }
-      </ul>
+      <p class="mt-5 text-sm text-ink-soft">{TRUST_LINE}</p>
     </div>
 
-    <div data-animate class="mx-auto w-full max-w-xl lg:max-w-none">
+    <div data-animate class="mx-auto w-full max-w-2xl lg:max-w-none">
       <div class="overflow-hidden rounded-card border border-line shadow-[0_1px_2px_rgba(23,33,29,0.04),0_16px_40px_-20px_rgba(23,33,29,0.22)]">
         <img
-          src="/guide/overview.png"
-          alt="The Painting Estimate Pro Overview dashboard, showing active projects, estimated revenue, average margin, and a recent-projects table"
+          src="/guide/overview.webp"
+          alt="The Painting Estimate Pro Overview dashboard, showing active projects, estimated revenue $579.23, average margin 35.0%, and a recent-projects table"
           width="1200"
-          height="1144"
+          height="860"
           class="w-full"
         />
       </div>
